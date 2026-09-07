@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Preflight</title>
+<meta name="description" content="Local-first delivery validation for finished audio and video. Will this be accepted, and what exactly is wrong with it — with the timestamps, and a corrected copy that is measured again before it claims to be fixed.">
+<meta property="og:title" content="Media Preflight">
+<meta property="og:description" content="Will this be accepted — and can you safely fix what is wrong? An inspector with carefully bounded, previewable transformations.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ecosystem.css">
+</head>
+<body data-project="media-preflight">
+
+<div class="ecosystem-progress" aria-hidden="true"><span></span></div>
+<nav class="ecosystem-rail" aria-label="Snepssen project network">
+  <div class="ecosystem-rail__inner">
+    <a class="ecosystem-rail__brand" href="https://snepssen.github.io/tools-core/"><span>snepssen / workshop</span></a>
+    <div class="ecosystem-rail__links">
+      <a data-project="gateway-forge" href="https://snepssen.github.io/gateway-forge/">Gateway Forge</a>
+      <a data-project="voice-forge" href="https://snepssen.github.io/voice-forge/">Voice Forge</a>
+      <a data-project="protoke" href="https://snepssen.github.io/protoke/">Protoke</a>
+      <a data-project="media-preflight" href="https://snepssen.github.io/media-preflight/">Media Preflight</a>
+      <a data-project="tools-core" href="https://snepssen.github.io/tools-core/">tools-core</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+<header id="top">
+  <span class="badge"><span class="dot"></span>macOS · Windows · Linux · MIT</span>
+  <h1>Media Preflight</h1>
+  <p class="subhead">Drop in a finished file — sound, picture, captions — pick where it is going, and find out whether it will be accepted, with the exact timestamp of everything that is wrong. Then, if you want, a corrected copy that is measured again from scratch before it claims to be fixed.</p>
+  <div class="headmeta">
+    <span><b>7</b> delivery targets, and your own</span>
+    <span><b>1</b> decode per stream, every measurement</span>
+    <span><b>134</b> checks passing</span>
+    <span><b>0</b> uploads, accounts, credits</span>
+    <span><b>Local-first.</b> Nothing leaves the machine</span>
+  </div>
+</header>
+</div>
+
+<nav class="jump" aria-label="Jump to a section">
+  <div class="wrap">
+    <a class="mark" href="#top">Media Preflight</a>
+    <ul>
+      <li><a href="#report">The report</a></li>
+      <li><a href="#targets">Targets</a></li>
+      <li><a href="#fix">Corrections</a></li>
+      <li><a href="#how">How</a></li>
+      <li><a href="#install">Install</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<section id="report">
+  <p class="eyebrow">What comes back</p>
+  <h2>A verdict, and where to look</h2>
+  <p class="lede">Not a dashboard. A list of what the file is, what the target asks for, and the difference between them — in the order that decides whether you can ship today. Checks with nothing to measure get one line between them, not one line each.</p>
+
+  <div class="report" role="img" aria-label="Example report for an audiobook chapter checked against the ACX target: four failures, one warning, eleven passes, with timestamps.">
+<span class="r-head">Chapter 04.wav</span>
+<span class="r-dim">23:41  wav  pcm_s16le 44.1 kHz mono 706 kbps</span>
+
+Target: Audiobook — ACX
+
+<span class="r-fail">✕ Not ready — the failures below would be rejected.</span>
+<span class="r-dim">  4 failed, 1 warned, 11 passed, 2 not checked.</span>
+
+<span class="r-fail">✕ RMS level: -29.89 dBFS                   Required: -23 to -18 dBFS</span>
+<span class="r-dim">    measured across the whole file — there is no single moment to point at</span>
+<span class="r-fail">✕ Peak level: -0.76 dBFS                         Required: ≤ -3 dBFS</span>
+<span class="r-dim">    at 03:42 (peak -0.76 dBFS), 18:07 (peak -0.91 dBFS)</span>
+<span class="r-fail">✕ Closing room tone: 0 s                          Required: 1 to 5 s</span>
+<span class="r-fail">✕ Bitrate mode: vbr                                    Required: cbr</span>
+<span class="r-warn">⚠ DC offset: 0.02                                   Required: ≤ 0.01</span>
+<span class="r-pass">✓ Noise floor: -64.2 dBFS RMS               Required: ≤ -60 dBFS RMS</span>
+
+Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
+  </div>
+
+  <div class="two" style="margin-top:38px">
+    <div>
+      <h3>What it measures</h3>
+      <ul class="plain">
+        <li>Integrated loudness, loudness range, short-term excursions</li>
+        <li>True peak and sample peak, with the moment each ceiling broke</li>
+        <li>Clipped samples, located to the second</li>
+        <li>Noise floor, DC offset, dead channels, channel imbalance</li>
+        <li>Stereo phase — sides that will cancel when someone plays it in mono</li>
+        <li>Room tone at head and tail, mid-file gaps, endings that stop mid-word</li>
+        <li>Black frames and frozen frames, with the seconds they occupy</li>
+        <li>Flashing passages worth a human look, screened at three transitions a second</li>
+        <li>Resolution, pixel format, interlacing, and constant versus variable frame rate</li>
+        <li>Caption overlaps, reading speed, line length, cues timed past the last frame</li>
+        <li>Subtitle fonts this machine does not have</li>
+        <li>Codec, container, sample rate, channels, bitrate, and whether an MP3 is constant or variable</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Where the timestamps come from</h3>
+      <p>A finding carries a timestamp only when the timeline holds <em>the same quantity the rule is about</em>.</p>
+      <p>Short-term loudness can locate an integrated-loudness failure, because both are loudness. It cannot locate an RMS failure: RMS and LUFS are different measurements, and pointing at a moment measured in one while quoting a threshold in the other would be an invention.</p>
+      <p>So those findings say <span class="mono" style="font-size:14px">measured across the whole file</span> instead of offering a number that looks precise and means nothing.</p>
+    </div>
+  </div>
+</section>
+
+<section id="targets">
+  <p class="eyebrow">Where it is going</p>
+  <h2>Six targets, and the one you write</h2>
+  <p class="lede">Each carries the source its thresholds came from and the month they were read. The report prints both, every time.</p>
+
+  <table>
+    <thead><tr><th>Target</th><th>What it is</th><th>Thresholds</th></tr></thead>
+    <tbody>
+      <tr><td><code>acx</code></td><td>Audiobook, ACX retail delivery</td><td><span class="tag published">published</span></td></tr>
+      <tr><td><code>ebu_r128</code></td><td>Broadcast, EBU R 128</td><td><span class="tag published">published</span></td></tr>
+      <tr><td><code>spotify_podcast</code></td><td>Podcast delivery to Spotify</td><td><span class="tag published">published</span></td></tr>
+      <tr><td><code>youtube</code></td><td>YouTube upload</td><td><span class="tag published">published</span></td></tr>
+      <tr><td><code>social_vertical</code></td><td>Instagram / TikTok</td><td><span class="tag informal">informal</span></td></tr>
+      <tr><td><code>web</code></td><td>Generic web video</td><td><span class="tag informal">informal</span></td></tr>
+      <tr><td><code>subtitles</code></td><td>Caption readability, checked on its own</td><td><span class="tag informal">informal</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <p><strong>Three of these are marked informal because there is no published specification to point at.</strong> Two are platforms that document nothing, and the third is a set of subtitling conventions reasonable people disagree about — seventeen characters a second is comfortable for an adult viewer in English and far too fast for a children's programme. Their thresholds are offered as a sanity check you should adjust, not as a promise about what anybody requires today. This tool measures your file exactly and compares it against a number you can see and change. It is not, and cannot be, an oracle for somebody else's current ingest rules, and the moment it presents itself as one it is lying to you.</p>
+  </div>
+
+  <p style="margin-top:28px">Your own target is a JSON file, not a patch to the tool — a list of rules naming a metric, a band, and what to say when a file falls outside it. Point <span class="mono" style="font-size:14px">--target</span> at the path, or drop it in <span class="mono" style="font-size:14px">profiles/</span> and it joins the list in the window.</p>
+  <p><a href="https://github.com/snepssen/media-preflight/blob/main/PROFILES.md">Writing a target →</a></p>
+</section>
+
+<section id="fix">
+  <p class="eyebrow">The corrected copy</p>
+  <h2>Four promises, kept in code</h2>
+  <p class="lede">Corrections are arithmetic on a signal — a gain change, a limiter, a trim, a re-encode. Nothing here invents audio that was never recorded.</p>
+
+  <div class="cards">
+    <div class="card">
+      <span class="num">01 / Never the source</span>
+      <h3>Your file is the file you still have</h3>
+      <p>Every correction writes a new file beside the original, refuses to write over the source, and refuses to overwrite anything else unless told twice. There is a test asserting the source's bytes are identical afterwards.</p>
+    </div>
+    <div class="card">
+      <span class="num">02 / Nothing unpreviewed</span>
+      <h3>Sentences first, then the argv</h3>
+      <p>The whole plan is shown in plain English and as the exact ffmpeg command, before anything runs. A correction that cannot be described in a sentence does not belong in the planner.</p>
+    </div>
+    <div class="card">
+      <span class="num">03 / No new faults</span>
+      <h3>The arithmetic is done in advance</h3>
+      <p>Raising a quiet recording by eleven decibels raises its peaks and its DC offset by eleven decibels too. The planner works out where those would land and adds a limiter or a high-pass — saying in writing that the source was fine and the gain is what would have broken it.</p>
+    </div>
+    <div class="card">
+      <span class="num">04 / Measured, not assumed</span>
+      <h3>It reads the copy back</h3>
+      <p>The finished file is analysed again from nothing, and the report you get is that measurement. When it lands off target the correction is recomputed and applied to the <em>original</em> again — never to the copy — so however many attempts it takes, the number of lossy encodes stays at one.</p>
+    </div>
+  </div>
+
+  <div class="report" style="margin-top:28px" role="img" aria-label="Verification output showing four checks moving from failing to passing after correction.">
+<span class="r-head">Verification — the corrected copy, measured from scratch:</span>
+
+  <span class="r-fail">✕</span> → <span class="r-pass">✓</span>  RMS level: -31.31 dBFS → -19.39 dBFS
+  <span class="r-fail">✕</span> → <span class="r-pass">✓</span>  Opening room tone: 2.4 s → 0.75 s
+  <span class="r-fail">✕</span> → <span class="r-pass">✓</span>  Closing room tone: 8.2 s → 3 s
+  <span class="r-fail">✕</span> → <span class="r-pass">✓</span>  Bitrate mode: vbr → cbr
+  </div>
+  <p class="caption">Room tone is copied from a quiet stretch of the file itself wherever there is one, rather than padded with digital zeroes — because a target asking for a quiet ending is asking for the room, not for nothing.</p>
+
+  <h3 style="margin-top:44px">What it will not do</h3>
+  <ul class="plain">
+    <li class="no">Edit, record, or arrange anything</li>
+    <li class="no">Publish anywhere, or ask you to sign in</li>
+    <li class="no">Repair with generative models — no invented audio, ever</li>
+    <li class="no">Remove noise, de-ess, or otherwise change a recording's character</li>
+    <li class="no">Retime, rewrite or reflow captions — it reports them and leaves them alone</li>
+    <li class="no">Clear a programme for photosensitivity</li>
+  </ul>
+  <p class="caption">The flashing check counts large frame-to-frame changes in average luminance and flags any second holding three or more, which is where WCAG draws its general flash threshold. It does no spatial analysis, does not measure how much of the screen changed, and knows nothing about the separate red-flash rule. It finds the passages worth looking at with human eyes. Silence from it is not a pass, and every report it appears in says so.</p>
+  <p class="caption">Noise reduction is deliberately absent. A noise floor above the target is reported and left alone, because the answer is to treat the room or re-record — and a tool that quietly ran a denoiser over somebody's audiobook would be doing something its owner did not ask for.</p>
+</section>
+
+<section id="how">
+  <p class="eyebrow">Under it</p>
+  <h2>One decode per stream</h2>
+  <p class="lede">A second read of a two-hour audiobook costs a minute of somebody's afternoon, and measurements taken in separate passes can disagree about where a moment is.</p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 680 250" role="img" aria-labelledby="chain-title">
+      <title id="chain-title">The audio filter chain: ebur128, aphasemeter, ametadata, silencedetect and astats, run as one pass, with metadata printed to stdout and events to stderr.</title>
+      <g class="d-label">
+        <rect class="d-node" x="8" y="58" width="118" height="40" rx="4"/>
+        <text x="67" y="76" text-anchor="middle">ebur128</text>
+        <text x="67" y="90" text-anchor="middle" class="d-sub">loudness, peak</text>
+
+        <rect class="d-node" x="140" y="58" width="118" height="40" rx="4"/>
+        <text x="199" y="76" text-anchor="middle">aphasemeter</text>
+        <text x="199" y="90" text-anchor="middle" class="d-sub">stereo phase</text>
+
+        <rect class="d-node" x="272" y="58" width="118" height="40" rx="4"/>
+        <text x="331" y="76" text-anchor="middle">ametadata</text>
+        <text x="331" y="90" text-anchor="middle" class="d-sub">print</text>
+
+        <rect class="d-node" x="404" y="58" width="132" height="40" rx="4"/>
+        <text x="470" y="76" text-anchor="middle">silencedetect</text>
+        <text x="470" y="90" text-anchor="middle" class="d-sub">gaps</text>
+
+        <rect class="d-node" x="550" y="58" width="118" height="40" rx="4"/>
+        <text x="609" y="76" text-anchor="middle">astats</text>
+        <text x="609" y="90" text-anchor="middle" class="d-sub">levels, channels</text>
+      </g>
+
+      <g class="d-line">
+        <path d="M126 78 H140"/><path d="M258 78 H272"/>
+        <path d="M390 78 H404"/><path d="M536 78 H550"/>
+      </g>
+      <path class="d-accent" d="M8 40 H668" stroke-dasharray="3 4"/>
+      <text class="d-out" x="8" y="30">one pass over the file</text>
+
+      <path class="d-accent" d="M331 98 V132 H120 V150"/>
+      <text class="d-out" x="8" y="168">stdout — metadata every 100 ms,</text>
+      <text class="d-out" x="8" y="184">kept as a one-second timeline</text>
+
+      <path class="d-line" d="M470 98 V132 H470 V150"/>
+      <path class="d-line" d="M609 98 V132 H470"/>
+      <text class="d-out" x="404" y="168">stderr — silence events and the</text>
+      <text class="d-out" x="404" y="184">summaries printed at the end</text>
+
+      <text class="d-out" x="8" y="222" fill="currentColor" opacity=".55">aphasemeter is inserted only for stereo: phase is a statement about the relationship</text>
+      <text class="d-out" x="8" y="238" fill="currentColor" opacity=".55">between two channels, and on anything else it reports 1.0 and means nothing by it.</text>
+    </svg>
+  </div>
+
+  <div class="two" style="margin-top:36px">
+    <div>
+      <h3>Both pipes are read at once</h3>
+      <p>Metadata goes to stdout and events to stderr, and a filled pipe that nobody is draining is a deadlock — one that looks exactly like a slow file. Draining stderr in a thread is not a detail; it is the difference between a tool that works on a long file and one that appears to hang on it.</p>
+      <h3 style="margin-top:26px">Kept to the second</h3>
+      <p>ebur128 reports every 100 ms. The timeline holds the loudest momentary and short-term value in each second, because the report quotes seconds — so a ten-hour audiobook costs 36,000 rows instead of 360,000, and nothing is lost that would have survived to the page.</p>
+    </div>
+    <div>
+      <h3>Two things earn a second pass</h3>
+      <p><strong>Locating peaks and clipping</strong>, and only when the whole-file peak says a peak problem can exist at all. A file whose loudest sample sits below the clipping threshold has no clipped samples — that is arithmetic, not an estimate — so the common case is answered without reading the audio again.</p>
+      <p><strong>loudnorm's own measurement</strong>, because it will not accept another filter's figures; it wants its own threshold and offset.</p>
+      <h3 style="margin-top:26px">The picture has its own pass</h3>
+      <p><span class="mono" style="font-size:14px">blackdetect → freezedetect → signalstats</span>, and it runs only when the target actually asks a question about the picture. Decoding a ninety-minute film to count black frames is minutes of somebody's time, and a podcast profile has no reason to spend them.</p>
+      <h3 style="margin-top:26px">ffmpeg is probed, not trusted</h3>
+      <p>Slim distribution builds omit <span class="mono" style="font-size:14px">ebur128</span>, and the failure otherwise surfaces halfway through an analysis as a filtergraph error that says nothing about why. The tool looks for the filter, not for a binary with the right name.</p>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <p class="eyebrow">Running it</p>
+  <h2>Two commands, no packages</h2>
+  <p class="lede">Python 3.10 or newer, standard library only. ffmpeg and ffprobe are located at runtime rather than bundled, and their absence is reported as a sentence with the install line for your platform.</p>
+
+<pre class="code"><span class="c"># the window — a local server and a page in your browser</span>
+python3 app.py
+
+<span class="c"># the command line</span>
+python3 preflight.py check finished.mp3 --target acx
+python3 preflight.py fix   finished.mp3 --target acx --dry-run
+python3 preflight.py fix   finished.mp3 --target acx</pre>
+
+  <p style="margin-top:26px"><span class="mono" style="font-size:14px">check</span> exits 0 when the file passes, 1 when it fails, and 2 when the tool itself could not run — so it drops into a build script without parsing anything.</p>
+
+  <p>The window listens on <span class="mono" style="font-size:14px">127.0.0.1</span> with a token minted at startup. Your file is never uploaded: a browser cannot tell a local program where a dropped file lives, so the page asks the tool to open your system's own file dialog and the path never leaves the machine. That is not a workaround — it is the point.</p>
+
+  <div class="contact">
+    <a href="https://github.com/snepssen/media-preflight">Source on GitHub</a>
+    <a href="https://github.com/snepssen/media-preflight/blob/main/README.md">Read the README</a>
+    <a href="https://github.com/snepssen/media-preflight/blob/main/PROFILES.md">Write a target</a>
+  </div>
+</section>
+
+<section class="ecosystem-more" aria-labelledby="ecosystem-heading" data-eco-reveal>
+  <div class="ecosystem-more__head">
+    <div>
+      <p class="ecosystem-kicker">The wider workshop</p>
+      <h2 id="ecosystem-heading">Five tools, one local-first practice.</h2>
+    </div>
+    <p class="ecosystem-more__intro">Move between guided-meditation authoring, measured speech, lyric video, delivery validation, and the small field tools that support all of them.</p>
+  </div>
+  <div class="ecosystem-grid">
+    <a class="ecosystem-card" data-project="gateway-forge" href="https://snepssen.github.io/gateway-forge/">
+      <div class="ecosystem-card__index"><span>01 / JOURNEYS</span><span>macOS · Windows · Linux</span></div>
+      <div class="ecosystem-card__glyph" aria-hidden="true">F10 ── F27</div>
+      <h3>Gateway Forge</h3>
+      <p>Assemble guided sessions and keep published maps beside what was actually found.</p>
+      <span class="ecosystem-card__go">Explore Gateway Forge →</span>
+    </a>
+    <a class="ecosystem-card" data-project="voice-forge" href="https://snepssen.github.io/voice-forge/">
+      <div class="ecosystem-card__index"><span>02 / SPEECH</span><span>macOS · Windows · Linux</span></div>
+      <div class="ecosystem-card__glyph" aria-hidden="true">⌁ / həˈləʊ /</div>
+      <h3>Voice Forge</h3>
+      <p>A transparent Piper workbench for timing, pronunciation, and honest audio export.</p>
+      <span class="ecosystem-card__go">Explore Voice Forge →</span>
+    </a>
+    <a class="ecosystem-card" data-project="protoke" href="https://snepssen.github.io/protoke/">
+      <div class="ecosystem-card__index"><span>03 / VIDEO</span><span>macOS · Windows · Linux</span></div>
+      <div class="ecosystem-card__glyph" aria-hidden="true">◤ w ◥</div>
+      <h3>Protoke</h3>
+      <p>Karaoke and narration video with a vector visor face that mouths every word.</p>
+      <span class="ecosystem-card__go">Explore Protoke →</span>
+    </a>
+    <a class="ecosystem-card" data-project="media-preflight" href="https://snepssen.github.io/media-preflight/">
+      <div class="ecosystem-card__index"><span>04 / DELIVERY</span><span>macOS · Windows · Linux</span></div>
+      <div class="ecosystem-card__glyph" aria-hidden="true">✓ ≤ -3 dB</div>
+      <h3>Media Preflight</h3>
+      <p>Check a finished file against where it is going, and correct it without touching the original.</p>
+      <span class="ecosystem-card__go">Explore Media Preflight →</span>
+    </a>
+    <a class="ecosystem-card" data-project="tools-core" href="https://snepssen.github.io/tools-core/">
+      <div class="ecosystem-card__index"><span>05 / FIELD TOOLS</span><span>Python · shell</span></div>
+      <div class="ecosystem-card__glyph" aria-hidden="true">[ measure → keep ]</div>
+      <h3>tools-core</h3>
+      <p>Small utilities for audio inspection, corpus work, authoring, and repeatable checks.</p>
+      <span class="ecosystem-card__go">Open the toolbox →</span>
+    </a>
+  </div>
+</section>
+
+<section id="contact">
+  <p class="eyebrow">If a number looks wrong</p>
+  <h2>Say so</h2>
+  <p>A threshold that has moved, a target that has changed its rules, a measurement that disagrees with your own meter — all of those are worth an issue. The profiles carry the month they were read precisely so that they can be argued with.</p>
+  <div class="contact">
+    <a href="https://github.com/snepssen/media-preflight/issues">Open an issue</a>
+    <a href="https://github.com/snepssen">More from snepssen</a>
+  </div>
+</section>
+
+<footer>
+  Media Preflight is MIT licensed. Your media stays on your machine and outside the repository; the test fixtures are generated from ffmpeg's own sources rather than committed.
+</footer>
+
+</div>
+
+<script src="ecosystem.js"></script>
+</body>
+</html>

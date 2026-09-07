@@ -86,6 +86,9 @@ should not decide on your behalf.
 | `room_tone_head`, `room_tone_tail` | trim or extend the quiet at one end |
 | `encode` | codec, bitrate, bitrate mode, sample rate, channel count |
 
+There is deliberately no fix for a picture or caption fault. Trimming black off
+an ending is an edit, retiming a cue is an edit, and this tool does not edit.
+
 ## Metrics
 
 **Measured from the audio**
@@ -102,8 +105,31 @@ should not decide on your behalf.
 `bitrate_mode`, `container`, `bit_depth`, `cover_art`, `duration_s`,
 `duration_min`, `av_duration_gap_s`
 
-A metric the file cannot answer — a video rule on an audio file — is *skipped*,
-not failed. Absence is not a fault.
+**Measured from the picture**
+
+`black_seconds`, `longest_black_s`, `leading_black_s`, `trailing_black_s`,
+`frozen_seconds`, `longest_frozen_s`, `flash_regions`
+
+**Declared by the picture**
+
+`video_codec`, `video_width`, `video_height`, `resolution`, `aspect_ratio`,
+`frame_rate`, `frame_rate_mode`, `pix_fmt`, `video_bitrate_kbps`, `interlaced`
+
+**Captions**
+
+`caption_cue_count`, `caption_format`, `caption_overlaps`,
+`caption_shortest_cue_s`, `caption_longest_cue_s`, `caption_max_cps`,
+`caption_max_line_length`, `caption_max_lines`, `caption_shortest_gap_s`,
+`caption_past_end_s`, `caption_empty_cues`, `caption_bad_timing`,
+`caption_missing_fonts`
+
+A metric the file cannot answer — a picture rule on an audio file, a caption
+rule where there are no captions — is *skipped*, not failed. Absence is not a
+fault, and the report groups every skipped check onto one line so that four
+real findings are not buried under eight dashes.
+
+Naming a picture metric in a rule is what makes the tool decode the picture at
+all. A profile with no picture rules never pays for the pass.
 
 ## Where the timestamps come from
 
@@ -116,6 +142,13 @@ measurements, and pointing at a moment measured in one while quoting a
 threshold in the other would be an invention. Rules that cannot be located say
 so — *"measured across the whole file — there is no single moment to point
 at"* — rather than offering a number that looks precise and means nothing.
+
+Picture and caption failures are located by the things that caused them: black
+and frozen runs carry their own start and end, a flashing region carries how
+many transitions it holds, and a caption fault carries the cue number and the
+number that broke the rule — *"cue 41, 26.3 characters a second"*. Which cues
+are at fault depends on the rule's own threshold, so the test lives in
+`captions.OFFENDERS` beside the cues rather than in the rule engine.
 
 Sample-peak and clipping failures are located exactly, by a second pass that
 measures the peak of every one-second window. That pass runs only when the
@@ -132,6 +165,13 @@ is arithmetic rather than an estimate.
 | `silence_threshold_db` | -45.0 | below this counts as silence |
 | `silence_min_s` | 0.30 | shorter gaps are speech, not silence |
 | `clip_threshold_dbfs` | -0.10 | a sample at or above this is clipping |
+| `black_min_s` | 0.5 | shorter than this is a cut, not a hole |
+| `black_picture_threshold` | 0.98 | how much of the frame must be dark |
+| `black_pixel_threshold` | 0.10 | how dark a pixel counts as black |
+| `freeze_min_s` | 2.0 | a still shorter than this is a held shot |
+| `freeze_noise_db` | -60.0 | how different two frames must be to have moved |
+| `flash_luma_delta` | 20.0 | luminance change counted as a transition |
+| `flash_per_second` | 3 | transitions in a second that flag a region |
 
 The silence threshold matters more than it looks. "Room tone" is a claim about
 a level, and a target that asks for a quiet ending is asking for the room, not
@@ -141,8 +181,10 @@ that reason.
 ## Always-on rules
 
 Every profile also gets a set of universal rules — clipping, dead channels,
-channel balance, DC offset, stereo phase, audio/video duration agreement. These
-are faults on any target, so they are never a `fail` on their own account;
-they warn, except a completely silent channel, which fails.
+channel balance, DC offset, stereo phase, audio/video duration agreement,
+overlapping captions, impossible caption timings, captions past the end, and
+missing subtitle fonts. These are faults on any target rather than requirements
+of one, so most of them warn; a silent channel, an overlapping cue and a cue
+that ends before it starts fail, because none of those is ever intentional.
 
 Give a rule the same `id` as a universal one and yours replaces it.

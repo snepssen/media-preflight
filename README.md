@@ -70,7 +70,7 @@ sanity check you should adjust — not as a promise about what the platform does
 today. Every profile carries the source its numbers came from and the month
 they were read, and the report prints both.
 
-You can write your own: see [docs/profiles.md](docs/profiles.md). A target is a
+You can write your own: see [PROFILES.md](PROFILES.md). A target is a
 JSON file, not a patch to this tool.
 
 ## Requirements

@@ -1,0 +1,272 @@
+/* Shared across the snepssen project pages. Each site keeps its own type and
+   palette; this is the common navigation and discovery layer between them. */
+:root {
+  --eco-gateway: #b69aff;
+  --eco-voice: #ffbc52;
+  --eco-protoke: #71e5d2;
+  --eco-tools: #ff765f;
+  --eco-preflight: #9ae66e;
+  --eco-current: var(--eco-protoke);
+  --eco-copy: var(--ink, #f3f0e3);
+  --eco-rail-h: 48px;
+}
+
+body[data-project="gateway-forge"] { --eco-current: var(--eco-gateway); }
+body[data-project="voice-forge"] { --eco-current: var(--eco-voice); }
+body[data-project="protoke"] { --eco-current: var(--eco-protoke); }
+body[data-project="tools-core"] {
+  --eco-current: var(--eco-tools);
+  --eco-copy: var(--chalk, #f3f0e3);
+}
+body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
+
+/* Wide diagrams and code samples own their scrolling inside their existing
+   wrappers; never let one of them make the whole page wobble sideways. */
+body { overflow-x: clip; }
+
+.ecosystem-progress {
+  position: fixed;
+  z-index: 1002;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  pointer-events: none;
+}
+.ecosystem-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--eco-current);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--eco-current) 70%, transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.ecosystem-rail {
+  position: sticky;
+  z-index: 1000;
+  top: 0;
+  min-height: var(--eco-rail-h);
+  border-bottom: 1px solid color-mix(in srgb, currentColor 17%, transparent);
+  background: color-mix(in srgb, var(--ground, #151611) 88%, transparent);
+  color: var(--eco-copy);
+  font: 600 12px/1 system-ui, sans-serif;
+  backdrop-filter: blur(18px) saturate(1.25);
+  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+}
+.ecosystem-rail__inner {
+  width: min(1180px, calc(100% - 40px));
+  min-height: var(--eco-rail-h);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+.ecosystem-rail__brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  color: inherit !important;
+  text-decoration: none !important;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.ecosystem-rail__brand::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--eco-current);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--eco-current) 15%, transparent),
+              0 0 18px var(--eco-current);
+}
+.ecosystem-rail__links {
+  min-width: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ecosystem-rail__links::-webkit-scrollbar { display: none; }
+.ecosystem-rail__links a {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 14px;
+  color: color-mix(in srgb, currentColor 58%, transparent) !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+.ecosystem-rail__links a::after {
+  content: "";
+  position: absolute;
+  inset: auto 14px 0;
+  height: 2px;
+  background: var(--project-accent, var(--eco-current));
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .2s ease;
+}
+.ecosystem-rail__links a:hover,
+.ecosystem-rail__links a:focus-visible,
+.ecosystem-rail__links a[aria-current="page"] { color: inherit !important; }
+.ecosystem-rail__links a:hover::after,
+.ecosystem-rail__links a:focus-visible::after,
+.ecosystem-rail__links a[aria-current="page"]::after { transform: scaleX(1); }
+.ecosystem-rail__links [data-project="gateway-forge"] { --project-accent: var(--eco-gateway); }
+.ecosystem-rail__links [data-project="voice-forge"] { --project-accent: var(--eco-voice); }
+.ecosystem-rail__links [data-project="protoke"] { --project-accent: var(--eco-protoke); }
+.ecosystem-rail__links [data-project="tools-core"] { --project-accent: var(--eco-tools); }
+.ecosystem-rail__links [data-project="media-preflight"] { --project-accent: var(--eco-preflight); }
+
+/* Existing sticky section navigation sits below the shared rail. */
+.jump, .site-nav { top: var(--eco-rail-h) !important; }
+
+.ecosystem-more {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(56px, 8vw, 96px) 0;
+  border-bottom: 1px solid var(--line, rgba(255,255,255,.14));
+}
+.ecosystem-more::before {
+  content: "";
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  left: max(-260px, calc(50% - 820px));
+  top: -280px;
+  border: 1px solid color-mix(in srgb, var(--eco-current) 22%, transparent);
+  border-radius: 50%;
+  box-shadow: 0 0 100px color-mix(in srgb, var(--eco-current) 7%, transparent);
+  pointer-events: none;
+}
+.ecosystem-more__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .65fr);
+  align-items: end;
+  gap: 32px;
+  margin-bottom: 30px;
+}
+.ecosystem-kicker {
+  margin: 0 0 12px !important;
+  color: var(--eco-current) !important;
+  font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.ecosystem-more h2 {
+  margin: 0;
+  max-width: 14ch;
+}
+.ecosystem-more__intro {
+  margin: 0 !important;
+  color: var(--muted, #999) !important;
+  font-size: 16px;
+}
+.ecosystem-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line, rgba(255,255,255,.14));
+  background: var(--line, rgba(255,255,255,.14));
+}
+.ecosystem-card {
+  --card-accent: var(--eco-current);
+  --mx: 50%;
+  --my: 50%;
+  position: relative;
+  isolation: isolate;
+  min-height: 310px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  color: var(--eco-copy) !important;
+  background: var(--surface, #1e1f19);
+  text-decoration: none !important;
+}
+.ecosystem-card::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(340px circle at var(--mx) var(--my),
+    color-mix(in srgb, var(--card-accent) 20%, transparent), transparent 58%);
+  transition: opacity .22s ease;
+}
+.ecosystem-card:hover::before,
+.ecosystem-card:focus-visible::before { opacity: 1; }
+.ecosystem-card[data-project="gateway-forge"] { --card-accent: var(--eco-gateway); }
+.ecosystem-card[data-project="voice-forge"] { --card-accent: var(--eco-voice); }
+.ecosystem-card[data-project="protoke"] { --card-accent: var(--eco-protoke); }
+.ecosystem-card[data-project="tools-core"] { --card-accent: var(--eco-tools); }
+.ecosystem-card[data-project="media-preflight"] { --card-accent: var(--eco-preflight); }
+.ecosystem-card[aria-current="page"] {
+  box-shadow: inset 0 3px 0 var(--card-accent);
+}
+.ecosystem-card__index {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--card-accent);
+  font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .12em;
+}
+.ecosystem-card__index span:last-child { color: var(--muted, #999); }
+.ecosystem-card__glyph {
+  margin: auto 0 24px;
+  color: var(--card-accent);
+  font: 400 clamp(34px, 4vw, 50px)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: -.08em;
+}
+.ecosystem-card h3 {
+  margin: 0 0 10px;
+  color: inherit;
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.05;
+}
+.ecosystem-card p {
+  margin: 0 !important;
+  color: var(--muted, #999) !important;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.ecosystem-card__go {
+  margin-top: 20px;
+  color: var(--card-accent);
+  font: 700 12px/1 system-ui, sans-serif;
+}
+
+.ecosystem-ready [data-eco-reveal] {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1);
+}
+.ecosystem-ready [data-eco-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 1180px) {
+  .ecosystem-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+  .ecosystem-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ecosystem-more__head { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .ecosystem-rail__inner { width: 100%; gap: 10px; padding-left: 14px; }
+  .ecosystem-rail__brand span { display: none; }
+  .ecosystem-rail__links a { padding-inline: 11px; }
+  .ecosystem-grid { grid-template-columns: 1fr; }
+  .ecosystem-card { min-height: 245px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ecosystem-ready [data-eco-reveal] { opacity: 1; transform: none; transition: none; }
+  .ecosystem-card::before, .ecosystem-rail__links a::after { transition: none; }
+}

@@ -6,7 +6,7 @@ corrected copy that is measured again from scratch before it claims to be
 fixed. Python 3 standard library only, ffmpeg and ffprobe as external programs,
 a browser page on `127.0.0.1` as the window. MIT.
 
-Read `README.md` for what it does and `docs/profiles.md` for how targets are
+Read `README.md` for what it does and `PROFILES.md` for how targets are
 written. This file is the short version: what will bite you if you don't know
 it.
 
