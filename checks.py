@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import math
 
+import captions
+
 FAIL, WARN, PASS, SKIP = "fail", "warn", "pass", "skip"
 
 
@@ -65,6 +67,38 @@ def _av_gap(facts, m):
     return abs(a - v)
 
 
+def _video(facts, field, default=None):
+    stream = facts.get("video") or {}
+    value = stream.get(field)
+    return default if value is None else value
+
+
+def _resolution(facts, m):
+    width, height = _video(facts, "width"), _video(facts, "height")
+    return f"{width}x{height}" if width and height else None
+
+
+def _aspect_ratio(facts, m):
+    """Width over height, so a rule can be written as a band rather than a
+    list of resolutions somebody has to keep up to date."""
+    width, height = _video(facts, "width"), _video(facts, "height")
+    if not width or not height:
+        return None
+    return round(width / height, 4)
+
+
+def _interlaced(facts, m):
+    order = _video(facts, "field_order")
+    if not order:
+        return None
+    return order not in ("progressive", "unknown")
+
+
+def _video_bitrate_kbps(facts, m):
+    rate = _video(facts, "bit_rate")
+    return round(rate / 1000.0, 1) if rate else None
+
+
 def _worst_short_term(facts, m):
     values = [row["short_term"] for row in (m.get("timeline") or [])
               if row.get("short_term") is not None]
@@ -81,7 +115,10 @@ METRICS = {
     "noise_floor_dbfs": lambda f, m: m.get("noise_floor_dbfs"),
     "dc_offset_max": _dc_offset_max,
     "channel_rms_spread_db": lambda f, m: m.get("channel_rms_spread_db"),
-    "silent_channel_count": lambda f, m: float(len(m.get("silent_channels") or [])),
+    # A file with no audio has not passed the silent-channel check; it has no
+    # channels to be silent, which is a different thing and reads as a skip.
+    "silent_channel_count": lambda f, m: (float(len(m["silent_channels"]))
+                                          if "silent_channels" in m else None),
     "phase_min": lambda f, m: m.get("phase_min"),
     "lead_silence_s": lambda f, m: m.get("lead_silence_s"),
     "tail_silence_s": lambda f, m: m.get("tail_silence_s"),
@@ -102,6 +139,42 @@ METRICS = {
     "bit_depth": lambda f, m: _audio(f, "bits_per_sample") or None,
     "cover_art": lambda f, m: f.get("cover_art"),
     "av_duration_gap_s": _av_gap,
+
+    # picture, declared
+    "video_codec": lambda f, m: _video(f, "codec"),
+    "video_width": lambda f, m: _video(f, "width"),
+    "video_height": lambda f, m: _video(f, "height"),
+    "resolution": _resolution,
+    "frame_rate": lambda f, m: _video(f, "avg_frame_rate"),
+    "frame_rate_mode": lambda f, m: m.get("frame_rate_mode"),
+    "pix_fmt": lambda f, m: _video(f, "pix_fmt"),
+    "aspect_ratio": _aspect_ratio,
+    "video_bitrate_kbps": _video_bitrate_kbps,
+    "interlaced": _interlaced,
+
+    # picture, measured
+    "black_seconds": lambda f, m: m.get("black_seconds"),
+    "longest_black_s": lambda f, m: m.get("longest_black_s"),
+    "leading_black_s": lambda f, m: m.get("leading_black_s"),
+    "trailing_black_s": lambda f, m: m.get("trailing_black_s"),
+    "frozen_seconds": lambda f, m: m.get("frozen_seconds"),
+    "longest_frozen_s": lambda f, m: m.get("longest_frozen_s"),
+    "flash_regions": lambda f, m: m.get("flash_regions"),
+
+    # captions
+    "caption_cue_count": lambda f, m: m.get("caption_cue_count"),
+    "caption_format": lambda f, m: m.get("caption_format"),
+    "caption_overlaps": lambda f, m: m.get("caption_overlaps"),
+    "caption_shortest_cue_s": lambda f, m: m.get("caption_shortest_cue_s"),
+    "caption_longest_cue_s": lambda f, m: m.get("caption_longest_cue_s"),
+    "caption_max_cps": lambda f, m: m.get("caption_max_cps"),
+    "caption_max_line_length": lambda f, m: m.get("caption_max_line_length"),
+    "caption_max_lines": lambda f, m: m.get("caption_max_lines"),
+    "caption_shortest_gap_s": lambda f, m: m.get("caption_shortest_gap_s"),
+    "caption_past_end_s": lambda f, m: m.get("caption_past_end_s"),
+    "caption_empty_cues": lambda f, m: m.get("caption_empty_cues"),
+    "caption_bad_timing": lambda f, m: m.get("caption_bad_timing"),
+    "caption_missing_fonts": lambda f, m: m.get("caption_missing_fonts"),
 }
 
 # Metrics whose failures the one-second timeline can point at, because the
@@ -117,6 +190,21 @@ LOCATABLE = {
     "lead_silence_s": "silence",
     "tail_silence_s": "silence",
     "longest_mid_silence_s": "silence",
+    "black_seconds": "black",
+    "longest_black_s": "black",
+    "leading_black_s": "black",
+    "trailing_black_s": "black",
+    "frozen_seconds": "frozen",
+    "longest_frozen_s": "frozen",
+    "flash_regions": "flash",
+    "caption_overlaps": "caption_overlaps",
+    "caption_max_cps": "captions",
+    "caption_max_line_length": "captions",
+    "caption_max_lines": "captions",
+    "caption_shortest_cue_s": "captions",
+    "caption_longest_cue_s": "captions",
+    "caption_empty_cues": "captions",
+    "caption_bad_timing": "captions",
 }
 
 
@@ -127,6 +215,11 @@ DECLARED_METRICS = {
     "audio_codec", "sample_rate", "channels", "audio_bitrate_kbps",
     "bitrate_mode", "container", "bit_depth", "cover_art", "duration_s",
     "duration_min", "av_duration_gap_s",
+    "video_codec", "video_width", "video_height", "resolution", "frame_rate",
+    "frame_rate_mode", "pix_fmt", "video_bitrate_kbps", "interlaced",
+    "aspect_ratio",
+    "caption_cue_count", "caption_format", "caption_missing_fonts",
+    "caption_shortest_gap_s", "caption_past_end_s",
 }
 
 
@@ -286,6 +379,30 @@ def locate(rule, value, facts, measurements, locator=None):
             windows = locator(threshold)
             measurements["peak_windows"] = windows
         return list(windows or [])
+
+    if kind in ("black", "frozen"):
+        items = measurements.get(kind) or []
+        metric = rule["metric"]
+        if metric.startswith("leading"):
+            items = [i for i in items if i.get("position") == "head"]
+        elif metric.startswith("trailing"):
+            items = [i for i in items if i.get("position") == "tail"]
+        elif metric.startswith("longest") and rule.get("max") is not None:
+            items = [i for i in items if i["duration"] > rule["max"]]
+        return [dict(i) for i in items]
+
+    if kind == "flash":
+        return [dict(i) for i in (measurements.get("flashes") or [])]
+
+    if kind == "caption_overlaps":
+        return [dict(i) for i in
+                (measurements.get("caption_overlap_intervals") or [])]
+
+    if kind == "captions":
+        # Which cues are at fault depends on the rule's own threshold, so the
+        # test lives beside the cues rather than here.
+        return captions.offending_cues(rule["metric"], rule,
+                                       measurements.get("cues"))
 
     if kind == "silence":
         wanted = {"lead_silence_s": "head", "tail_silence_s": "tail",

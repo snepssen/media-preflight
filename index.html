@@ -131,6 +131,7 @@
   <section class="panel hidden" id="reportPanel">
     <p class="verdict" id="verdict"></p>
     <p class="counts" id="counts"></p>
+    <p class="chosen" id="fileLine" style="margin:-8px 0 14px"></p>
     <div id="findings"></div>
     <p class="stamps hidden" id="stamps"></p>
     <div class="row">
@@ -165,9 +166,9 @@ let state = null, current = null, showPasses = false, lastPlan = null;
 
 const STAGES = [
   { key: "container", label: "container" },
-  { key: "video", label: "video", skip: true },
   { key: "audio", label: "audio" },
-  { key: "captions", label: "captions", skip: true },
+  { key: "video", label: "video" },
+  { key: "captions", label: "captions" },
   { key: "target", label: "delivery target" },
 ];
 
@@ -183,24 +184,21 @@ async function api(path, body) {
   return data;
 }
 
-function drawPath(activeKey) {
+// A stage the file has no material for — the picture nodes on an audio file —
+// is drawn dimmed rather than left out, so the path keeps its shape and the
+// absence is legible.
+function drawPath(activeKey, seenKeys) {
   const seen = STAGES.findIndex((s) => s.key === activeKey);
   $("signalPath").innerHTML = STAGES.map((stage, index) => {
     let cls = "stage";
-    if (stage.skip) cls += " skip";
-    else if (index < seen) cls += " done";
-    else if (index === seen) cls += " active";
-    const title = stage.skip ? ' title="not in this release"' : "";
+    const visited = seenKeys && seenKeys.has(stage.key);
+    if (index === seen) cls += " active";
+    else if (visited) cls += " done";
+    else if (seen >= 0 && index < seen) cls += " skip";
+    const title = (seen >= 0 && index < seen && !visited)
+      ? ' title="nothing in this file to measure here"' : "";
     return `<span class="${cls}"${title}>${stage.label}</span>`;
   }).join('<span class="arrow">→</span>');
-}
-
-function stageKey(text) {
-  if (!text) return "container";
-  if (text.includes("container")) return "container";
-  if (text.includes("audio") || text.includes("measur")) return "audio";
-  if (text.includes("corrected") || text.includes("rebuild")) return "audio";
-  return "target";
 }
 
 function esc(text) {
@@ -216,6 +214,28 @@ function timecode(seconds) {
   return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+function describeFile(file) {
+  const bits = [file.name];
+  if (file.duration_s) bits.push(timecode(file.duration_s));
+  if (file.audio) {
+    bits.push([file.audio.codec,
+      file.audio.sample_rate ? (file.audio.sample_rate / 1000) + " kHz" : "",
+      { 1: "mono", 2: "stereo" }[file.audio.channels] || (file.audio.channels + " ch"),
+    ].filter(Boolean).join(" "));
+  }
+  if (file.video) {
+    bits.push([file.video.codec,
+      file.video.width ? `${file.video.width}x${file.video.height}` : "",
+      file.video.frame_rate ? file.video.frame_rate.toFixed(3).replace(/\.?0+$/, "") + " fps" : "",
+    ].filter(Boolean).join(" "));
+  }
+  if (file.captions && file.captions.cues != null) {
+    const n = file.captions.cues;
+    bits.push(`${file.captions.format} ${n} cue${n === 1 ? "" : "s"} ${file.captions.origin || ""}`.trim());
+  }
+  return bits.join("  ·  ");
+}
+
 const MARK = { pass: "✓", fail: "✕", warn: "⚠", skip: "·" };
 const ORDER = { fail: 0, warn: 1, pass: 2, skip: 3 };
 
@@ -228,12 +248,14 @@ function renderReport(envelope) {
   $("verdict").className = "verdict " + envelope.verdict;
   const c = envelope.counts;
   $("counts").textContent =
-    `${c.fail} failed, ${c.warn} warned, ${c.pass} passed, ${c.skip} not checked` +
-    ` — ${envelope.file.name}`;
+    `${c.fail} failed, ${c.warn} warned, ${c.pass} passed, ${c.skip} not checked`;
+  $("fileLine").textContent = describeFile(envelope.file);
 
-  const findings = [...envelope.findings]
-    .sort((a, b) => ORDER[a.status] - ORDER[b.status])
-    .filter((f) => showPasses || f.status === "fail" || f.status === "warn");
+  const sorted = [...envelope.findings]
+    .sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  const skipped = sorted.filter((f) => f.status === "skip");
+  const findings = sorted.filter((f) =>
+    f.status !== "skip" && (showPasses || f.status !== "pass"));
 
   $("findings").innerHTML = findings.map((f) => {
     const where = f.intervals && f.intervals.length
@@ -249,7 +271,12 @@ function renderReport(envelope) {
       <span>${esc(f.label)}: ${esc(f.actual)}</span>
       <span class="required">${f.required ? "Required: " + esc(f.required) : ""}</span>
       ${where}${note}</div>`;
-  }).join("");
+  }).join("") + (skipped.length ? `<div class="finding">
+      <span class="mark skip">·</span>
+      <span class="where" style="grid-column:2/-1">${skipped.length} not checked —
+        nothing in this file to measure them against:
+        ${esc(skipped.slice(0, 8).map((f) => f.label.toLowerCase()).join(", "))}</span>
+    </div>` : "");
 
   const stamps = [...new Set(envelope.findings
     .filter((f) => f.status === "fail" || f.status === "warn")
@@ -271,11 +298,13 @@ function renderReport(envelope) {
 }
 
 async function poll(jobId, onDone) {
+  const seen = new Set();
   const tick = async () => {
     const job = await api(`/job?id=${encodeURIComponent(jobId)}`);
     $("bar").style.width = Math.round((job.progress || 0) * 100) + "%";
     $("stage").textContent = job.stage || "";
-    drawPath(stageKey(job.stage));
+    if (job.phase) seen.add(job.phase);
+    drawPath(job.phase || "container", seen);
     if (job.state === "running") return setTimeout(tick, 220);
     $("progressPanel").classList.add("hidden");
     if (job.state === "error") return fail(job.error);
@@ -294,7 +323,7 @@ function busy(on) {
   $("run").disabled = on;
   $("toolError").classList.add("hidden");
   $("progressPanel").classList.toggle("hidden", !on);
-  if (on) { $("bar").style.width = "0%"; drawPath("container"); }
+  if (on) { $("bar").style.width = "0%"; drawPath("container", new Set()); }
 }
 
 async function boot() {

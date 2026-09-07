@@ -82,6 +82,7 @@ def start_job(work):
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {"state": "running", "progress": 0.0,
+                         "phase": "container",
                          "stage": "reading the container"}
 
     def update(**fields):
@@ -108,23 +109,40 @@ def job_state(job_id):
 
 # ------------------------------------------------------------------- the work
 
+# What each phase of a run is called in the window, and which node of the
+# signal path lights up while it runs.
+STAGE_WORDS = {
+    "container": "reading the container",
+    "audio": "measuring the audio",
+    "video": "measuring the picture",
+    "captions": "reading the captions",
+    "target": "comparing against the target",
+}
+
+
+def _stage_reporter(update):
+    def announce(name):
+        update(phase=name, stage=STAGE_WORDS.get(name, name))
+    return announce
+
+
 def check_job(path, target):
     def work(update):
         cached = _recall(path, target)
         if cached:
-            update(stage="already measured", progress=1.0)
+            update(stage="already measured", phase="target", progress=1.0)
             return cached["envelope"]
 
         profile = profiles.get(target)
-        update(stage="reading the container", progress=0.02)
+        update(stage="reading the container", phase="container", progress=0.02)
 
         def progress(fraction):
-            update(stage="measuring the audio",
-                   progress=0.05 + fraction * 0.9)
+            update(progress=0.05 + fraction * 0.9)
 
         facts, measurements, result, profile = preflight.run(
-            path, profile, progress=progress)
-        update(stage="comparing against the target", progress=0.97)
+            path, profile, progress=progress, stage=_stage_reporter(update))
+        update(stage="comparing against the target", phase="target",
+               progress=0.97)
         envelope = report.envelope(facts, measurements, result, profile)
         _remember(path, target, {"facts": facts, "measurements": measurements,
                                  "result": result, "profile": profile,
@@ -168,7 +186,8 @@ def fix_job(path, target, overwrite=False):
     def work(update):
         cached = _recall(path, target)
         if not cached:
-            update(stage="measuring the audio", progress=0.05)
+            update(stage="measuring the audio", phase="audio",
+                   progress=0.05)
             profile = profiles.get(target)
             facts, measurements, result, profile = preflight.run(path, profile)
             cached = {"facts": facts, "measurements": measurements,
@@ -184,12 +203,14 @@ def fix_job(path, target, overwrite=False):
                 "No failing check here has a safe automatic fix.")
 
         ffmpeg, _ = platform_support.require_tools()
-        update(stage="writing the corrected copy", progress=0.3)
+        update(stage="writing the corrected copy", phase="audio",
+               progress=0.3)
         written, command, prepared = corrections.apply(
             path, planned["steps"], cached["facts"], ffmpeg=ffmpeg,
             overwrite=overwrite)
 
-        update(stage="measuring the corrected copy", progress=0.6)
+        update(stage="measuring the corrected copy", phase="audio",
+               progress=0.6)
         after = preflight.run(written, cached["profile"])
         after_envelope = report.envelope(
             after[0], after[1], after[2], cached["profile"],
@@ -202,7 +223,8 @@ def fix_job(path, target, overwrite=False):
                                                cached["profile"])
             if not adjusted:
                 break
-            update(stage=f"rebuilding from the source — {why}", progress=0.75)
+            update(stage=f"rebuilding from the source — {why}",
+                   phase="audio", progress=0.75)
             written, command, prepared = corrections.apply(
                 path, adjusted, cached["facts"], destination=written,
                 ffmpeg=ffmpeg, overwrite=True)

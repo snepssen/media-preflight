@@ -175,6 +175,44 @@ YOUTUBE = {
         {"id": "bitrate", "metric": "audio_bitrate_kbps", "label": "Audio bitrate",
          "unit": "kbps", "min": 128.0, "warn_min": 192.0, "severity": "warn",
          "fix": "encode"},
+        {"id": "video_codec", "metric": "video_codec", "label": "Video codec",
+         "one_of": ["h264", "vp9", "av1", "hevc"], "severity": "warn"},
+        {"id": "pix_fmt", "metric": "pix_fmt", "label": "Pixel format",
+         "one_of": ["yuv420p", "yuv420p10le"], "severity": "warn",
+         "note": "Anything else is re-encoded on ingest, and 4:2:2 and 4:4:4 "
+                 "sources gain nothing by being uploaded that way."},
+        {"id": "height", "metric": "video_height", "label": "Frame height",
+         "unit": "px", "min": 720, "severity": "warn",
+         "note": "Below 720 lines the encoder is given less to work with than "
+                 "the platform's own presets expect."},
+        {"id": "frame_rate_mode", "metric": "frame_rate_mode",
+         "label": "Frame rate mode", "one_of": ["cfr"], "severity": "warn",
+         "note": "Variable frame rate plays fine and quietly ruins anything "
+                 "downstream that assumes a constant one — most editing "
+                 "software, and every burn-in workflow."},
+        {"id": "interlaced", "metric": "interlaced", "label": "Interlacing",
+         "forbid": True, "severity": "warn",
+         "note": "Interlaced material is deinterlaced on ingest, by a filter "
+                 "you did not choose."},
+        {"id": "trailing_black", "metric": "trailing_black_s",
+         "label": "Black at the end", "unit": "s", "max": 3.0,
+         "severity": "warn",
+         "note": "A long black tail is usually a render that ran past the "
+                 "edit, and it is what the thumbnail picker sees."},
+        {"id": "frozen", "metric": "longest_frozen_s",
+         "label": "Frozen picture", "unit": "s", "max": 4.0,
+         "severity": "warn",
+         "note": "This tool's own screening threshold, not a rule of the "
+                 "platform: a still frame is legitimate over a title card and "
+                 "a fault in the middle of a shot."},
+        {"id": "flashing", "metric": "flash_regions",
+         "label": "Flashing risk", "max": 0.0, "severity": "warn",
+         "note": "A screening heuristic, not a compliance test: it counts "
+                 "large frame-to-frame changes in average luminance and flags "
+                 "any second holding three or more, which is where WCAG draws "
+                 "its general flash threshold. It does no spatial analysis and "
+                 "knows nothing about the separate red-flash rule. Look at "
+                 "these passages; do not treat silence here as a pass."},
     ],
 }
 
@@ -203,6 +241,23 @@ SOCIAL_VERTICAL = {
          "label": "Ending", "forbid": True, "severity": "warn",
          "note": "The file is still at programme level on its last sample; "
                  "on a looping feed that reads as a cut-off."},
+        {"id": "height", "metric": "video_height", "label": "Frame height",
+         "unit": "px", "min": 1080, "severity": "warn"},
+        {"id": "aspect", "metric": "aspect_ratio", "label": "Aspect ratio",
+         "min": 0.5, "max": 0.5626, "severity": "warn",
+         "note": "Between 9:16 and 9:16-ish. A landscape upload is letterboxed "
+                 "into a fraction of the screen."},
+        {"id": "frame_rate_mode", "metric": "frame_rate_mode",
+         "label": "Frame rate mode", "one_of": ["cfr"], "severity": "warn"},
+        {"id": "leading_black", "metric": "leading_black_s",
+         "label": "Black at the start", "unit": "s", "max": 0.2,
+         "severity": "warn",
+         "note": "The first frame is the thumbnail and the first thing a "
+                 "scrolling viewer sees. Black is a wasted second."},
+        {"id": "flashing", "metric": "flash_regions",
+         "label": "Flashing risk", "max": 0.0, "severity": "warn",
+         "note": "A screening heuristic, not a compliance test — see the "
+                 "documentation before relying on it either way."},
     ],
 }
 
@@ -223,6 +278,21 @@ GENERIC_WEB = {
         {"id": "integrated", "metric": "integrated_lufs",
          "label": "Integrated loudness", "unit": "LUFS",
          "min": -24.0, "max": -9.0, "severity": "warn", "fix": "loudnorm"},
+        {"id": "frame_rate_mode", "metric": "frame_rate_mode",
+         "label": "Frame rate mode", "one_of": ["cfr"], "severity": "warn"},
+        {"id": "leading_black", "metric": "leading_black_s",
+         "label": "Black at the start", "unit": "s", "max": 1.0,
+         "severity": "warn"},
+        {"id": "trailing_black", "metric": "trailing_black_s",
+         "label": "Black at the end", "unit": "s", "max": 3.0,
+         "severity": "warn"},
+        {"id": "frozen", "metric": "longest_frozen_s",
+         "label": "Frozen picture", "unit": "s", "max": 5.0,
+         "severity": "warn"},
+        {"id": "flashing", "metric": "flash_regions",
+         "label": "Flashing risk", "max": 0.0, "severity": "warn",
+         "note": "A screening heuristic, not a compliance test — it finds the "
+                 "passages worth looking at, and cannot clear a programme."},
     ],
 }
 
@@ -254,11 +324,70 @@ UNIVERSAL = [
      "label": "Audio/video duration", "unit": "s", "max": 0.5,
      "severity": "warn",
      "note": "The picture and the sound do not end together."},
+    {"id": "caption_overlaps", "metric": "caption_overlaps",
+     "label": "Overlapping captions", "max": 0.0, "severity": "fail",
+     "note": "Two cues on screen at once. Players resolve this differently "
+             "and none of them resolve it the way you meant."},
+    {"id": "caption_bad_timing", "metric": "caption_bad_timing",
+     "label": "Impossible caption timings", "max": 0.0, "severity": "fail",
+     "note": "A cue that ends before it starts, or lasts no time at all."},
+    {"id": "caption_past_end", "metric": "caption_past_end_s",
+     "label": "Captions past the end", "unit": "s", "max": 0.5,
+     "severity": "warn",
+     "note": "Cues timed beyond the last frame — usually a caption file left "
+             "over from a longer cut."},
+    {"id": "caption_missing_fonts", "metric": "caption_missing_fonts",
+     "label": "Missing subtitle fonts", "max": 0.0, "severity": "warn",
+     "note": "Named by the subtitle file and not installed on this machine. "
+             "Whether it matters depends on where it will be rendered."},
 ]
 
 
+SUBTITLES = {
+    "id": "subtitles",
+    "label": "Subtitles — readability",
+    "kind": "captions",
+    "summary": "Reading speed, line length and cue timing, against the "
+               "conventions most subtitling guidance is written in.",
+    "source": "Common subtitling practice, not a platform requirement",
+    "checked": "2026-09",
+    "confidence": "informal",
+    "rules": [
+        {"id": "reading_speed", "metric": "caption_max_cps",
+         "label": "Reading speed", "unit": "chars/s", "max": 21.0,
+         "warn_max": 17.0, "severity": "fail",
+         "note": "Characters per second is a proxy and knows nothing about "
+                 "vocabulary, language, or who is watching. Seventeen is "
+                 "comfortable for most adult viewers in English and far too "
+                 "fast for a children's programme. Change the number."},
+        {"id": "line_length", "metric": "caption_max_line_length",
+         "label": "Longest line", "unit": "chars", "max": 42.0,
+         "warn_max": 37.0, "severity": "fail",
+         "note": "Forty-two characters is the width most players and most "
+                 "broadcast guidance assume."},
+        {"id": "line_count", "metric": "caption_max_lines",
+         "label": "Lines per cue", "max": 2.0, "severity": "fail",
+         "note": "A third line covers picture and is read as an error by "
+                 "most viewers before they finish it."},
+        {"id": "min_duration", "metric": "caption_shortest_cue_s",
+         "label": "Shortest cue", "unit": "s", "min": 1.0, "warn_min": 1.4,
+         "severity": "fail",
+         "note": "Below a second a cue registers as a flicker rather than as "
+                 "words, however few characters it holds."},
+        {"id": "max_duration", "metric": "caption_longest_cue_s",
+         "label": "Longest cue", "unit": "s", "max": 7.0, "severity": "warn",
+         "note": "Past about seven seconds a viewer has read it twice and "
+                 "started to wonder whether the player has frozen."},
+        {"id": "empty", "metric": "caption_empty_cues",
+         "label": "Empty cues", "max": 0.0, "severity": "warn"},
+        {"id": "cue_count", "metric": "caption_cue_count",
+         "label": "Cues", "min": 1.0, "severity": "fail"},
+    ],
+}
+
+
 BUILT_IN = [ACX, EBU_R128, SPOTIFY_PODCAST, YOUTUBE, SOCIAL_VERTICAL,
-            GENERIC_WEB]
+            GENERIC_WEB, SUBTITLES]
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROFILE_DIR = os.path.join(HERE, "profiles")

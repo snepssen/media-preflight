@@ -9,7 +9,7 @@ passes can disagree about where a moment is.
 
 The filter chain is:
 
-    ebur128 -> ametadata(print) -> [aphasemeter] -> silencedetect -> astats
+    ebur128 -> [aphasemeter] -> ametadata(print) -> silencedetect -> astats
 
 ebur128 and aphasemeter *inject* per-frame metadata, ametadata prints it to
 stdout, and silencedetect and astats write their own findings to stderr. Both

@@ -134,7 +134,156 @@ def build(folder=DEFAULT_DIR):
     written.append((os.path.basename(video),
                     "Five seconds of picture with acceptable audio."))
 
+    written += build_video(folder, ffmpeg)
+    written += build_captions(folder)
     return folder, written
+
+
+# --------------------------------------------------------------------- video
+
+def _encode(ffmpeg, path, *inputs, filters=None):
+    command = [ffmpeg, "-y", "-v", "error"]
+    for source in inputs:
+        command += ["-f", "lavfi", "-i", source]
+    if filters:
+        command += ["-filter_complex", filters]
+    command += ["-c:v", "libx264", "-pix_fmt", "yuv420p", path]
+    subprocess.run(command, check=True, **platform_support.no_console())
+    return path
+
+
+# Ten alternations a second, well past the three-per-second threshold the
+# flashing screen is written around. The comma inside geq's expression is
+# escaped because a filtergraph splits its options on commas first.
+STROBE = ("color=c=white:size=320x180:rate=30:d=4,"
+          "geq=lum='if(lt(mod(floor(T*10)\\,2)\\,1)\\,235\\,16)'"
+          ":cb=128:cr=128")
+
+
+def build_video(folder, ffmpeg):
+    written = []
+    size = "size=320x180"
+
+    _encode(ffmpeg, os.path.join(folder, "video-black-tail.mp4"),
+            f"testsrc2={size}:rate=25:d=3", f"color=black:{size}:rate=25:d=4",
+            filters="[0:v][1:v]concat=n=2:v=1:a=0")
+    written.append(("video-black-tail.mp4",
+                    "Three seconds of picture and four of black, which is what "
+                    "a render that ran past the edit looks like."))
+
+    _encode(ffmpeg, os.path.join(folder, "video-frozen.mp4"),
+            f"testsrc2={size}:rate=25:d=3", f"color=c=gray:{size}:rate=25:d=6",
+            filters="[0:v][1:v]concat=n=2:v=1:a=0")
+    written.append(("video-frozen.mp4",
+                    "The picture stops moving six seconds before the file does."))
+
+    _encode(ffmpeg, os.path.join(folder, "video-strobe.mp4"), STROBE)
+    written.append(("video-strobe.mp4",
+                    "A ten-hertz full-frame flash: what the flashing screen "
+                    "is meant to find."))
+
+    # Variable frame rate has to be built rather than asked for: two segments
+    # at different rates, concatenated without re-timing, in a container that
+    # records per-frame durations honestly.
+    first = _encode(ffmpeg, os.path.join(folder, ".vfr-25.mp4"),
+                    f"testsrc2={size}:rate=25:d=2")
+    second = _encode(ffmpeg, os.path.join(folder, ".vfr-50.mp4"),
+                     f"testsrc2={size}:rate=50:d=2")
+    listing = os.path.join(folder, ".vfr-list.txt")
+    with open(listing, "w", encoding="utf-8") as handle:
+        for part in (first, second):
+            handle.write("file '%s'\n" % os.path.basename(part))
+    subprocess.run([ffmpeg, "-y", "-v", "error", "-f", "concat", "-safe", "0",
+                    "-i", listing, "-c", "copy", "-fps_mode", "passthrough",
+                    os.path.join(folder, "video-variable-rate.mkv")],
+                   check=True, **platform_support.no_console())
+    for temporary in (first, second, listing):
+        os.remove(temporary)
+    written.append(("video-variable-rate.mkv",
+                    "Twenty-five frames a second for two seconds, then fifty. "
+                    "Plays fine; ruins anything downstream that assumed one rate."))
+    return written
+
+
+# ------------------------------------------------------------------ captions
+
+# Timed the way a caption actually has to be: about fifty characters wants
+# three and a half seconds, or nobody finishes reading it.
+CLEAN_SRT = """1
+00:00:00,500 --> 00:00:04,000
+A line somebody can read
+in the time they are given.
+
+2
+00:00:04,500 --> 00:00:08,000
+And a second one, comfortably
+under the width limit.
+"""
+
+# The sidecar has to fit inside the five-second video it sits beside, or the
+# "captions past the end" check is right to complain about it.
+SIDECAR_SRT = """1
+00:00:00,500 --> 00:00:04,000
+A line somebody can read
+in the time it is given.
+"""
+
+BROKEN_SRT = """1
+00:00:00,200 --> 00:00:00,700
+This single line is far too long to be read in seven tenths of a second by anybody at all
+
+2
+00:00:00,500 --> 00:00:02,000
+Starting before the one above it has finished
+
+3
+00:00:02,100 --> 00:00:02,050
+Ending before it starts
+
+4
+00:00:03,000 --> 00:00:12,000
+Running well past the end of the picture it belongs to
+"""
+
+MISSING_FONT_ASS = """[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour
+Style: Default,A Font Nobody Has Installed,48,&H00FFFFFF
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.50,0:00:02.50,Default,,0,0,0,,Styled in a font that is not here
+Dialogue: 0,0:00:03.00,0:00:04.50,Default,,0,0,0,,{\\fnAnother Absent Face}And another
+"""
+
+
+def build_captions(folder):
+    written = []
+    for name, body, note in (
+        ("captions-clean.srt", CLEAN_SRT,
+         "Two well-formed cues, comfortably inside every convention."),
+        ("captions-broken.srt", BROKEN_SRT,
+         "One cue of each fault: unreadable speed, an overlap, a negative "
+         "duration, and a cue running past the end."),
+        ("captions-missing-font.ass", MISSING_FONT_ASS,
+         "Names two fonts no machine is likely to have, one in a style and "
+         "one inline."),
+    ):
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(body)
+        written.append((name, note))
+
+    # A sidecar found by name rather than by being pointed at: the same stem as
+    # video-with-audio.mp4, which is how a delivery actually arrives.
+    path = os.path.join(folder, "video-with-audio.srt")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(SIDECAR_SRT)
+    written.append((os.path.basename(path),
+                    "Clean captions beside the video, discovered by name."))
+    return written
 
 
 def main():

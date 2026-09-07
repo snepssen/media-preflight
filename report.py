@@ -61,6 +61,12 @@ def envelope(facts, measurements, result, profile, corrections=None):
                 "frame_rate": video.get("avg_frame_rate"),
             } if video else None,
             "cover_art": facts.get("cover_art"),
+            "captions": {
+                "format": measurements.get("caption_format"),
+                "origin": measurements.get("caption_origin"),
+                "source": measurements.get("caption_source"),
+                "cues": measurements.get("caption_cue_count"),
+            } if measurements.get("caption_cue_count") is not None else None,
         },
         "target": result["target"],
         "verdict": result["verdict"],
@@ -150,12 +156,24 @@ def text(report, width=68, show_passes=True):
     order = {"fail": 0, "warn": 1, "pass": 2, "skip": 3}
     findings = sorted(report["findings"], key=lambda f: order[f["status"]])
     for finding in findings:
-        if finding["status"] in ("pass", "skip") and not show_passes:
+        if finding["status"] == "skip":
+            continue
+        if finding["status"] == "pass" and not show_passes:
             continue
         lines.append(_finding_line(finding, width))
         if finding["status"] in ("fail", "warn"):
             for extra in _finding_detail(finding, width):
                 lines.append(extra)
+
+    # Checks that had nothing to measure get one line between them rather than
+    # one line each. A video target run against an audio file would otherwise
+    # bury four real findings under eight dashes.
+    skipped = [f for f in findings if f["status"] == "skip"]
+    if skipped:
+        names = ", ".join(f["label"].lower() for f in skipped[:6])
+        more = "" if len(skipped) <= 6 else f", and {len(skipped) - 6} more"
+        lines.append(f"· {len(skipped)} not checked — nothing in this file to "
+                     f"measure them against: {names}{more}")
 
     stamps = _all_timestamps(report)
     if stamps:
@@ -183,7 +201,11 @@ def _stream_line(file_info):
     bits = []
     if file_info.get("duration_s"):
         bits.append(checks.timecode(file_info["duration_s"]))
-    if file_info.get("container"):
+    caption = file_info.get("captions") or {}
+    # A caption file checked on its own has the caption format as its
+    # container, and printing it twice reads as a stutter.
+    caption_only = not file_info.get("audio") and not file_info.get("video")
+    if file_info.get("container") and not caption_only:
         bits.append(file_info["container"])
     audio = file_info.get("audio")
     if audio:
@@ -194,6 +216,13 @@ def _stream_line(file_info):
                    if audio.get("bit_rate") else "")
         bits.append(" ".join(x for x in [audio.get("codec"), rate, channels,
                                          bitrate] if x))
+    if caption and caption.get("cues") is not None:
+        where = {"sidecar": "sidecar", "embedded": "embedded"}.get(
+            caption.get("origin"), "")
+        count = caption["cues"]
+        bits.append(" ".join(x for x in [
+            caption.get("format"),
+            f"{count} cue" + ("" if count == 1 else "s"), where] if x))
     video = file_info.get("video")
     if video:
         size = f"{video['width']}x{video['height']}" if video.get("width") else ""

@@ -42,16 +42,21 @@ channels, channel imbalance, out-of-phase stereo that will cancel in mono.
 **Shape** — room tone at the head and tail, suspicious mid-file gaps, endings
 that stop while the programme is still at full level.
 
+**Picture** — black frames and frozen frames with the seconds they occupy,
+flashing passages worth a human look, resolution, pixel format, interlacing,
+and whether the frame rate is constant or variable.
+
+**Captions** — SubRip, WebVTT and Advanced SubStation, found as a sidecar
+beside the media, extracted from an embedded stream, or checked on their own.
+Overlapping cues, reading speed, line length and count, cues timed past the
+last frame, impossible timings, and subtitle fonts this machine does not have.
+
 **Declarations** — codec, container, sample rate, channel count, bitrate, and
 whether an MP3 is constant or variable bitrate.
 
 Every failure that can be tied to a moment carries one. Failures that are
 whole-file measurements say so rather than pointing at a second that means
 nothing.
-
-Video and caption checks — frame rate, resolution, variable-frame-rate
-warnings, black and frozen frames, caption overlaps and reading speed — are the
-next release. The audio path is complete.
 
 ## Targets
 
@@ -63,9 +68,11 @@ next release. The audio path is complete.
 | `youtube` | YouTube upload | published |
 | `social_vertical` | Instagram / TikTok | **informal** |
 | `web` | Generic web video | **informal** |
+| `subtitles` | Caption readability, on its own | **informal** |
 
-Two of these are marked *informal* because the platforms do not publish a
-specification. Those thresholds are the widely reported figures, offered as a
+Three of these are marked *informal* because there is no published
+specification to point at — two platforms that document nothing, and a set of
+subtitling conventions that reasonable people disagree about. Those thresholds are the widely reported figures, offered as a
 sanity check you should adjust — not as a promise about what the platform does
 today. Every profile carries the source its numbers came from and the month
 they were read, and the report prints both.
@@ -102,15 +109,33 @@ leaves the machine.
 
 ```sh
 python3 preflight.py check finished.mp3 --target acx
+python3 preflight.py check episode.mp4  --target youtube
+python3 preflight.py check film.srt     --target subtitles
 python3 preflight.py fix   finished.mp3 --target acx --dry-run
 python3 preflight.py fix   finished.mp3 --target acx
 python3 preflight.py targets
 ```
 
+Captions are found without being asked for: a sidecar beside the media first,
+then an embedded subtitle stream. `--captions path.srt` overrides both, and a
+caption file given on its own is checked on its own, with no media required.
+
 `check` exits 0 when the file passes, 1 when it fails, and 2 when the tool
 itself could not run — so it drops into a build script without parsing
 anything. `--strict` makes warnings count as failures. `--json` and
 `--markdown` write the machine-readable report and the client-facing one.
+
+## What costs a decode
+
+The audio measurements come out of one pass. The picture measurements come out
+of one more, and only when the target actually asks a question about the
+picture — decoding a ninety-minute film to count black frames is minutes of
+somebody's time, and a podcast profile has no reason to spend them.
+
+Two things earn a pass of their own, each on a condition: locating peaks and
+clipping, when the whole-file peak says a peak problem can exist at all; and
+loudnorm's own measurement, because it will not accept another filter's
+figures.
 
 ## The corrected copy
 
@@ -162,6 +187,9 @@ repeat by hand.
 - Publish anywhere
 - Repair with generative models — no invented audio, ever
 - Remove noise, de-ess, de-click, or otherwise change the recording's character
+- Retime, rewrite or reflow captions — it reports them and leaves them alone
+- Clear a programme for photosensitivity; the flashing check is a screening
+  heuristic that finds passages to look at, and says so wherever it appears
 - Ask you to sign in, upload, or spend a credit
 
 Noise reduction in particular is deliberately absent. A noise floor above the
@@ -172,7 +200,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 83 checks, about five seconds
+python3 -m unittest discover -s tests     # 134 checks, about eight seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ```
 
@@ -194,6 +222,8 @@ with an install line when ffmpeg is absent.
 | `index.html` | the window |
 | `probe.py` | what the file *says* it is — ffprobe, normalised |
 | `analysis.py` | what the audio *contains* — one decode, every measurement |
+| `video.py` | what the picture contains — black, frozen, flashing, frame rate |
+| `captions.py` | SubRip, WebVTT and ASS, parsed and measured |
 | `checks.py` | the rule engine: measurements plus a target, in, findings out |
 | `profiles.py` | the delivery targets, as data |
 | `corrections.py` | planning, previewing, applying and verifying a fix |

@@ -1,10 +1,15 @@
 # Media Preflight — working context
 
-A local-first inspector for finished media. Drop a file, pick a delivery
-target, get a pass/fail report with exact timestamps; optionally get a
-corrected copy that is measured again from scratch before it claims to be
-fixed. Python 3 standard library only, ffmpeg and ffprobe as external programs,
-a browser page on `127.0.0.1` as the window. MIT.
+A local-first inspector for finished media — audio, picture and captions.
+Drop a file, pick a delivery target, get a pass/fail report with exact
+timestamps; optionally get a corrected copy that is measured again from scratch
+before it claims to be fixed. Python 3 standard library only, ffmpeg and
+ffprobe as external programs, a browser page on `127.0.0.1` as the window. MIT.
+
+There is a project page in `docs/`, published by GitHub Pages, sharing
+`ecosystem.css` and `ecosystem.js` with the other snepssen sites. That folder
+is the site and nothing else; prose documentation lives at the top level
+(`PROFILES.md`), as it does in the sibling repositories.
 
 Read `README.md` for what it does and `PROFILES.md` for how targets are
 written. This file is the short version: what will bite you if you don't know
@@ -21,6 +26,10 @@ it.
 - Generative repair — no model ever touches the media
 - Noise reduction, de-essing, de-clicking, or anything that changes the
   character of a recording
+- Retiming, rewriting or reflowing captions. They are measured and reported;
+  correcting them is editing, and editing is somebody else's tool
+- Any claim to clear a programme for photosensitivity. The flashing check is a
+  screening heuristic and every place it surfaces says so
 
 The last one comes up every time somebody reads the noise-floor check and asks
 why it has no fix. The answer is in the profile's own note: the remedy is to
@@ -48,12 +57,12 @@ the correction is recomputed and applied *to the original file again* — never
 to the corrected copy — so however many attempts it takes, the number of lossy
 encodes stays at one. Bounded to two rebuilds.
 
-## The one-decode rule
+## The one-decode-per-stream rule
 
 `analysis.analyse` gets everything the audio report needs from a single pass:
 
 ```
-ebur128 -> ametadata(print) -> [aphasemeter] -> silencedetect -> astats
+ebur128 -> [aphasemeter] -> ametadata(print) -> silencedetect -> astats
 ```
 
 ebur128 and aphasemeter inject per-frame metadata, ametadata prints it to
@@ -71,6 +80,23 @@ Two things are allowed a second pass, and only on condition:
 
 Do not add a third without a reason of that kind.
 
+`video.analyse` does the same for the picture:
+
+```
+blackdetect -> freezedetect -> signalstats -> metadata(print)
+```
+
+It is a **separate** decode, deliberately. The two read different streams, and
+combining them would put two metadata printers on one pipe with nothing keeping
+their blocks apart. It runs only when the target has a rule that needs it —
+`preflight.VIDEO_METRICS` is the list — because decoding a feature to count
+black frames is minutes of somebody's time and a podcast profile has no reason
+to spend them. `parse_luma_stream` keeps only `YAVG`: signalstats prints
+fifteen fields a frame, and a ninety-minute film is 130,000 frames.
+
+Captions cost no decode at all unless they are embedded, in which case one
+`ffmpeg -f ass -` extraction reads them.
+
 ## Things measured the hard way, for a reason
 
 - **The timeline is bucketed to one second.** ebur128 reports every 100 ms; the
@@ -86,6 +112,17 @@ Do not add a third without a reason of that kind.
 - **ffmpeg is probed for `ebur128`, not trusted.** Slim builds omit it and the
   failure otherwise appears halfway through an analysis as a filtergraph error
   that says nothing about why.
+- **Frame rate mode is sampled, not read.** No header records whether a file is
+  constant or variable, so `video.classify_frame_durations` compares frame
+  durations against the median across three windows and allows 5% to disagree.
+  Demanding exactness would report most of the world's video as variable: a
+  correct constant-rate file can end on a short frame, and NTSC rates drift by
+  microseconds.
+- **Flashing is screened, not tested.** Three large luminance transitions in a
+  sliding second, which is where WCAG's general flash threshold sits. No
+  spatial analysis, no red-flash rule, no proportion-of-screen test. It finds
+  passages to look at and cannot clear anything — and the rule's `note` says
+  exactly that in every report it appears in.
 
 ## Traps
 
@@ -112,6 +149,16 @@ Do not add a third without a reason of that kind.
 - **Cover art is a video stream.** `probe.normalise` splits `attached_pic`
   streams out of `video_streams`, or every podcast episode becomes a video that
   fails every video rule.
+- **Absence is not a pass.** A metric that returns `0` when there is nothing to
+  measure turns a subtitle file into one that passed the silent-channel check.
+  Return `None` and let it skip. `silent_channel_count` had exactly this bug.
+- **ASS dialogue is not in time order.** Sorting on parse is what keeps every
+  cue in a re-ordered file from reporting as an overlap.
+- **A cue can start after the last frame.** `caption_past_end_s` compares
+  `max(start, end)`, because a cue whose own timing is backwards still sits
+  past the end of the picture.
+- **Odd frame dimensions break x264.** 4:2:0 chroma cannot represent an odd
+  number of lines; a 240x135 test fixture fails to encode. Keep fixtures even.
 
 ## The numbers in profiles.py
 
@@ -126,7 +173,7 @@ one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 83 checks, about five seconds
+python3 -m unittest discover -s tests    # 134 checks, about eight seconds
 python3 scripts/make_fixtures.py         # regenerate the test media
 python3 app.py                           # the window
 python3 preflight.py check f.wav -t acx  # the command line
@@ -141,11 +188,26 @@ ffmpeg's output shape breaks a test rather than filling a report with dashes.
 End-to-end tests use real files and skip with an install line when ffmpeg is
 absent — they do not pass silently on a machine that cannot run them.
 
+## Adding a check
+
+A new check is a `metric` entry in `checks.METRICS` and a rule in a profile.
+Three questions decide the rest:
+
+1. **Where does the number come from?** A header field goes in
+   `checks.DECLARED_METRICS` so the report does not apologise for having no
+   timestamp for it. A measurement goes in the pass that already reads that
+   stream.
+2. **Can a failure be pointed at?** Only if something holds *the same quantity*
+   over time. Add it to `checks.LOCATABLE` and give `checks.locate` a branch;
+   otherwise it is a whole-file finding and says so.
+3. **Is it a fault or a convention?** A fault belongs in `UNIVERSAL`. A
+   convention belongs in a profile that carries its source, and its `note`
+   should say plainly whose convention it is.
+
 ## Not yet built
 
-Video and caption checks: frame rate, resolution, variable-frame-rate warnings,
-black and frozen frames, flashing-risk regions, caption overlap and reading
-speed, missing subtitle fonts. The rule engine, report, and profile format
-already take them — a video rule is a `metric` entry in `checks.METRICS` and a
-line in a profile. `analysis.py` is where the measuring goes, under the same
-one-decode rule.
+Nothing in the original three-week plan. Candidates, in rough order of how
+often they would earn their place: interlacing field-order verification rather
+than trusting the header, a loudness-over-time chart in the window, per-chapter
+reporting for audiobooks, and batch checking of a folder against one target
+with a single summary.

@@ -22,39 +22,83 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import analysis
+import captions
 import checks
 import corrections
 import platform_support
 import probe
 import profiles
 import report
+import video
 
 
 class PreflightError(RuntimeError):
     """Anything the person running this needs to read as a sentence."""
 
 
-def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None):
-    """Measure one file against one target. Returns the report envelope."""
+# Everything the picture pass answers. Decoding a ninety-minute film to
+# measure black frames is minutes of somebody's time, so it happens only when
+# the target actually asks one of these questions.
+VIDEO_METRICS = {
+    "black_seconds", "longest_black_s", "leading_black_s", "trailing_black_s",
+    "frozen_seconds", "longest_frozen_s", "flash_regions",
+}
+CAPTION_METRICS = {name for name in checks.METRICS if name.startswith("caption_")}
+
+
+def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None,
+        caption_path=None, stage=None):
+    """Measure one file against one target. Returns the report envelope.
+
+    ``stage`` is called with 'container', 'audio', 'video', 'captions' or
+    'target' as each begins, so a window can show which part of the file is
+    being read rather than a bar with no subject.
+    """
     if ffmpeg is None or ffprobe is None:
         ffmpeg, ffprobe = platform_support.require_tools()
     profile = profiles.get(target) if not isinstance(target, dict) else target
+    announce = stage or (lambda name: None)
 
+    if is_caption_file(path) or caption_path and path == caption_path:
+        announce("captions")
+        return _run_caption_file(path, profile)
+
+    announce("container")
     facts = probe.inspect(path, ffprobe)
-    if not facts.get("audio"):
+    if not facts.get("audio") and not facts.get("video"):
         raise PreflightError(
-            f"{facts['name']} carries no audio stream. This release checks "
-            f"audio; container and picture checks arrive with the video pass.")
+            f"{facts['name']} carries neither audio nor picture that this "
+            f"tool can measure.")
 
-    audio = facts["audio"]
+    audio = facts.get("audio") or {}
     duration = facts["container"]["duration_s"] or audio.get("duration_s")
-    measurements = analysis.analyse(
-        path, ffmpeg=ffmpeg, channels=audio.get("channels", 2),
-        duration_s=duration, options=profile.get("options"),
-        progress=progress)
 
-    _add_declared_extras(path, facts, measurements, profile, ffprobe)
-    _add_clipping(path, facts, measurements, ffmpeg)
+    wants_video = bool(facts.get("video")) and _needs(profile, VIDEO_METRICS)
+    audio_share = 0.5 if wants_video else 1.0
+
+    measurements = {"settings": dict(analysis.DEFAULTS)}
+    if audio:
+        announce("audio")
+        measurements = analysis.analyse(
+            path, ffmpeg=ffmpeg, channels=audio.get("channels", 2),
+            duration_s=duration, options=profile.get("options"),
+            progress=_scaled(progress, 0.0, audio_share))
+        _add_declared_extras(path, facts, measurements, profile, ffprobe)
+        _add_clipping(path, facts, measurements, ffmpeg)
+
+    if wants_video:
+        announce("video")
+        measurements.update(_video_measurements(
+            path, facts, profile, ffmpeg, duration,
+            _scaled(progress, audio_share, 1.0)))
+    if _needs(profile, {"frame_rate_mode"}) and facts.get("video"):
+        measurements["frame_rate_mode"] = video.frame_rate_mode(
+            path, duration, ffprobe)
+    if _needs(profile, CAPTION_METRICS):
+        announce("captions")
+        _add_captions(path, facts, measurements, caption_path, ffmpeg, duration)
+
+    announce("target")
 
     def locator(threshold_dbfs):
         return analysis.locate_peaks(
@@ -65,10 +109,63 @@ def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None):
     return facts, measurements, result, profile
 
 
+def is_caption_file(path):
+    return os.path.splitext(path)[1].lstrip(".").lower() in \
+        platform_support.CAPTION_EXTS
+
+
+def _needs(profile, metrics):
+    return any(rule["metric"] in metrics for rule in profile.get("rules", []))
+
+
+def _scaled(progress, start, end):
+    """A progress callback covering one slice of the whole job."""
+    if progress is None:
+        return None
+    return lambda fraction: progress(start + fraction * (end - start))
+
+
+def _video_measurements(path, facts, profile, ffmpeg, duration, progress):
+    out = video.analyse(path, ffmpeg=ffmpeg, duration_s=duration,
+                        options=profile.get("options"), progress=progress)
+    # The audio pass already owns "settings"; the picture pass keeps its own
+    # under a name of its own rather than overwriting it.
+    out["video_settings"] = out.pop("settings", {})
+    return out
+
+
+def _add_captions(path, facts, measurements, caption_path, ffmpeg, duration):
+    """Attach a caption track when there is one to attach. Absence is not a fault."""
+    try:
+        track = captions.find(path, facts, caption_path, ffmpeg)
+    except captions.CaptionError as error:
+        measurements["caption_error"] = str(error)
+        return
+    if track:
+        measurements.update(captions.measure(track, duration))
+
+
+def _run_caption_file(path, profile):
+    """A subtitle file checked on its own, with no media beside it."""
+    track = captions.load(path)
+    facts = {
+        "path": os.path.abspath(path), "name": os.path.basename(path),
+        "size_bytes": os.path.getsize(path),
+        "container": {"format_name": track.get("format", ""),
+                      "format_long_name": "", "duration_s": None,
+                      "bit_rate": None, "tags": {}},
+        "chapters": 0, "streams": [], "audio": None, "audio_streams": [],
+        "video": None, "video_streams": [], "cover_art": False,
+        "subtitle_streams": [],
+    }
+    measurements = captions.measure(track, None)
+    result = checks.evaluate(facts, measurements, profile)
+    return facts, measurements, result, profile
+
+
 def _add_declared_extras(path, facts, measurements, profile, ffprobe):
     """Answers that cost a probe of their own, fetched only when a rule asks."""
-    metrics = {rule["metric"] for rule in profile.get("rules", [])}
-    if "bitrate_mode" in metrics:
+    if _needs(profile, {"bitrate_mode"}):
         measurements["bitrate_mode"] = probe.bitrate_mode(
             path, facts["container"]["duration_s"], ffprobe)
 
@@ -98,7 +195,8 @@ def _add_clipping(path, facts, measurements, ffmpeg):
 
 def command_check(args):
     facts, measurements, result, profile = run(
-        args.file, args.target, progress=_progress(args))
+        args.file, args.target, progress=_progress(args),
+        caption_path=args.captions)
     envelope = report.envelope(facts, measurements, result, profile)
     _write_outputs(args, envelope)
     if not args.quiet:
@@ -109,7 +207,8 @@ def command_check(args):
 
 def command_fix(args):
     facts, measurements, result, profile = run(
-        args.file, args.target, progress=_progress(args))
+        args.file, args.target, progress=_progress(args),
+        caption_path=args.captions)
     envelope = report.envelope(facts, measurements, result, profile)
 
     planned = corrections.plan(facts, measurements, result, profile)
@@ -291,6 +390,10 @@ def build_parser():
                          help="hide the checks that passed")
         sub.add_argument("--strict", action="store_true",
                          help="treat warnings as failures in the exit code")
+        sub.add_argument("--captions",
+                         help="caption file to check with this media; by "
+                              "default a sidecar beside it, then an embedded "
+                              "subtitle stream")
 
     check = subparsers.add_parser("check", help="measure and report")
     shared(check)
@@ -324,8 +427,8 @@ def main(argv=None):
     try:
         return args.handler(args)
     except (PreflightError, platform_support.ToolsMissing, probe.ProbeError,
-            analysis.AnalysisError, corrections.CorrectionError,
-            ValueError) as error:
+            analysis.AnalysisError, video.VideoError, captions.CaptionError,
+            corrections.CorrectionError, ValueError) as error:
         sys.stderr.write(f"{error}\n")
         return 2
     except KeyboardInterrupt:

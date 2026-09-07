@@ -15,12 +15,14 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL))
 
+import captions  # noqa: E402
 import checks  # noqa: E402
 import corrections  # noqa: E402
 import platform_support  # noqa: E402
 import preflight  # noqa: E402
 import profiles  # noqa: E402
 import report  # noqa: E402
+import video  # noqa: E402
 
 FFMPEG = platform_support.find_ffmpeg()
 FFPROBE = platform_support.find_ffprobe(FFMPEG)
@@ -153,6 +155,184 @@ class CorrectionTests(unittest.TestCase):
             ids = [step["id"] for step in plan["steps"]]
             self.assertIn("trim_head", ids)
             self.assertIn("trim_tail", ids)
+
+
+def picture(path, *sources, filters=None):
+    command = [FFMPEG, "-y", "-v", "error"]
+    for source in sources:
+        command += ["-f", "lavfi", "-i", source]
+    if filters:
+        command += ["-filter_complex", filters]
+    command += ["-c:v", "libx264", "-pix_fmt", "yuv420p", path]
+    subprocess.run(command, check=True)
+    return path
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class PictureTests(unittest.TestCase):
+    SIZE = "size=320x180"
+
+    def test_black_at_the_end_is_found_and_placed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = picture(os.path.join(folder, "tail.mp4"),
+                           f"testsrc2={self.SIZE}:rate=25:d=2",
+                           f"color=black:{self.SIZE}:rate=25:d=3",
+                           filters="[0:v][1:v]concat=n=2:v=1:a=0")
+            m = video.analyse(path, ffmpeg=FFMPEG, duration_s=5.0)
+            self.assertGreater(m["trailing_black_s"], 2.5)
+            self.assertEqual(m["leading_black_s"], 0)
+            self.assertEqual(m["black"][0]["position"], "tail")
+
+    def test_a_still_picture_reads_as_frozen(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = picture(os.path.join(folder, "frozen.mp4"),
+                           f"testsrc2={self.SIZE}:rate=25:d=2",
+                           f"color=c=gray:{self.SIZE}:rate=25:d=5",
+                           filters="[0:v][1:v]concat=n=2:v=1:a=0")
+            m = video.analyse(path, ffmpeg=FFMPEG, duration_s=7.0)
+            self.assertGreater(m["longest_frozen_s"], 4.0)
+
+    def test_a_strobe_is_flagged_and_a_moving_picture_is_not(self):
+        with tempfile.TemporaryDirectory() as folder:
+            strobe = picture(
+                os.path.join(folder, "strobe.mp4"),
+                f"color=c=white:{self.SIZE}:rate=30:d=3,"
+                r"geq=lum='if(lt(mod(floor(T*10)\,2)\,1)\,235\,16)'"
+                ":cb=128:cr=128")
+            calm = picture(os.path.join(folder, "calm.mp4"),
+                           f"testsrc2={self.SIZE}:rate=25:d=3")
+            self.assertGreater(
+                video.analyse(strobe, ffmpeg=FFMPEG, duration_s=3.0)
+                ["flash_regions"], 0)
+            self.assertEqual(
+                video.analyse(calm, ffmpeg=FFMPEG, duration_s=3.0)
+                ["flash_regions"], 0,
+                "a moving test pattern is not a flashing hazard")
+
+    def test_two_rates_in_one_file_read_as_variable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            first = picture(os.path.join(folder, "a.mp4"),
+                            f"testsrc2={self.SIZE}:rate=25:d=2")
+            second = picture(os.path.join(folder, "b.mp4"),
+                             f"testsrc2={self.SIZE}:rate=50:d=2")
+            listing = os.path.join(folder, "list.txt")
+            Path(listing).write_text(
+                "".join(f"file '{os.path.basename(p)}'\n"
+                        for p in (first, second)), encoding="utf-8")
+            joined = os.path.join(folder, "joined.mkv")
+            subprocess.run([FFMPEG, "-y", "-v", "error", "-f", "concat",
+                            "-safe", "0", "-i", listing, "-c", "copy",
+                            "-fps_mode", "passthrough", joined], check=True)
+            self.assertEqual(video.frame_rate_mode(joined, 4.0, FFPROBE), "vfr")
+            self.assertEqual(video.frame_rate_mode(first, 2.0, FFPROBE), "cfr")
+
+    def test_the_picture_pass_only_runs_when_a_rule_asks_for_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = picture(os.path.join(folder, "calm.mp4"),
+                           f"testsrc2={self.SIZE}:rate=25:d=2")
+            subprocess.run([FFMPEG, "-y", "-v", "error", "-i", path,
+                            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono",
+                            "-c:v", "copy", "-c:a", "aac", "-shortest",
+                            os.path.join(folder, "with-audio.mp4")], check=True)
+            media = os.path.join(folder, "with-audio.mp4")
+            _, quiet, _, _ = preflight.run(media, "spotify_podcast")
+            _, asked, _, _ = preflight.run(media, "web")
+            self.assertNotIn("black_seconds", quiet,
+                             "no picture rule, no picture decode")
+            self.assertIn("black_seconds", asked)
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class CaptionTests(unittest.TestCase):
+    CLEAN = ("1\n00:00:00,500 --> 00:00:03,500\nA readable line here.\n\n"
+             "2\n00:00:04,000 --> 00:00:07,000\nAnd a second one.\n")
+    BROKEN = ("1\n00:00:00,200 --> 00:00:00,600\n"
+              "Far too many characters to be read in four tenths of one second"
+              "\n\n2\n00:00:00,500 --> 00:00:02,000\nOverlapping.\n")
+
+    def _media(self, folder, seconds=8):
+        path = os.path.join(folder, "episode.wav")
+        return generate(path, f"0.3*({SPEECH})", duration=seconds)
+
+    def test_a_sidecar_is_found_beside_the_media_and_measured(self):
+        with tempfile.TemporaryDirectory() as folder:
+            media = self._media(folder)
+            Path(os.path.join(folder, "episode.srt")).write_text(
+                self.CLEAN, encoding="utf-8")
+            _, m, result, _ = preflight.run(media, "web")
+            self.assertEqual(m["caption_cue_count"], 2)
+            self.assertEqual(m["caption_origin"], "sidecar")
+            overlaps = next(f for f in result["findings"]
+                            if f["id"] == "caption_overlaps")
+            self.assertEqual(overlaps["status"], "pass")
+
+    def test_broken_captions_fail_and_name_the_cue(self):
+        with tempfile.TemporaryDirectory() as folder:
+            media = self._media(folder)
+            Path(os.path.join(folder, "episode.srt")).write_text(
+                self.BROKEN, encoding="utf-8")
+            _, _, result, _ = preflight.run(media, "web")
+            overlaps = next(f for f in result["findings"]
+                            if f["id"] == "caption_overlaps")
+            self.assertEqual(overlaps["status"], "fail")
+            self.assertIn("cue 2", overlaps["intervals"][0]["detail"])
+
+    def test_an_explicit_caption_path_beats_the_sidecar(self):
+        with tempfile.TemporaryDirectory() as folder:
+            media = self._media(folder)
+            Path(os.path.join(folder, "episode.srt")).write_text(
+                self.CLEAN, encoding="utf-8")
+            other = os.path.join(folder, "elsewhere.srt")
+            Path(other).write_text(self.BROKEN, encoding="utf-8")
+            _, m, _, _ = preflight.run(media, "web", caption_path=other)
+            self.assertEqual(m["caption_source"], other)
+
+    def test_no_captions_leaves_the_caption_rules_skipped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            media = self._media(folder)
+            _, _, result, _ = preflight.run(media, "web")
+            overlaps = next(f for f in result["findings"]
+                            if f["id"] == "caption_overlaps")
+            self.assertEqual(overlaps["status"], "skip")
+
+    def test_an_embedded_stream_is_read_when_there_is_no_sidecar(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = os.path.join(folder, "subs.srt")
+            Path(source).write_text(self.CLEAN, encoding="utf-8")
+            media = picture(os.path.join(folder, "silent.mp4"),
+                            "testsrc2=size=320x180:rate=25:d=8")
+            muxed = os.path.join(folder, "muxed.mkv")
+            subprocess.run([FFMPEG, "-y", "-v", "error", "-i", media,
+                            "-i", source, "-c", "copy", "-c:s", "srt",
+                            muxed], check=True)
+            _, m, _, _ = preflight.run(muxed, "web")
+            self.assertEqual(m["caption_origin"], "embedded")
+            self.assertEqual(m["caption_cue_count"], 2)
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class SubtitleFileTests(unittest.TestCase):
+    def test_a_caption_file_can_be_checked_with_no_media_at_all(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "film.srt")
+            Path(path).write_text(CaptionTests.BROKEN, encoding="utf-8")
+            facts, m, result, _ = preflight.run(path, "subtitles")
+            self.assertIsNone(facts["audio"])
+            self.assertEqual(result["verdict"], "fail")
+            speed = next(f for f in result["findings"]
+                         if f["id"] == "reading_speed")
+            self.assertEqual(speed["status"], "fail")
+
+    def test_audio_rules_are_skipped_rather_than_passed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "film.srt")
+            Path(path).write_text(CaptionTests.CLEAN, encoding="utf-8")
+            _, _, result, _ = preflight.run(path, "subtitles")
+            silent = next(f for f in result["findings"]
+                          if f["id"] == "silent_channel")
+            self.assertEqual(silent["status"], "skip",
+                             "a file with no channels has not passed a "
+                             "channel check")
 
 
 @unittest.skipUnless(FFMPEG and FFPROBE, REASON)
