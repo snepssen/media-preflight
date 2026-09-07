@@ -1,0 +1,53 @@
+{
+  "id": "house",
+  "label": "House standard (example)",
+  "summary": "A worked example. Copy it, change the numbers, delete this one.",
+  "source": "This file's own comments — not a specification",
+  "checked": "2026-09",
+  "confidence": "informal",
+  "options": {
+    "silence_threshold_db": -50.0
+  },
+  "rules": [
+    {
+      "id": "integrated",
+      "metric": "integrated_lufs",
+      "label": "Integrated loudness",
+      "unit": "LUFS",
+      "min": -17.0,
+      "max": -13.0,
+      "warn_min": -15.5,
+      "warn_max": -14.5,
+      "severity": "fail",
+      "fix": "loudnorm",
+      "note": "The band is wide and the warning band is narrow, so a file two decibels out still ships while a file half a decibel out gets a second look."
+    },
+    {
+      "id": "true_peak",
+      "metric": "true_peak_dbfs",
+      "label": "True peak",
+      "unit": "dBTP",
+      "max": -1.0,
+      "severity": "fail",
+      "fix": "loudnorm"
+    },
+    {
+      "id": "tail",
+      "metric": "tail_silence_s",
+      "label": "Closing silence",
+      "unit": "s",
+      "min": 0.5,
+      "max": 3.0,
+      "severity": "warn",
+      "fix": "room_tone_tail"
+    },
+    {
+      "id": "codec",
+      "metric": "audio_codec",
+      "label": "Codec",
+      "one_of": ["aac", "flac"],
+      "severity": "fail",
+      "fix": "encode"
+    }
+  ]
+}

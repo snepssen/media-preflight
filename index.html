@@ -1,0 +1,407 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Preflight</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f6f4; --panel: #ffffff; --ink: #16181c; --quiet: #5d646e;
+    --line: #dcdfe4; --fail: #b3261e; --warn: #8a5a00; --pass: #1c6b3f;
+    --accent: #1f5fbf; --code: #f0f1f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2127; --ink: #e8eaee; --quiet: #99a1ad;
+      --line: #313640; --fail: #ff8a80; --warn: #f0b849; --pass: #6fd39a;
+      --accent: #7aa7ff; --code: #14161a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 60px; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+          "DejaVu Sans", sans-serif;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 19px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .sub { color: var(--quiet); font-size: 13px; margin: 0 0 22px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; margin-bottom: 16px;
+  }
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 8px; padding: 26px 18px;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .drop strong { display: block; font-size: 15px; margin-bottom: 4px; }
+  .drop span { color: var(--quiet); font-size: 13px; }
+  .chosen { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12.5px; word-break: break-all; color: var(--ink); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .row label { font-size: 13px; color: var(--quiet); }
+  select, input[type=text], button {
+    font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px;
+  }
+  input[type=text] { flex: 1; min-width: 200px; font-size: 13px;
+                     font-family: ui-monospace, Menlo, Consolas, monospace; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .note { font-size: 12.5px; color: var(--quiet); margin-top: 8px; }
+  .note.informal { color: var(--warn); }
+
+  /* signal path */
+  .path { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+          margin: 16px 0 4px; font-size: 12px; }
+  .stage { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px;
+           color: var(--quiet); white-space: nowrap; }
+  .stage.active { border-color: var(--accent); color: var(--accent);
+                  animation: pulse 1.1s ease-in-out infinite; }
+  .stage.done { border-color: var(--pass); color: var(--pass); }
+  .stage.skip { opacity: .4; border-style: dashed; }
+  .arrow { color: var(--quiet); opacity: .5; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent);
+             transition: width .25s; }
+
+  /* findings */
+  .verdict { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+  .verdict.fail { color: var(--fail); } .verdict.warn { color: var(--warn); }
+  .verdict.pass { color: var(--pass); }
+  .counts { color: var(--quiet); font-size: 13px; margin-bottom: 14px; }
+  .finding { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px;
+             padding: 7px 0; border-top: 1px solid var(--line); align-items: baseline; }
+  .finding:first-of-type { border-top: none; }
+  .mark { font-weight: 700; }
+  .mark.fail { color: var(--fail); } .mark.warn { color: var(--warn); }
+  .mark.pass { color: var(--pass); } .mark.skip { color: var(--quiet); }
+  .required { color: var(--quiet); font-size: 13px; white-space: nowrap; }
+  .where { grid-column: 2 / -1; color: var(--quiet); font-size: 12.5px; }
+  .where b { font-weight: 600; color: var(--ink); }
+  .detail { grid-column: 2 / -1; color: var(--quiet); font-size: 12.5px;
+            font-style: italic; }
+  .stamps { margin-top: 14px; font-size: 13px; }
+  .stamps b { font-weight: 600; }
+  pre { background: var(--code); border: 1px solid var(--line); border-radius: 7px;
+        padding: 11px; overflow-x: auto; font-size: 12px; margin: 10px 0 0; }
+  .steps { margin: 0; padding-left: 20px; }
+  .steps li { margin-bottom: 8px; }
+  .caveat { color: var(--warn); font-size: 12.5px; display: block; margin-top: 2px; }
+  .error { color: var(--fail); font-size: 13.5px; }
+  .hidden { display: none; }
+  .meta { color: var(--quiet); font-size: 12.5px; margin-top: 12px; }
+  .toggle { background: none; border: none; color: var(--accent); padding: 0;
+            font-size: 13px; text-decoration: underline; }
+</style>
+
+<main>
+  <h1>Media Preflight</h1>
+  <p class="sub">Will this be accepted — and what exactly is wrong with it?
+    Nothing is uploaded and the file you choose is never modified.</p>
+
+  <section class="panel">
+    <div class="drop" id="drop">
+      <strong id="dropTitle">Choose your finished media</strong>
+      <span id="dropHint">A browser cannot read a dropped file's location, so this
+        opens your system's file dialog. Or type a path below.</span>
+    </div>
+    <div class="row">
+      <input type="text" id="path" placeholder="/path/to/finished.wav"
+             spellcheck="false" autocomplete="off">
+    </div>
+    <div class="row">
+      <label for="target">Target</label>
+      <select id="target"></select>
+      <button class="primary" id="run">Run</button>
+    </div>
+    <p class="note" id="targetNote"></p>
+    <p class="error hidden" id="toolError"></p>
+  </section>
+
+  <section class="panel hidden" id="progressPanel">
+    <div class="path" id="signalPath"></div>
+    <div class="bar"><i id="bar"></i></div>
+    <p class="note" id="stage"></p>
+  </section>
+
+  <section class="panel hidden" id="reportPanel">
+    <p class="verdict" id="verdict"></p>
+    <p class="counts" id="counts"></p>
+    <div id="findings"></div>
+    <p class="stamps hidden" id="stamps"></p>
+    <div class="row">
+      <button id="fix">Create corrected copy</button>
+      <button id="exportMd">Export report</button>
+      <button id="exportJson">Export JSON</button>
+      <button class="toggle" id="togglePasses">show every check</button>
+    </div>
+    <p class="note" id="exported"></p>
+    <p class="meta" id="sourceNote"></p>
+  </section>
+
+  <section class="panel hidden" id="planPanel">
+    <p class="verdict">Proposed corrections</p>
+    <p class="counts">Nothing has been written yet. The source file is not
+      touched by any of this.</p>
+    <ol class="steps" id="planSteps"></ol>
+    <p class="note" id="planUnfixable"></p>
+    <p class="note">Output: <span class="chosen" id="planOutput"></span></p>
+    <pre id="planCommand"></pre>
+    <div class="row">
+      <button class="primary" id="applyFix">Write the corrected copy</button>
+      <button id="cancelFix">Cancel</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+const $ = (id) => document.getElementById(id);
+let state = null, current = null, showPasses = false, lastPlan = null;
+
+const STAGES = [
+  { key: "container", label: "container" },
+  { key: "video", label: "video", skip: true },
+  { key: "audio", label: "audio" },
+  { key: "captions", label: "captions", skip: true },
+  { key: "target", label: "delivery target" },
+];
+
+async function api(path, body) {
+  const url = `/api${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(TOKEN)}`;
+  const options = body ? {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  } : {};
+  const response = await fetch(url, options);
+  const data = await response.json();
+  if (!response.ok || data.error) throw new Error(data.error || "Request failed.");
+  return data;
+}
+
+function drawPath(activeKey) {
+  const seen = STAGES.findIndex((s) => s.key === activeKey);
+  $("signalPath").innerHTML = STAGES.map((stage, index) => {
+    let cls = "stage";
+    if (stage.skip) cls += " skip";
+    else if (index < seen) cls += " done";
+    else if (index === seen) cls += " active";
+    const title = stage.skip ? ' title="not in this release"' : "";
+    return `<span class="${cls}"${title}>${stage.label}</span>`;
+  }).join('<span class="arrow">→</span>');
+}
+
+function stageKey(text) {
+  if (!text) return "container";
+  if (text.includes("container")) return "container";
+  if (text.includes("audio") || text.includes("measur")) return "audio";
+  if (text.includes("corrected") || text.includes("rebuild")) return "audio";
+  return "target";
+}
+
+function esc(text) {
+  return String(text ?? "").replace(/[&<>"]/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function timecode(seconds) {
+  if (seconds == null) return "—";
+  const whole = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(whole / 3600), m = Math.floor((whole % 3600) / 60), s = whole % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+const MARK = { pass: "✓", fail: "✕", warn: "⚠", skip: "·" };
+const ORDER = { fail: 0, warn: 1, pass: 2, skip: 3 };
+
+function renderReport(envelope) {
+  current = envelope;
+  const verdictWord = { pass: "Ready to deliver.",
+    warn: "Deliverable, with things worth looking at.",
+    fail: "Not ready — the failures below would be rejected." }[envelope.verdict];
+  $("verdict").textContent = `${MARK[envelope.verdict]} ${verdictWord}`;
+  $("verdict").className = "verdict " + envelope.verdict;
+  const c = envelope.counts;
+  $("counts").textContent =
+    `${c.fail} failed, ${c.warn} warned, ${c.pass} passed, ${c.skip} not checked` +
+    ` — ${envelope.file.name}`;
+
+  const findings = [...envelope.findings]
+    .sort((a, b) => ORDER[a.status] - ORDER[b.status])
+    .filter((f) => showPasses || f.status === "fail" || f.status === "warn");
+
+  $("findings").innerHTML = findings.map((f) => {
+    const where = f.intervals && f.intervals.length
+      ? `<div class="where">at ${f.intervals.slice(0, 8).map((i) =>
+          `<b>${timecode(i.start)}</b>${i.detail ? " (" + esc(i.detail) + ")" : ""}`
+        ).join(", ")}${f.intervals.length > 8 ? `, +${f.intervals.length - 8} more` : ""}</div>`
+      : (f.scope === "file" && f.status !== "pass" && f.status !== "skip"
+        ? `<div class="where">measured across the whole file — no single moment to point at</div>` : "");
+    const note = (f.note && (f.status === "fail" || f.status === "warn"))
+      ? `<div class="detail">${esc(f.note)}</div>` : "";
+    return `<div class="finding">
+      <span class="mark ${f.status}">${MARK[f.status]}</span>
+      <span>${esc(f.label)}: ${esc(f.actual)}</span>
+      <span class="required">${f.required ? "Required: " + esc(f.required) : ""}</span>
+      ${where}${note}</div>`;
+  }).join("");
+
+  const stamps = [...new Set(envelope.findings
+    .filter((f) => f.status === "fail" || f.status === "warn")
+    .flatMap((f) => f.timestamps))].sort((a, b) => a - b);
+  $("stamps").className = stamps.length ? "stamps" : "stamps hidden";
+  $("stamps").innerHTML = stamps.length
+    ? `Problems occur at <b>${stamps.slice(0, 12).map(timecode).join(", ")}</b>` +
+      (stamps.length > 12 ? `, and ${stamps.length - 12} more` : "")
+    : "";
+
+  const t = envelope.target;
+  $("sourceNote").textContent = t.source
+    ? `Thresholds from: ${t.source}${t.checked ? " (read " + t.checked + ")" : ""}`
+    : "";
+  $("fix").disabled = envelope.verdict === "pass";
+  $("reportPanel").classList.remove("hidden");
+  $("planPanel").classList.add("hidden");
+  $("exported").textContent = "";
+}
+
+async function poll(jobId, onDone) {
+  const tick = async () => {
+    const job = await api(`/job?id=${encodeURIComponent(jobId)}`);
+    $("bar").style.width = Math.round((job.progress || 0) * 100) + "%";
+    $("stage").textContent = job.stage || "";
+    drawPath(stageKey(job.stage));
+    if (job.state === "running") return setTimeout(tick, 220);
+    $("progressPanel").classList.add("hidden");
+    if (job.state === "error") return fail(job.error);
+    onDone(job.result);
+  };
+  tick();
+}
+
+function fail(message) {
+  $("toolError").textContent = message;
+  $("toolError").classList.remove("hidden");
+  $("run").disabled = false;
+}
+
+function busy(on) {
+  $("run").disabled = on;
+  $("toolError").classList.add("hidden");
+  $("progressPanel").classList.toggle("hidden", !on);
+  if (on) { $("bar").style.width = "0%"; drawPath("container"); }
+}
+
+async function boot() {
+  state = await api("/state");
+  $("target").innerHTML = state.targets.map((t) =>
+    `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join("");
+  $("target").value = localStorage.getItem("target") || "web";
+  describeTarget();
+  if (!state.ffmpeg) fail(`ffmpeg was not found. Install it with: ${state.ffmpeg_hint}`);
+}
+
+function describeTarget() {
+  const chosen = state.targets.find((t) => t.id === $("target").value);
+  if (!chosen) return;
+  $("targetNote").textContent = chosen.summary +
+    (chosen.confidence === "informal"
+      ? "  ·  Not a published specification: treat these thresholds as a sanity check you can edit."
+      : "");
+  $("targetNote").className = "note" + (chosen.confidence === "informal" ? " informal" : "");
+}
+
+$("target").addEventListener("change", () => {
+  localStorage.setItem("target", $("target").value);
+  describeTarget();
+});
+
+$("drop").addEventListener("click", async () => {
+  try {
+    const { path } = await api("/pick", {});
+    if (path) { $("path").value = path; $("dropTitle").textContent = path.split(/[\\/]/).pop(); }
+  } catch (error) { fail(error.message); }
+});
+
+// A dropped file gives us a name but never a path; say so rather than failing
+// silently, and leave the native dialog as the way in.
+$("drop").addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("over"); });
+$("drop").addEventListener("dragleave", () => $("drop").classList.remove("over"));
+$("drop").addEventListener("drop", (e) => {
+  e.preventDefault();
+  $("drop").classList.remove("over");
+  const file = e.dataTransfer.files[0];
+  $("dropHint").textContent = file
+    ? `The browser will not tell this tool where “${file.name}” lives. Click to choose it in a real file dialog, or paste its path below.`
+    : $("dropHint").textContent;
+});
+
+$("run").addEventListener("click", async () => {
+  const path = $("path").value.trim();
+  if (!path) return fail("Choose a file first.");
+  busy(true);
+  try {
+    const { job } = await api("/check", { path, target: $("target").value });
+    poll(job, (envelope) => { busy(false); renderReport(envelope); });
+  } catch (error) { busy(false); fail(error.message); }
+});
+
+$("togglePasses").addEventListener("click", () => {
+  showPasses = !showPasses;
+  $("togglePasses").textContent = showPasses ? "show only problems" : "show every check";
+  if (current) renderReport(current);
+});
+
+$("fix").addEventListener("click", async () => {
+  try {
+    lastPlan = await api("/plan", { path: $("path").value.trim(),
+                                    target: $("target").value });
+    $("planSteps").innerHTML = lastPlan.steps.map((s) =>
+      `<li>${esc(s.description)}${s.caveat ? `<span class="caveat">⚠ ${esc(s.caveat)}</span>` : ""}</li>`
+    ).join("");
+    $("planUnfixable").textContent = lastPlan.unfixable.length
+      ? "Not corrected by this tool: " +
+        lastPlan.unfixable.map((u) => `${u.label} — ${u.detail}`).join("; ")
+      : "";
+    $("planOutput").textContent = lastPlan.output || "—";
+    $("planCommand").textContent = (lastPlan.command || []).join(" ");
+    $("planPanel").classList.remove("hidden");
+    $("planPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) { fail(error.message); }
+});
+
+$("cancelFix").addEventListener("click", () => $("planPanel").classList.add("hidden"));
+
+$("applyFix").addEventListener("click", async () => {
+  $("planPanel").classList.add("hidden");
+  busy(true);
+  try {
+    const { job } = await api("/fix", { path: $("path").value.trim(),
+                                        target: $("target").value,
+                                        overwrite: true });
+    poll(job, (result) => {
+      busy(false);
+      renderReport(result.after);
+      $("exported").textContent = `Wrote ${result.output} — measured again from scratch, and this is that measurement.`;
+      $("path").value = result.output;
+    });
+  } catch (error) { busy(false); fail(error.message); }
+});
+
+for (const [id, kind] of [["exportMd", "markdown"], ["exportJson", "json"]]) {
+  $(id).addEventListener("click", async () => {
+    try {
+      const { written } = await api("/export", { path: $("path").value.trim(),
+                                                 target: $("target").value, kind });
+      $("exported").textContent = `Wrote ${written}`;
+    } catch (error) { fail(error.message); }
+  });
+}
+
+boot().catch((error) => fail(error.message));
+</script>

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "media-preflight"
+version = "0.1.0"
+description = "Local-first delivery validation for audio and video: will this be accepted, and what exactly is wrong with it?"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "snepssen" }]
+keywords = ["loudness", "ebur128", "acx", "audiobook", "podcast", "preflight",
+            "validation", "ffmpeg", "delivery", "broadcast", "r128"]
+classifiers = [
+  "Environment :: Console",
+  "Environment :: Web Environment",
+  "Intended Audience :: End Users/Desktop",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: Analysis",
+  "Topic :: Multimedia :: Video",
+]
+# Standard library only. ffmpeg and ffprobe are external programs, located at
+# runtime rather than bundled, and their absence is reported as a sentence with
+# the install line for the platform.
+dependencies = []
+
+[project.scripts]
+media-preflight = "preflight:main"
+
+[project.urls]
+Source = "https://github.com/snepssen/media-preflight"
+
+[tool.setuptools]
+py-modules = ["preflight", "app", "probe", "analysis", "checks", "profiles",
+              "corrections", "report", "platform_support"]
