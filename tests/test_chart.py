@@ -190,3 +190,35 @@ class SvgTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CaptionTrackTests(unittest.TestCase):
+    def test_cues_a_breath_apart_are_one_run(self):
+        runs = chart.caption_coverage([
+            {"start": 1.0, "end": 6.0}, {"start": 6.2, "end": 8.0},
+            {"start": 9.0, "end": 14.0}])
+        self.assertEqual([(r["start"], r["end"]) for r in runs],
+                         [(1.0, 8.0), (9.0, 14.0)])
+
+    def test_cues_out_of_order_still_merge(self):
+        runs = chart.caption_coverage([
+            {"start": 9.0, "end": 14.0}, {"start": 1.0, "end": 6.0}])
+        self.assertEqual(runs[0]["start"], 1.0)
+
+    def test_a_cue_with_no_length_is_not_drawn(self):
+        self.assertEqual(chart.caption_coverage(
+            [{"start": 3.0, "end": 3.0}]), [])
+
+    def test_no_cues_is_no_track(self):
+        self.assertEqual(chart.caption_coverage(None), [])
+
+    def test_the_track_is_drawn_when_there_is_one(self):
+        points = chart.reduce([{"t": t, "short_term": -20, "momentary": -20,
+                                "true_peak_dbfs": None, "phase": None}
+                               for t in range(20)])
+        drawing = chart.svg(points, duration=20, caption_runs=[
+            {"start": 1.0, "end": 6.0}])
+        self.assertIn('class="caption"', drawing)
+        self.assertIn("captioned", drawing)
+        self.assertNotIn('class="caption"',
+                         chart.svg(points, duration=20))

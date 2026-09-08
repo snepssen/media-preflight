@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>259</b> checks passing</span>
+    <span><b>281</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -136,6 +136,7 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
         <li>Resolution, pixel format, telecine, and constant versus variable frame rate</li>
         <li>Interlacing measured from the picture, not read off a header that often lies</li>
         <li>Caption overlaps, reading speed, line length, cues timed past the last frame</li>
+        <li>Passages of sound nobody captioned, and captions that run out of sync with the audio</li>
         <li>Subtitle fonts this machine does not have</li>
         <li>Codec, container, sample rate, channels, bitrate, and whether an MP3 is constant or variable</li>
       </ul>
@@ -146,6 +147,11 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
       <p>A list of timestamps tells you to look at 18:07. It does not tell you that 18:07 is one of nine identical spikes and the real problem is a compressor doing something odd.</p>
       <p>The chart is bucketed — no display has 36,000 pixels for a ten-hour audiobook — and each bucket keeps its <em>loudest and quietest</em> value rather than an average. Averaging is precisely the operation that hides a spike next to a hole, and spikes next to holes are what this tool is for.</p>
       <p>A target band is shaded only when the target states its requirement in the unit the chart is drawn in. ACX asks for an RMS level, which is not LUFS, so on that target no band appears and the chart says so.</p>
+
+      <h3 style="margin-top:26px">Do the captions match the programme?</h3>
+      <p>Everything else about a caption file measures it against itself. This measures it against the audio, using the silence the audio pass already found — so it costs no decode, and it answers the two questions that otherwise mean scrubbing a two-hour recording: <em>which passages did nobody caption</em>, and <em>is the whole file out of sync</em>.</p>
+      <p>The gaps reported are the ones <em>within</em> each stretch of sound, not the stretches as a whole — a twelve-second passage with three seconds of caption on the front has nine seconds missing, and pointing at the whole passage would be pointing at the three that are fine. Drift is a median of every cue's distance from the nearest moment sound starts, with a confidence figure, because cues legitimately sit mid-sentence and one of those must not become the answer.</p>
+      <p>Music and atmosphere are legitimately uncaptioned, so this finds passages to look at rather than faults. What it does is find them in seconds.</p>
 
       <h3 style="margin-top:26px">Where the timestamps come from</h3>
       <p>A finding carries a timestamp only when the timeline holds <em>the same quantity the rule is about</em>.</p>

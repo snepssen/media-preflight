@@ -211,6 +211,10 @@ METRICS = {
     "caption_empty_cues": lambda f, m: m.get("caption_empty_cues"),
     "caption_bad_timing": lambda f, m: m.get("caption_bad_timing"),
     "caption_missing_fonts": lambda f, m: m.get("caption_missing_fonts"),
+    "caption_uncaptioned_speech_s":
+        lambda f, m: m.get("caption_uncaptioned_speech_s"),
+    "caption_over_silence": lambda f, m: m.get("caption_over_silence"),
+    "caption_drift_s": lambda f, m: m.get("caption_drift_s"),
 }
 
 # Metrics whose failures the one-second timeline can point at, because the
@@ -241,6 +245,8 @@ LOCATABLE = {
     "caption_longest_cue_s": "captions",
     "caption_empty_cues": "captions",
     "caption_bad_timing": "captions",
+    "caption_uncaptioned_speech_s": "caption_uncaptioned",
+    "caption_over_silence": "caption_orphans",
 }
 
 
@@ -431,6 +437,14 @@ def locate(rule, value, facts, measurements, locator=None):
 
     if kind == "flash":
         return [dict(i) for i in (measurements.get("flashes") or [])]
+
+    if kind == "caption_uncaptioned":
+        return [dict(i) for i in
+                (measurements.get("caption_uncaptioned_intervals") or [])]
+
+    if kind == "caption_orphans":
+        return [dict(i) for i in
+                (measurements.get("caption_orphan_intervals") or [])]
 
     if kind == "caption_overlaps":
         return [dict(i) for i in

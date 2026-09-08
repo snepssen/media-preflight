@@ -150,7 +150,13 @@ both be right.
 `caption_shortest_cue_s`, `caption_longest_cue_s`, `caption_max_cps`,
 `caption_max_line_length`, `caption_max_lines`, `caption_shortest_gap_s`,
 `caption_past_end_s`, `caption_empty_cues`, `caption_bad_timing`,
-`caption_missing_fonts`
+`caption_missing_fonts`, `caption_uncaptioned_speech_s`,
+`caption_over_silence`, `caption_drift_s`
+
+The last three compare the captions against the *programme* rather than
+against themselves, using the silence the audio pass already measured — so
+they need audio, and a caption file checked on its own reports them as
+skipped rather than guessing.
 
 A metric the file cannot answer — a picture rule on an audio file, a caption
 rule where there are no captions — is *skipped*, not failed. Absence is not a
@@ -271,6 +277,10 @@ any metric it states itself, so nothing is checked twice at two thresholds.
 | `field_dominance` | 0.8 | how one-sided the field order must be to count |
 | `interlace_evidence` | 0.25 | decided frames needed before claiming anything |
 | `telecine_ratio` | 0.05 | repeated fields before it reads as pulldown |
+| `uncaptioned_min_s` | 6.0 | uncaptioned sound before it is worth reporting |
+| `drift_window_s` | 5.0 | how far a cue may sit from speech and still match |
+| `drift_min_s` | 0.4 | offset that counts as drift |
+| `orphan_margin_s` | 0.35 | how far inside silence a cue must sit to be orphaned |
 
 The silence threshold matters more than it looks. "Room tone" is a claim about
 a level, and a target that asks for a quiet ending is asking for the room, not

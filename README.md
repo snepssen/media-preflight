@@ -54,12 +54,50 @@ beside the media, extracted from an embedded stream, or checked on their own.
 Overlapping cues, reading speed, line length and count, cues timed past the
 last frame, impossible timings, and subtitle fonts this machine does not have.
 
+**Captions against the audio** — and this is the one that saves the afternoon.
+Everything above measures a caption file against itself. These measure it
+against the programme: passages of sound nobody captioned, cues that play over
+silence, and a constant offset between the two. Nobody scrubs a two-hour
+recording to find the eleven seconds that were missed, and nobody notices a
+file is a second and a half out of sync until a viewer says so.
+
 **Declarations** — codec, container, sample rate, channel count, bitrate, and
 whether an MP3 is constant or variable bitrate.
 
 Every failure that can be tied to a moment carries one. Failures that are
 whole-file measurements say so rather than pointing at a second that means
 nothing.
+
+### Do the captions match the programme?
+
+```
+⚠ Sound with no caption: 7 s                         Required: ≤ 0 s
+    at 00:17 (7.0 s of sound with no caption)
+⚠ Caption timing: 1.47 s                       Required: -0.4 to 0.4 s
+```
+
+The audio pass already measured where the sound is, so none of this costs a
+decode. Three things fall out of comparing that against where the cues are:
+
+**Sound nobody captioned.** The gaps *within* each stretch of sound rather than
+the stretches as a whole — a twelve-second passage with three seconds of
+caption on the front has nine seconds missing, and pointing at the whole
+passage would be pointing at the three that are fine. Music and atmosphere are
+legitimately uncaptioned, so this finds passages to look at rather than faults;
+what it does is find them in a two-hour recording in seconds.
+
+**A constant offset.** Every cue matched to the nearest moment sound starts,
+and the median of those offsets taken. The median rather than the mean because
+cues legitimately sit mid-sentence and one of those should not become the
+answer, and it carries a confidence figure because a file where only a third of
+cues matched anything has not really been measured.
+
+**Cues playing over silence** — what drift looks like from the other end.
+
+The chart grows a caption track underneath, so the gap is a thing you see
+rather than a line you read:
+
+![the caption track](docs/caption-example.svg)
 
 ## The shape, not just the list
 
@@ -436,7 +474,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 259 checks, about twenty-five seconds
+python3 -m unittest discover -s tests     # 281 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

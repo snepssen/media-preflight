@@ -137,6 +137,30 @@ def events(measurements, findings=None):
     return out
 
 
+# ------------------------------------------------------------ caption track
+
+# What a reader wants from a caption track on a chart is not every cue — it is
+# where the captions are and where they are not. Cues separated by less than a
+# breath are one run of captioning; drawn separately they are fifteen hundred
+# rectangles that read as a solid bar.
+CAPTION_MERGE_GAP_S = 0.6
+
+
+def caption_coverage(cues, merge_gap=CAPTION_MERGE_GAP_S):
+    """Cue intervals merged into runs of captioning."""
+    ordered = sorted(({"start": float(c["start"]), "end": float(c["end"])}
+                      for c in (cues or []) if c.get("end") is not None
+                      and c["end"] > c["start"]),
+                     key=lambda run: run["start"])
+    runs = []
+    for cue in ordered:
+        if runs and cue["start"] - runs[-1]["end"] <= merge_gap:
+            runs[-1]["end"] = max(runs[-1]["end"], cue["end"])
+        else:
+            runs.append(dict(cue))
+    return runs
+
+
 # ----------------------------------------------------------------- chapters
 
 # Short-term loudness is measured over a three-second window, so a value
@@ -262,8 +286,8 @@ def _marks(points, columns, event_list, width):
 
 # ----------------------------------------------------------------------- SVG
 
-WIDTH, HEIGHT = 720, 210
-PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM = 44, 12, 14, 42
+WIDTH, HEIGHT = 720, 220
+PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM = 44, 12, 14, 52
 
 # Two grounds, and the choice matters more than it looks. An SVG referenced by
 # an <img> resolves prefers-color-scheme against the reader's *operating
@@ -289,6 +313,8 @@ LIGHT_STYLE = """
   .chapter { stroke: #8a8f98; stroke-width: 1; stroke-dasharray: 2 3;
              stroke-opacity: .6; }
   .note { fill: #5d646e; font: 10px ui-monospace, Menlo, Consolas, monospace; }
+  .caption { fill: #1f5fbf; fill-opacity: .45; }
+  .caption-bed { fill: #5d646e; fill-opacity: .13; }
 """
 
 DARK_RULES = """
@@ -303,6 +329,8 @@ DARK_RULES = """
     .ev-warn { fill: #f0b849; }
     .ev-quiet, .ev-picture { fill: #99a1ad; }
     .chapter { stroke: #99a1ad; }
+    .caption { fill: #7aa7ff; fill-opacity: .55; }
+    .caption-bed { fill: #99a1ad; fill-opacity: .16; }
 """
 
 def style_for(theme):
@@ -315,7 +343,7 @@ def style_for(theme):
 
 
 def svg(points, band=None, event_list=None, chapter_list=None, duration=None,
-        title="Loudness over time", theme="light"):
+        title="Loudness over time", theme="light", caption_runs=None):
     """A standalone SVG. Returns '' when there is nothing to draw."""
     if not points:
         return ""
@@ -397,6 +425,22 @@ def svg(points, band=None, event_list=None, chapter_list=None, duration=None,
             f'<title>{_escape(event["label"])}'
             f'{" — " + _escape(event["detail"]) if event.get("detail") else ""}'
             f' at {checks.timecode(event["start"])}</title></rect>')
+
+    # The caption track: a bed the width of the programme with the captioned
+    # runs drawn on it, so the gaps are the thing you see.
+    if caption_runs:
+        top_y = PAD_TOP + plot_h + 16
+        parts.append(f'<rect class="caption-bed" x="{PAD_LEFT}" '
+                     f'y="{top_y}" width="{plot_w}" height="5"/>')
+        for run in caption_runs:
+            left = x(run["start"])
+            right = max(x(run["end"]), left + 0.8)
+            parts.append(f'<rect class="caption" x="{left:.1f}" y="{top_y}" '
+                         f'width="{right - left:.1f}" height="5"><title>'
+                         f'captioned {checks.timecode(run["start"])}'
+                         f'–{checks.timecode(run["end"])}</title></rect>')
+        parts.append(f'<text class="axis" x="{PAD_LEFT - 6}" '
+                     f'y="{top_y + 5}" text-anchor="end">cc</text>')
 
     ticks = _time_ticks(duration)
     for index, seconds in enumerate(ticks):

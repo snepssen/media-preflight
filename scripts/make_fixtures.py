@@ -384,6 +384,78 @@ Dialogue: 0,0:00:03.00,0:00:04.50,Default,,0,0,0,,{\\fnAnother Absent Face}And a
 """
 
 
+# Three passages of speech at 1-6, 9-14 and 17-24 seconds. The caption files
+# below are timed against those, so what each one demonstrates is exactly one
+# thing.
+ALIGNMENT_SPEECH = ("0.3*({SPEECH})*(between(t\\,1\\,6)"
+                    "+between(t\\,9\\,14)+between(t\\,17\\,24))")
+
+CAPTIONED_ALL = """1
+00:00:01,000 --> 00:00:06,000
+The first passage, captioned.
+
+2
+00:00:09,000 --> 00:00:14,000
+The second passage, captioned.
+
+3
+00:00:17,000 --> 00:00:24,000
+And the third one as well.
+"""
+
+CAPTIONED_PARTLY = """1
+00:00:01,000 --> 00:00:06,000
+The first passage, captioned.
+
+2
+00:00:09,000 --> 00:00:14,000
+The second passage, captioned.
+"""
+
+# Every cue a second and a half late, which is what a sync error looks like
+# and what nobody notices until a viewer complains.
+CAPTIONED_LATE = """1
+00:00:02,500 --> 00:00:07,500
+The first passage, captioned late.
+
+2
+00:00:10,500 --> 00:00:15,500
+The second passage, captioned late.
+
+3
+00:00:18,500 --> 00:00:25,500
+And the third one, also late.
+"""
+
+
+def build_alignment(folder):
+    """Speech with caption files that agree with it, miss part of it, or run
+    late — the three things a caption file can be wrong about relative to the
+    programme rather than to itself."""
+    ffmpeg, _ = platform_support.require_tools()
+    written = []
+    for stem, body, note in (
+        ("captions-aligned", CAPTIONED_ALL,
+         "Speech in three passages, every one captioned on time."),
+        ("captions-missing-passage", CAPTIONED_PARTLY,
+         "The same speech with the third passage uncaptioned — seven seconds "
+         "nobody would find by scrubbing."),
+        ("captions-late", CAPTIONED_LATE,
+         "The same speech with every cue a second and a half late."),
+    ):
+        audio = os.path.join(folder, f"{stem}.wav")
+        subprocess.run(
+            [ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+             f"aevalsrc={ALIGNMENT_SPEECH.format(SPEECH=SPEECH)}:d=26:s=44100",
+             "-ac", "1", audio],
+            check=True, **platform_support.no_console())
+        with open(os.path.join(folder, f"{stem}.srt"), "w",
+                  encoding="utf-8") as handle:
+            handle.write(body)
+        written.append((f"{stem}.wav + .srt", note))
+    return written
+
+
 def build_captions(folder):
     written = []
     for name, body, note in (
@@ -400,6 +472,8 @@ def build_captions(folder):
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(body)
         written.append((name, note))
+
+    written += build_alignment(folder)
 
     # A sidecar found by name rather than by being pointed at: the same stem as
     # video-with-audio.mp4, which is how a delivery actually arrives.

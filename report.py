@@ -87,6 +87,7 @@ def envelope(facts, measurements, result, profile, corrections=None):
                                    measurements.get("timeline")),
         "band": chart.band_for(profile),
         "timeline": chart.reduce(measurements.get("timeline")),
+        "caption_track": chart.caption_coverage(measurements.get("cues")),
         "events": chart.events(measurements, result["findings"]),
     }
 
@@ -156,7 +157,7 @@ def chart_svg(report, theme="light"):
                      report.get("events"), report.get("chapters"),
                      duration=report["file"].get("duration_s"),
                      title=f"Loudness over time — {report['file'].get('name')}",
-                     theme=theme)
+                     theme=theme, caption_runs=report.get("caption_track"))
 
 
 # --------------------------------------------------------------------- text

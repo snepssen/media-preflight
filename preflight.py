@@ -106,7 +106,8 @@ def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None,
             path, duration, ffprobe)
     if _needs(profile, CAPTION_METRICS):
         announce("captions")
-        _add_captions(path, facts, measurements, caption_path, ffmpeg, duration)
+        _add_captions(path, facts, measurements, caption_path, ffmpeg,
+                      duration, profile)
 
     announce("target")
 
@@ -144,7 +145,8 @@ def _video_measurements(path, facts, profile, ffmpeg, duration, progress):
     return out
 
 
-def _add_captions(path, facts, measurements, caption_path, ffmpeg, duration):
+def _add_captions(path, facts, measurements, caption_path, ffmpeg, duration,
+                  profile=None):
     """Attach a caption track when there is one to attach. Absence is not a fault."""
     try:
         track = captions.find(path, facts, caption_path, ffmpeg)
@@ -153,6 +155,11 @@ def _add_captions(path, facts, measurements, caption_path, ffmpeg, duration):
         return
     if track:
         measurements.update(captions.measure(track, duration))
+        # Where the captions are, against where the sound is. The audio pass
+        # already measured the silence, so this costs nothing to ask.
+        measurements.update(captions.align(
+            measurements.get("cues"), measurements.get("silences"),
+            duration, (profile or {}).get("options")))
 
 
 def _run_caption_file(path, profile):

@@ -365,6 +365,75 @@ class CaptionTests(unittest.TestCase):
 
 
 @unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class AlignmentTests(unittest.TestCase):
+    """Captions against the programme, on real audio."""
+
+    # Speech at 1-6, 9-14 and 17-24 seconds.
+    PASSAGES = (f"0.3*({SPEECH})*(between(t\\,1\\,6)"
+                f"+between(t\\,9\\,14)+between(t\\,17\\,24))")
+
+    ALL = ("1\n00:00:01,000 --> 00:00:06,000\nOne.\n\n"
+           "2\n00:00:09,000 --> 00:00:14,000\nTwo.\n\n"
+           "3\n00:00:17,000 --> 00:00:24,000\nThree.\n")
+    MISSING = ("1\n00:00:01,000 --> 00:00:06,000\nOne.\n\n"
+               "2\n00:00:09,000 --> 00:00:14,000\nTwo.\n")
+    LATE = ("1\n00:00:02,500 --> 00:00:07,500\nOne.\n\n"
+            "2\n00:00:10,500 --> 00:00:15,500\nTwo.\n\n"
+            "3\n00:00:18,500 --> 00:00:25,500\nThree.\n")
+
+    def _pair(self, folder, name, srt):
+        path = generate(os.path.join(folder, f"{name}.wav"), self.PASSAGES,
+                        duration=26)
+        Path(os.path.join(folder, f"{name}.srt")).write_text(
+            srt, encoding="utf-8")
+        return path
+
+    def test_captions_that_match_the_programme_raise_nothing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._pair(folder, "ok", self.ALL)
+            _, m, result, _ = preflight.run(path, "web")
+            self.assertEqual(m["caption_uncaptioned_speech_s"], 0)
+            self.assertLess(abs(m["caption_drift_s"]), 0.4)
+            for rule_id in ("uncaptioned", "caption_drift", "caption_orphans"):
+                finding = next(f for f in result["findings"]
+                               if f["id"] == rule_id)
+                self.assertEqual(finding["status"], "pass", rule_id)
+
+    def test_a_passage_nobody_captioned_is_found_and_timestamped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._pair(folder, "gap", self.MISSING)
+            _, m, result, _ = preflight.run(path, "web")
+            self.assertGreater(m["caption_uncaptioned_speech_s"], 5.0)
+            finding = next(f for f in result["findings"]
+                           if f["id"] == "uncaptioned")
+            self.assertEqual(finding["status"], "warn")
+            self.assertGreaterEqual(finding["timestamps"][0], 16.0)
+
+    def test_a_file_that_runs_late_is_measured_as_running_late(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._pair(folder, "late", self.LATE)
+            _, m, result, _ = preflight.run(path, "web")
+            self.assertAlmostEqual(m["caption_drift_s"], 1.5, delta=0.3)
+            finding = next(f for f in result["findings"]
+                           if f["id"] == "caption_drift")
+            self.assertEqual(finding["status"], "warn")
+
+    def test_alignment_costs_no_decode_of_its_own(self):
+        """It reads the silence the audio pass already measured."""
+        source = Path(TOOL / "preflight.py").read_text(encoding="utf-8")
+        self.assertIn("captions.align", source)
+        self.assertIn('measurements.get("silences")', source)
+
+    def test_a_caption_file_alone_makes_no_alignment_claim(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "film.srt")
+            Path(path).write_text(self.ALL, encoding="utf-8")
+            _, m, _, _ = preflight.run(path, "subtitles")
+            self.assertIsNone(m.get("caption_drift_s"),
+                              "there is no programme to compare against")
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
 class SubtitleFileTests(unittest.TestCase):
     def test_a_caption_file_can_be_checked_with_no_media_at_all(self):
         with tempfile.TemporaryDirectory() as folder:

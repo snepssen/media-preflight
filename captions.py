@@ -391,3 +391,147 @@ def installed_families(_cache={}):
             families = None
     _cache["families"] = families
     return families
+
+
+# ------------------------------------------------- captions against the audio
+
+# Everything above measures a caption file against itself. This measures it
+# against the programme, which is where the hours actually go: nobody scrubs a
+# two-hour recording to find the eleven seconds nobody captioned, and nobody
+# notices a file is a second and a half out of sync until a viewer says so.
+#
+# The audio pass already knows where the sound is — `silences` is measured, not
+# guessed — so this needs no decode of its own.
+
+ALIGNMENT_DEFAULTS = {
+    # A stretch of sound with no cue over it. Six seconds because speech has
+    # gaps, and because music and atmosphere are legitimately uncaptioned.
+    "uncaptioned_min_s": 6.0,
+    # How far a cue may sit from the speech it belongs to before it counts as
+    # evidence of drift.
+    "drift_window_s": 5.0,
+    "drift_min_s": 0.4,
+    # A cue wholly inside silence longer than this is a cue on nothing.
+    "orphan_margin_s": 0.35,
+}
+
+
+def align(cues, silences, duration_s=None, options=None):
+    """Compare where the captions are against where the sound is."""
+    settings = dict(ALIGNMENT_DEFAULTS)
+    settings.update(options or {})
+    out = {
+        "caption_uncaptioned_speech_s": None,
+        "caption_uncaptioned_intervals": [],
+        "caption_over_silence": None,
+        "caption_orphan_intervals": [],
+        "caption_drift_s": None,
+        "caption_drift_confidence": None,
+    }
+    if not cues or silences is None or not duration_s:
+        return out
+
+    sound = _sound_runs(silences, duration_s)
+    if not sound:
+        return out
+
+    out.update(_uncaptioned(cues, sound, settings))
+    out.update(_orphans(cues, silences, settings))
+    out.update(_drift(cues, sound, settings))
+    return out
+
+
+def _sound_runs(silences, duration_s):
+    """The intervals that are not silence — measured, not inferred."""
+    quiet = sorted(((s["start"], s["end"]) for s in silences),
+                   key=lambda pair: pair[0])
+    runs, position = [], 0.0
+    for start, end in quiet:
+        if start > position:
+            runs.append({"start": position, "end": min(start, duration_s)})
+        position = max(position, end or position)
+    if position < duration_s:
+        runs.append({"start": position, "end": duration_s})
+    return [run for run in runs if run["end"] - run["start"] > 0.01]
+
+
+def _gaps_in(start, end, cues):
+    """The parts of an interval no cue covers."""
+    covering = sorted(
+        ((max(start, cue["start"]), min(end, cue["end"])) for cue in cues
+         if min(end, cue["end"]) > max(start, cue["start"])),
+        key=lambda pair: pair[0])
+    gaps, position = [], start
+    for cue_start, cue_end in covering:
+        if cue_start > position:
+            gaps.append((position, cue_start))
+        position = max(position, cue_end)
+    if position < end:
+        gaps.append((position, end))
+    return gaps
+
+
+def _uncaptioned(cues, sound, settings):
+    """Sound nobody captioned, which is the thing worth finding.
+
+    The gaps *within* each stretch of sound, not the stretches as a whole: a
+    twelve-second run with three seconds of caption on the front has nine
+    seconds nobody captioned, and pointing at the whole run would be pointing
+    at the three seconds that are fine as well.
+    """
+    minimum = settings["uncaptioned_min_s"]
+    found = []
+    for run in sound:
+        for start, end in _gaps_in(run["start"], run["end"], cues):
+            length = end - start
+            if length < minimum:
+                continue
+            found.append({"start": round(start, 2), "end": round(end, 2),
+                          "duration": round(length, 2),
+                          "detail": f"{length:.1f} s of sound with no caption"})
+    return {"caption_uncaptioned_speech_s": round(
+                sum(f["duration"] for f in found), 2),
+            "caption_uncaptioned_intervals": found}
+
+
+def _orphans(cues, silences, settings):
+    """Cues sitting on nothing, which is what drift looks like from one end."""
+    margin = settings["orphan_margin_s"]
+    quiet = [(s["start"], s["end"]) for s in silences
+             if (s["end"] - s["start"]) > margin * 2]
+    found = []
+    for cue in cues:
+        for start, end in quiet:
+            if cue["start"] >= start + margin and cue["end"] <= end - margin:
+                found.append({
+                    "start": cue["start"], "end": cue["end"],
+                    "detail": f"cue {cue['index']} plays over silence"})
+                break
+    return {"caption_over_silence": len(found),
+            "caption_orphan_intervals": found}
+
+
+def _drift(cues, sound, settings):
+    """A constant offset between the captions and the programme.
+
+    Each cue is matched to the nearest moment sound *starts*, and the median of
+    those offsets is the answer. The median rather than the mean because a
+    handful of cues legitimately sit mid-sentence, and one of those should not
+    drag the figure; and a confidence figure, because a file where only a
+    third of cues matched anything has not really been measured.
+    """
+    window = settings["drift_window_s"]
+    onsets = [run["start"] for run in sound]
+    if not onsets:
+        return {}
+    offsets = []
+    for cue in cues:
+        nearest = min(onsets, key=lambda onset: abs(cue["start"] - onset))
+        if abs(cue["start"] - nearest) <= window:
+            offsets.append(cue["start"] - nearest)
+    if len(offsets) < 3:
+        return {}
+    offsets.sort()
+    median = offsets[len(offsets) // 2]
+    return {"caption_drift_s": round(median, 2),
+            "caption_drift_confidence": round(len(offsets) / len(cues), 2)}

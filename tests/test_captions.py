@@ -220,3 +220,91 @@ class FontTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AlignmentTests(unittest.TestCase):
+    """Captions against the programme, which is where the hours go."""
+
+    # Sound from 1-6, 9-14 and 17-24 in a 26-second file.
+    SILENCES = [{"start": 0.0, "end": 1.0}, {"start": 6.0, "end": 9.0},
+                {"start": 14.0, "end": 17.0}, {"start": 24.0, "end": 26.0}]
+    DURATION = 26.0
+
+    def _cues(self, spans):
+        return [{"index": i, "start": s, "end": e}
+                for i, (s, e) in enumerate(spans, 1)]
+
+    def test_sound_runs_come_from_the_measured_silence(self):
+        runs = captions._sound_runs(self.SILENCES, self.DURATION)
+        self.assertEqual([(r["start"], r["end"]) for r in runs],
+                         [(1.0, 6.0), (9.0, 14.0), (17.0, 24.0)])
+
+    def test_a_fully_captioned_programme_reports_no_gap(self):
+        out = captions.align(
+            self._cues([(1, 6), (9, 14), (17, 24)]), self.SILENCES,
+            self.DURATION)
+        self.assertEqual(out["caption_uncaptioned_speech_s"], 0)
+
+    def test_an_uncaptioned_passage_is_found_and_located(self):
+        out = captions.align(self._cues([(1, 6), (9, 14)]), self.SILENCES,
+                             self.DURATION)
+        self.assertAlmostEqual(out["caption_uncaptioned_speech_s"], 7.0)
+        interval = out["caption_uncaptioned_intervals"][0]
+        self.assertEqual((interval["start"], interval["end"]), (17.0, 24.0))
+
+    def test_a_partly_captioned_passage_reports_only_the_part(self):
+        """The seven-second passage has half a second of caption on the front,
+        so what is reported is the six and a half nobody captioned — not the
+        whole passage, and not nothing."""
+        out = captions.align(self._cues([(1, 6), (9, 14), (17, 17.5)]),
+                             self.SILENCES, self.DURATION)
+        interval = out["caption_uncaptioned_intervals"][0]
+        self.assertEqual((interval["start"], interval["end"]), (17.5, 24.0))
+        self.assertAlmostEqual(out["caption_uncaptioned_speech_s"], 6.5)
+
+    def test_short_gaps_are_breath_not_a_fault(self):
+        out = captions.align(self._cues([(1, 6), (9, 14), (17, 22)]),
+                             self.SILENCES, self.DURATION)
+        self.assertEqual(out["caption_uncaptioned_speech_s"], 0,
+                         "two seconds is a pause, not a missing caption")
+
+    def test_a_constant_offset_reads_as_drift(self):
+        out = captions.align(
+            self._cues([(2.5, 7.5), (10.5, 15.5), (18.5, 25.5)]),
+            self.SILENCES, self.DURATION)
+        self.assertAlmostEqual(out["caption_drift_s"], 1.5)
+        self.assertEqual(out["caption_drift_confidence"], 1.0)
+
+    def test_captions_on_time_show_no_drift(self):
+        out = captions.align(self._cues([(1, 6), (9, 14), (17, 24)]),
+                             self.SILENCES, self.DURATION)
+        self.assertEqual(out["caption_drift_s"], 0.0)
+
+    def test_one_stray_cue_does_not_drag_the_figure(self):
+        """The median rather than the mean, because cues legitimately sit
+        mid-sentence and one of those should not become the answer."""
+        out = captions.align(
+            self._cues([(1, 3), (9, 11), (17, 19), (21.0, 22.0)]),
+            self.SILENCES, self.DURATION)
+        self.assertLess(abs(out["caption_drift_s"]), 0.5)
+
+    def test_too_few_cues_to_tell_says_nothing(self):
+        out = captions.align(self._cues([(1, 6)]), self.SILENCES,
+                             self.DURATION)
+        self.assertIsNone(out["caption_drift_s"])
+
+    def test_a_cue_playing_over_silence_is_found(self):
+        out = captions.align(self._cues([(1, 6), (6.5, 8.5), (9, 14)]),
+                             self.SILENCES, self.DURATION)
+        self.assertEqual(out["caption_over_silence"], 1)
+        self.assertIn("cue 2", out["caption_orphan_intervals"][0]["detail"])
+
+    def test_no_captions_makes_no_claims(self):
+        out = captions.align([], self.SILENCES, self.DURATION)
+        self.assertIsNone(out["caption_uncaptioned_speech_s"])
+
+    def test_no_measured_silence_makes_no_claims(self):
+        """A caption file checked on its own has no programme to compare to."""
+        out = captions.align(self._cues([(1, 6)]), None, None)
+        self.assertIsNone(out["caption_drift_s"])
+        self.assertIsNone(out["caption_uncaptioned_speech_s"])

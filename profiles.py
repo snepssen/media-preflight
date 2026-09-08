@@ -314,6 +314,27 @@ YOUTUBE = {
          "severity": "warn", "basis": "house",
          "note": "A still frame is legitimate over a title card and a fault "
                  "in the middle of a shot; this cannot tell them apart."},
+        {"id": "uncaptioned", "metric": "caption_uncaptioned_speech_s",
+         "label": "Sound with no caption", "unit": "s", "max": 0.0,
+         "severity": "warn", "basis": "house",
+         "note": "Stretches of sound longer than six seconds that no cue "
+                 "covers. Music and atmosphere are legitimately uncaptioned, "
+                 "so this finds passages to look at rather than faults — but "
+                 "it finds them in a two-hour recording in seconds, which is "
+                 "the part nobody does by hand."},
+        {"id": "caption_drift", "metric": "caption_drift_s",
+         "label": "Caption timing", "unit": "s", "min": -0.4, "max": 0.4,
+         "severity": "warn", "basis": "house",
+         "note": "Every cue matched to the nearest moment sound starts, and "
+                 "the median of those offsets taken. A whole file out by the "
+                 "same amount is a sync error; a scattering of cues that sit "
+                 "mid-sentence is not, which is why this is a median and "
+                 "carries a confidence figure."},
+        {"id": "caption_orphans", "metric": "caption_over_silence",
+         "label": "Captions over silence", "max": 0.0, "severity": "warn",
+         "basis": "house",
+         "note": "Cues that play while nothing is audible — what drift looks "
+                 "like from the other end."},
         {"id": "flashing", "metric": "flash_regions",
          "label": "Flashing risk", "max": 0.0, "severity": "warn",
          "basis": "house",
@@ -406,6 +427,27 @@ GENERIC_WEB = {
          "label": "Telecine", "max": 0.05, "severity": "warn",
          "note": "Repeated fields — 24-frame film pulled up to 30 and left "
                  "that way."},
+        {"id": "uncaptioned", "metric": "caption_uncaptioned_speech_s",
+         "label": "Sound with no caption", "unit": "s", "max": 0.0,
+         "severity": "warn", "basis": "house",
+         "note": "Stretches of sound longer than six seconds that no cue "
+                 "covers. Music and atmosphere are legitimately uncaptioned, "
+                 "so this finds passages to look at rather than faults — but "
+                 "it finds them in a two-hour recording in seconds, which is "
+                 "the part nobody does by hand."},
+        {"id": "caption_drift", "metric": "caption_drift_s",
+         "label": "Caption timing", "unit": "s", "min": -0.4, "max": 0.4,
+         "severity": "warn", "basis": "house",
+         "note": "Every cue matched to the nearest moment sound starts, and "
+                 "the median of those offsets taken. A whole file out by the "
+                 "same amount is a sync error; a scattering of cues that sit "
+                 "mid-sentence is not, which is why this is a median and "
+                 "carries a confidence figure."},
+        {"id": "caption_orphans", "metric": "caption_over_silence",
+         "label": "Captions over silence", "max": 0.0, "severity": "warn",
+         "basis": "house",
+         "note": "Cues that play while nothing is audible — what drift looks "
+                 "like from the other end."},
         {"id": "flashing", "metric": "flash_regions",
          "label": "Flashing risk", "max": 0.0, "severity": "warn",
          "note": "A screening heuristic, not a compliance test — it finds the "

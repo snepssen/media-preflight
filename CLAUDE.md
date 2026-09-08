@@ -97,6 +97,21 @@ fifteen fields a frame, and a ninety-minute film is 130,000 frames.
 Captions cost no decode at all unless they are embedded, in which case one
 `ffmpeg -f ass -` extraction reads them.
 
+`captions.align` costs none either: it compares the cues against the
+`silences` the audio pass already measured. Three findings come out of that —
+sound nobody captioned, a constant offset, and cues over silence — and they
+are the ones that actually save somebody an afternoon.
+
+- **Gaps within a run, not runs as a whole.** `_gaps_in` subtracts the cues
+  from each stretch of sound. Judging a whole passage as covered or not was the
+  first attempt and it hid a twelve-second passage with three seconds of
+  caption on the front.
+- **Drift is a median with a confidence figure.** Cues legitimately sit
+  mid-sentence; one of those must not become the answer, and a file where a
+  third of cues matched nothing has not been measured.
+- **Music is legitimately uncaptioned.** The six-second minimum and the `house`
+  basis are both admissions that this finds passages to look at, not faults.
+
 ## Things measured the hard way, for a reason
 
 - **The timeline is bucketed to one second.** ebur128 reports every 100 ms; the
@@ -336,7 +351,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 259 checks, about twenty-five seconds
+python3 -m unittest discover -s tests    # 281 checks, about thirty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -371,9 +386,14 @@ Three questions decide the rest:
 
 ## Not yet built
 
-Nothing in the original three-week plan. Candidates, in rough order of how
-often they would earn their place:
+Nothing in the original three-week plan, and nothing named since. Candidates,
+in rough order of how often they would earn their place:
 
-- **A caption view** — cues are measured and reported as a list; seeing them
-  against the loudness timeline would locate a reading-speed problem the way
-  the chart locates a loudness one.
+- **Fast-start check** — whether an MP4's `moov` atom precedes `mdat`.
+  YouTube's guide asks for it by name, it is a real cause of stalled
+  progressive downloads, and it needs no decode: read the atom order off the
+  front of the file.
+- **Gaps in a delivery's numbering** — `chapter-01, -02, -04` is a missing
+  chapter, visible from the filenames alone.
+- **Loudness of the corrected copy plotted against the original**, so a
+  correction can be seen as well as verified.
