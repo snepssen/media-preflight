@@ -52,15 +52,21 @@ _jobs = {}
 _jobs_lock = threading.Lock()
 
 
-def _key(path, target, depth="selective"):
+def _file_identity(path):
+    """The parts of a file that make a cached measurement safe to reuse."""
     try:
         stat = os.stat(path)
     except OSError:
         return None
     if not os.path.isfile(path):
         return None
-    return (os.path.abspath(path), target, depth,
-            stat.st_size, int(stat.st_mtime))
+    return (os.path.abspath(path), stat.st_size, stat.st_mtime_ns,
+            stat.st_ctime_ns, stat.st_dev, stat.st_ino)
+
+
+def _key(path, target, depth="selective"):
+    identity = _file_identity(path)
+    return (identity, target, depth) if identity else None
 
 
 def _remember(path, target, payload, depth="selective"):
@@ -173,7 +179,7 @@ def check_job(path, target, depth="selective"):
     return start_job(work)
 
 
-def batch_job(paths, target, recursive=False):
+def batch_job(paths, target, recursive=False, depth="selective"):
     """Check a whole delivery, remembering each file so a click is instant."""
     def work(update):
         def on_file(index, total, name):
@@ -181,9 +187,9 @@ def batch_job(paths, target, recursive=False):
                    stage=f"{name} — {index + 1} of {total}")
 
         result = batch.run(paths, target, recursive=recursive,
-                           on_file=on_file)
+                           on_file=on_file, depth=depth)
         _remember_delivery([entry["path"] for entry in result["files"]],
-                           target, result)
+                           target, result, depth)
         update(phase="target", stage="comparing the delivery", progress=0.98)
         envelope = report.set_envelope(result)
         envelope["kind"] = "delivery"
@@ -192,7 +198,7 @@ def batch_job(paths, target, recursive=False):
             _remember(entry["path"], target, {
                 "facts": entry["facts"], "measurements": entry["measurements"],
                 "result": entry["result"], "profile": result["profile"],
-                "envelope": entry["envelope"]})
+                "envelope": entry["envelope"]}, depth)
         return envelope
     return start_job(work)
 
@@ -203,23 +209,29 @@ _delivery = {}
 _delivery_lock = threading.Lock()
 
 
-def _remember_delivery(paths, target, result):
+def _remember_delivery(paths, target, result, depth="selective"):
+    identities = tuple(sorted(filter(None, (_file_identity(p) for p in paths))))
+    if len(identities) != len(paths):
+        return
     with _delivery_lock:
         _delivery.clear()
-        _delivery["key"] = (tuple(sorted(paths)), target)
+        _delivery["key"] = (identities, target, depth)
         _delivery["result"] = result
 
 
-def _recall_delivery(paths, target):
+def _recall_delivery(paths, target, depth="selective"):
+    identities = tuple(sorted(filter(None, (_file_identity(p) for p in paths))))
+    if len(identities) != len(paths):
+        return None
     with _delivery_lock:
-        if _delivery.get("key") == (tuple(sorted(paths)), target):
+        if _delivery.get("key") == (identities, target, depth):
             return _delivery.get("result")
     return None
 
 
-def delivery_plan(paths, target):
+def delivery_plan(paths, target, depth="selective"):
     """What it would take to make this delivery pass, in sentences."""
-    result = _recall_delivery(paths, target)
+    result = _recall_delivery(paths, target, depth)
     if result is None:
         raise preflight.PreflightError(
             "Check the delivery before correcting it.")
@@ -238,7 +250,7 @@ def delivery_plan(paths, target):
     }
 
 
-def delivery_fix_job(paths, target, overwrite=False):
+def delivery_fix_job(paths, target, overwrite=False, depth="selective"):
     """Correct a delivery, then measure the delivery that came out.
 
     The work itself is batch.correct, which the command line calls too — the
@@ -246,7 +258,7 @@ def delivery_fix_job(paths, target, overwrite=False):
     and a window that skipped it would be quietly making a weaker one.
     """
     def work(update):
-        result = _recall_delivery(paths, target)
+        result = _recall_delivery(paths, target, depth)
         if result is None:
             raise preflight.PreflightError(
                 "Check the delivery before correcting it.")
@@ -269,13 +281,13 @@ def delivery_fix_job(paths, target, overwrite=False):
         after = report.set_envelope(done["after"])
         after["kind"] = "delivery"
         after["chart"] = report.set_chart_svg(done["after"], theme="auto")
-        _remember_delivery(done["outputs"], target, done["after"])
+        _remember_delivery(done["outputs"], target, done["after"], depth)
         for entry in done["after"]["files"]:
             _remember(entry["path"], target, {
                 "facts": entry["facts"], "measurements": entry["measurements"],
                 "result": entry["result"],
                 "profile": done["after"]["profile"],
-                "envelope": entry["envelope"]})
+                "envelope": entry["envelope"]}, depth)
         return {"after": after,
                 "written": [entry["output"]
                             for entry in done["written"]["written"]],
@@ -351,7 +363,7 @@ def fix_job(path, target, overwrite=False, depth="selective"):
 
         update(stage="measuring the corrected copy", phase="audio",
                progress=0.6)
-        after = preflight.run(written, cached["profile"])
+        after = preflight.run(written, cached["profile"], depth=depth)
         after_envelope = report.envelope(
             after[0], after[1], after[2], cached["profile"],
             corrections=[{"description": s["description"]} for s in prepared])
@@ -370,7 +382,7 @@ def fix_job(path, target, overwrite=False, depth="selective"):
             written, command, prepared = corrections.apply(
                 path, adjusted, cached["facts"], destination=written,
                 ffmpeg=ffmpeg, overwrite=True)
-            after = preflight.run(written, cached["profile"])
+            after = preflight.run(written, cached["profile"], depth=depth)
             after_envelope = report.envelope(
                 after[0], after[1], after[2], cached["profile"],
                 corrections=[{"description": s["description"]}
@@ -380,7 +392,7 @@ def fix_job(path, target, overwrite=False, depth="selective"):
 
         _remember(written, target, {
             "facts": after[0], "measurements": after[1], "result": after[2],
-            "profile": cached["profile"], "envelope": after_envelope})
+            "profile": cached["profile"], "envelope": after_envelope}, depth)
         return {
             "output": written,
             "before": cached["envelope"],
@@ -485,7 +497,7 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError(f"No such file or folder: {path}")
                 return self._json({"job": batch_job(
                     paths, body.get("target", "web"),
-                    bool(body.get("recursive")))})
+                    bool(body.get("recursive")), _depth(body))})
 
             if url.path == "/api/check":
                 path = self._require_file(body)
@@ -516,14 +528,15 @@ class Handler(BaseHTTPRequestHandler):
                 paths = [os.path.expanduser(p) for p in
                          (body.get("paths") or [])]
                 return self._json(delivery_plan(paths,
-                                                body.get("target", "web")))
+                                                body.get("target", "web"),
+                                                _depth(body)))
 
             if url.path == "/api/delivery_fix":
                 paths = [os.path.expanduser(p) for p in
                          (body.get("paths") or [])]
                 return self._json({"job": delivery_fix_job(
                     paths, body.get("target", "web"),
-                    bool(body.get("overwrite")))})
+                    bool(body.get("overwrite")), _depth(body))})
 
             if url.path == "/api/export":
                 return self._json(self._export(body))
@@ -557,7 +570,7 @@ class Handler(BaseHTTPRequestHandler):
         """Write the report beside the file it describes."""
         path = self._require_file(body)
         target = body.get("target", "web")
-        cached = _recall(path, target)
+        cached = _recall(path, target, _depth(body))
         if not cached:
             raise ValueError("Run the check before exporting its report.")
         stem = os.path.splitext(path)[0]

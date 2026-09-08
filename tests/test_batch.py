@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 TOOL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL))
@@ -389,10 +390,26 @@ class DepthAcrossADelivery(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as folder:
                 for name in ("a.wav", "b.wav"):
-                    open(os.path.join(folder, name), "wb").write(b"\0" * 16)
+                    Path(os.path.join(folder, name)).write_bytes(b"\0" * 16)
                 with self.assertRaises(batch.BatchError):
                     batch.run([folder], "web", ffmpeg="ffmpeg",
                               ffprobe="ffprobe", depth="full")
         finally:
             batch.preflight.run = original
         self.assertEqual(seen, ["full", "full"])
+
+    def test_correction_is_verified_at_the_original_depth(self):
+        original = _result([entry("a.mp3")], profiles.get("acx"))
+        original["depth"] = "full"
+        planned = {"files": [{"name": "a.mp3"}], "untouched": [],
+                   "unaddressed": []}
+        written = {"written": [{"name": "a.mp3", "source": "/tmp/a.mp3",
+                                  "output": "/tmp/a.preflight.mp3",
+                                  "steps": []}], "failed": []}
+        after = {"verdict": "pass", "files": [], "profile": original["profile"]}
+        with mock.patch("batch.plan", return_value=planned), \
+                mock.patch("batch.apply", return_value=written), \
+                mock.patch("batch.run", return_value=after) as rerun:
+            batch.correct(original, "acx", ffmpeg="ffmpeg")
+
+        self.assertEqual(rerun.call_args.kwargs["depth"], "full")

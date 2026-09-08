@@ -138,6 +138,7 @@ def run(paths, target="web", ffmpeg=None, ffprobe=None, recursive=False,
     set_result = checks.evaluate_set(set_measurements, profile)
     return {
         "profile": profile,
+        "depth": depth,
         "files": done,
         "unreadable": failed,
         "set_measurements": set_measurements,
@@ -489,14 +490,17 @@ def correct(result, target, ffmpeg=None, overwrite=False, directory=None,
     outputs = [entry["output"] for entry in written["written"]]
 
     say("measuring the corrected delivery")
-    after = run(outputs + untouched, target, ffmpeg, on_file=on_file)
+    depth = result.get("depth", "selective")
+    after = run(outputs + untouched, target, ffmpeg, on_file=on_file,
+                depth=depth)
     for _ in range(rounds):
         if after["verdict"] != "fail":
             break
         if not refine(result, written, after, ffmpeg, say):
             break
         say("measuring the rebuilt delivery")
-        after = run(outputs + untouched, target, ffmpeg, on_file=on_file)
+        after = run(outputs + untouched, target, ffmpeg, on_file=on_file,
+                    depth=depth)
 
     return {"planned": planned, "written": written, "after": after,
             "outputs": outputs + untouched}

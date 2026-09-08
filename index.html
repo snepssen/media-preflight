@@ -710,7 +710,8 @@ $("fixDelivery").addEventListener("click", async () => {
   if (!delivery) return;
   try {
     const plan = await api("/delivery_plan", { paths: deliveryPaths,
-                                               target: $("target").value });
+                                               target: $("target").value,
+                                               depth: depth() });
     $("deliveryReasons").innerHTML = (plan.consensus.reasons || [])
       .map((r) => `<li>${esc(r)}</li>`).join("");
     $("deliveryPlan").innerHTML = plan.files.map((f) => `
@@ -743,7 +744,8 @@ $("applyDelivery").addEventListener("click", async () => {
   try {
     const { job } = await api("/delivery_fix", { paths: deliveryPaths,
                                                  target: $("target").value,
-                                                 overwrite: true });
+                                                 overwrite: true,
+                                                 depth: depth() });
     poll(job, (result) => {
       busy(false);
       deliveryPaths = result.after.files.map((f) => f.path);
@@ -774,7 +776,8 @@ $("runFolder").addEventListener("click", async () => {
     }
     busy(true);
     const { job } = await api("/batch", { path: folder,
-                                          target: $("target").value });
+                                          target: $("target").value,
+                                          depth: depth() });
     poll(job, (envelope) => {
       busy(false);
       $("deliveryPlanPanel").classList.add("hidden");
@@ -847,7 +850,8 @@ for (const [id, kind] of [["exportMd", "markdown"], ["exportJson", "json"]]) {
   $(id).addEventListener("click", async () => {
     try {
       const { written } = await api("/export", { path: $("path").value.trim(),
-                                                 target: $("target").value, kind });
+                                                 target: $("target").value,
+                                                 depth: depth(), kind });
       $("exported").textContent = `Wrote ${written}`;
     } catch (error) { fail(error.message); }
   });
