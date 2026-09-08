@@ -37,6 +37,22 @@ import platform_support
 
 # Measurement parameters. A profile may override them, because "silence" is a
 # claim about a threshold and different targets draw the line differently.
+# Seconds of work per second of audio, on the machine the picture costs in
+# video.FILTER_COST were timed on. Measured at 0.0067x on a 48 kHz stereo WAV
+# and 0.0083x decoding AAC from an MP4; 0.01 is the round number above both.
+#
+# It is here so an estimate can be given for a job before it starts, and it is
+# small enough that it usually rounds away: the sound in a ninety-minute film
+# is under a minute of work against eighty for the picture. Saying so is still
+# better than implying the audio is free.
+COST_PER_SECOND = 0.01
+
+
+def estimate_seconds(duration_s):
+    """Roughly how long the audio pass will take. An estimate, and no more."""
+    return duration_s * COST_PER_SECOND if duration_s else None
+
+
 DEFAULTS = {
     "silence_threshold_db": -45.0,   # below this counts as silence
     "silence_min_s": 0.30,           # shorter gaps are speech, not silence

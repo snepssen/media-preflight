@@ -30,13 +30,16 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import analysis
 import batch
 import corrections
+import intake
 import platform_support
 import preflight
 import probe
 import profiles
 import report
+import video
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORT = 8770
@@ -62,6 +65,99 @@ def _file_identity(path):
         return None
     return (os.path.abspath(path), stat.st_size, stat.st_mtime_ns,
             stat.st_ctime_ns, stat.st_dev, stat.st_ino)
+
+
+# One sorted selection, kept between the intake call and the estimate that
+# follows it. The lean envelope the page holds has had the probe output
+# dropped — it is kilobytes a file and nothing on the page draws it — but the
+# estimate needs the width, height and frame rate that were in it. Keeping it
+# here beats probing the whole folder twice.
+_intakes = {}
+_intakes_lock = threading.Lock()
+_INTAKES_KEPT = 4
+
+
+def _remember_intake(envelope):
+    token = secrets.token_urlsafe(12)
+    with _intakes_lock:
+        _intakes[token] = envelope
+        while len(_intakes) > _INTAKES_KEPT:
+            _intakes.pop(next(iter(_intakes)))
+    return token
+
+
+def _recall_intake(token):
+    with _intakes_lock:
+        return _intakes.get(token)
+
+
+def intake_job(paths, recursive=False):
+    """Sort a selection. Cheap per file, and not cheap over four hundred."""
+    def work(update):
+        update(stage="looking at what is here", phase="container",
+               progress=0.02)
+
+        def progress(done, total):
+            update(progress=0.02 + 0.96 * (done / max(total, 1)),
+                   stage="identifying %d of %d" % (done, total))
+
+        envelope = intake.classify(paths, recursive=recursive,
+                                   progress=progress)
+        lean = intake.without_facts(envelope)
+        lean["intake"] = _remember_intake(envelope)
+        lean["profiles"] = {
+            kind: [{"id": p["id"], "label": p["label"],
+                    "summary": p.get("summary", ""),
+                    "confidence": p.get("confidence", "informal")}
+                   for p in profiles.for_kind(kind)]
+            for kind in ("audio", "video", "captions")
+        }
+        return lean
+    return start_job(work)
+
+
+def estimate_run(token, assignments):
+    """What the chosen work will cost, before any of it starts.
+
+    Weighted by predicted cost rather than by file count, because a two-second
+    caption check and a ninety-minute picture pass are not the same tick of a
+    progress bar.
+    """
+    envelope = _recall_intake(token)
+    if not envelope:
+        raise ValueError("That selection has been forgotten. Choose the "
+                         "files again.")
+    facts_by_path = {i["path"]: i.get("facts") for i in envelope["items"]}
+
+    rows, total = [], 0.0
+    for choice in assignments or []:
+        path = choice.get("path")
+        if choice.get("action") == "skip":
+            continue
+        facts = facts_by_path.get(path) or {}
+        profile = profiles.get(choice.get("target", "web"))
+        seconds = _estimate_one(facts, profile, choice.get("depth",
+                                                           "selective"))
+        total += seconds
+        rows.append({"path": path, "seconds": round(seconds, 1)})
+
+    return {"files": len(rows), "seconds": round(total, 1),
+            "low": round(total * 0.7), "high": round(total * 1.4),
+            "per_file": rows}
+
+
+def _estimate_one(facts, profile, depth):
+    container = facts.get("container") or {}
+    duration = container.get("duration_s") or 0.0
+    stream = facts.get("video") or {}
+
+    seconds = analysis.estimate_seconds(duration) or 0.0
+    if stream:
+        filters = preflight.picture_filters(profile, depth)
+        seconds += video.estimate_seconds(
+            filters, duration, stream.get("width"), stream.get("height"),
+            stream.get("avg_frame_rate")) or 0.0
+    return seconds
 
 
 def _key(path, target, depth="selective"):
@@ -498,6 +594,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"job": batch_job(
                     paths, body.get("target", "web"),
                     bool(body.get("recursive")), _depth(body))})
+
+            if url.path == "/api/intake":
+                paths = [os.path.expanduser(p.strip())
+                         for p in (body.get("paths") or []) if p and p.strip()]
+                if not paths:
+                    raise ValueError("Nothing was chosen.")
+                for path in paths:
+                    if not os.path.exists(path):
+                        raise ValueError(f"No such file or folder: {path}")
+                return self._json({"job": intake_job(
+                    paths, bool(body.get("recursive")))})
+
+            if url.path == "/api/estimate":
+                return self._json(estimate_run(body.get("intake"),
+                                               body.get("assignments")))
 
             if url.path == "/api/check":
                 path = self._require_file(body)

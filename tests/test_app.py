@@ -80,3 +80,77 @@ class DeliveryCacheTests(unittest.TestCase):
                 [str(path)], "youtube", "selective"))
             self.assertIsNotNone(app._recall_delivery(
                 [str(path)], "youtube", "full"))
+
+
+class EstimatingBeforeAnythingRuns(unittest.TestCase):
+    """Weighted by predicted cost, because file count is not the work."""
+
+    def setUp(self):
+        app._intakes.clear()
+
+    def stash(self, *items):
+        return app._remember_intake({"items": list(items), "groups": [],
+                                     "counts": {}})
+
+    def audio(self, path, duration):
+        return {"path": path, "kind": "audio",
+                "facts": {"container": {"duration_s": duration},
+                          "audio": {"channels": 2}}}
+
+    def video(self, path, duration, width=1920, height=1080, fps=60):
+        return {"path": path, "kind": "video",
+                "facts": {"container": {"duration_s": duration},
+                          "audio": {"channels": 2},
+                          "video": {"width": width, "height": height,
+                                    "avg_frame_rate": fps}}}
+
+    def test_a_picture_pass_dwarfs_the_sound_beside_it(self):
+        token = self.stash(self.audio("/a.wav", 187),
+                           self.video("/b.mp4", 187))
+        out = app.estimate_run(token, [
+            {"path": "/a.wav", "target": "acx"},
+            {"path": "/b.mp4", "target": "youtube"}])
+        rows = {r["path"]: r["seconds"] for r in out["per_file"]}
+        self.assertLess(rows["/a.wav"], 5)
+        self.assertGreater(rows["/b.mp4"], 100)
+
+    def test_a_skipped_file_costs_nothing_and_is_not_counted(self):
+        token = self.stash(self.video("/b.mp4", 187))
+        out = app.estimate_run(token, [{"path": "/b.mp4", "target": "youtube",
+                                        "action": "skip"}])
+        self.assertEqual(out["files"], 0)
+        self.assertEqual(out["seconds"], 0.0)
+
+    def test_a_target_asking_nothing_of_the_picture_costs_almost_nothing(self):
+        token = self.stash(self.video("/b.mp4", 187))
+        loud = app.estimate_run(token, [{"path": "/b.mp4",
+                                         "target": "ebu_r128"}])
+        full = app.estimate_run(token, [{"path": "/b.mp4",
+                                         "target": "youtube"}])
+        self.assertLess(loud["seconds"], full["seconds"] / 10)
+
+    def test_full_depth_costs_more_than_selective(self):
+        token = self.stash(self.video("/b.mp4", 187))
+        lean = app.estimate_run(token, [{"path": "/b.mp4",
+                                         "target": "social_vertical"}])
+        everything = app.estimate_run(token, [{"path": "/b.mp4",
+                                               "target": "social_vertical",
+                                               "depth": "full"}])
+        self.assertGreater(everything["seconds"], lean["seconds"])
+
+    def test_the_range_brackets_the_estimate(self):
+        token = self.stash(self.video("/b.mp4", 187))
+        out = app.estimate_run(token, [{"path": "/b.mp4",
+                                        "target": "youtube"}])
+        self.assertLess(out["low"], out["seconds"])
+        self.assertGreater(out["high"], out["seconds"])
+
+    def test_a_forgotten_selection_says_so_rather_than_guessing(self):
+        with self.assertRaises(ValueError) as caught:
+            app.estimate_run("nothing-like-a-token", [])
+        self.assertIn("again", str(caught.exception))
+
+    def test_only_a_few_selections_are_kept(self):
+        for _ in range(app._INTAKES_KEPT + 3):
+            self.stash(self.audio("/a.wav", 1))
+        self.assertLessEqual(len(app._intakes), app._INTAKES_KEPT)
