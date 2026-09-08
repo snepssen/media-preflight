@@ -20,6 +20,33 @@ body[data-project="tools-core"] {
 }
 body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
 
+/* The five accents above are built for a dark ground and fail badly on a
+   light one — measured against the lightest surface these pages use, the
+   green came to 1.26:1 and the teal to 1.27:1 where body text needs 4.5:1.
+   They were not dim, they were close to invisible.
+   
+   These are the same hues taken down until each clears 4.5:1 on every light
+   surface in the workshop (#EDEBDC, #EFEDE1, #EAEEE7), which is what the
+   individual sites already do for their own palettes — protoke turns its
+   #FFD400 signal into #7A5C00 the same way. Dark mode is untouched: there the
+   originals run from 6.5:1 to 11.4:1 and are exactly right. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --eco-gateway: #723cff;
+    --eco-voice: #955b00;
+    --eco-protoke: #157565;
+    --eco-tools: #cd1d00;
+    --eco-preflight: #387614;
+  }
+}
+:root[data-theme="light"] {
+  --eco-gateway: #723cff;
+  --eco-voice: #955b00;
+  --eco-protoke: #157565;
+  --eco-tools: #cd1d00;
+  --eco-preflight: #387614;
+}
+
 /* Wide diagrams and code samples own their scrolling inside their existing
    wrappers; never let one of them make the whole page wobble sideways. */
 body { overflow-x: clip; }
@@ -244,11 +271,22 @@ body { overflow-x: clip; }
   letter-spacing: .02em;
   font-size: 10px;
 }
+/* The glyph is sized against the card, not the viewport.
+   It used to be clamp(34px, 4vw, 50px), and 4vw is a fifth of the wrong
+   number: five cards across mean each one is about a fifth of the page, so a
+   wider window grew the type without growing the box holding it. At 1280px
+   that is 50px of monospace inside a 139px column, and "[ measure -> keep ]"
+   came apart over four lines with the bracket alone on the last. cqw is the
+   same idea measured against the right thing. */
+.ecosystem-card { container-type: inline-size; }
 .ecosystem-card__glyph {
   margin: auto 0 24px;
   color: var(--card-accent);
-  font: 400 clamp(34px, 4vw, 50px)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: -.08em;
+  font: 400 clamp(20px, 17cqw, 46px)/1.08 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: -.06em;
+  /* When it still has to wrap, wrap it evenly rather than filling the first
+     line and orphaning whatever is left. */
+  text-wrap: balance;
 }
 .ecosystem-card h3 {
   margin: 0 0 10px;
