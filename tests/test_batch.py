@@ -371,3 +371,28 @@ class NumberingTests(unittest.TestCase):
         self.assertEqual(finding["status"], "warn")
         self.assertIn("chapter-", finding["actual"])
         self.assertEqual(finding["files"], ["chapter-03.mp3"])
+
+
+class DepthAcrossADelivery(unittest.TestCase):
+    """One delivery is measured one way, decided once rather than per file."""
+
+    def test_run_passes_the_depth_to_every_file(self):
+        seen = []
+
+        def spy(path, profile, ffmpeg=None, ffprobe=None, progress=None,
+                depth="selective", width_divide=None, **rest):
+            seen.append(depth)
+            raise RuntimeError("measured")   # reported, not lost
+
+        original = batch.preflight.run
+        batch.preflight.run = spy
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                for name in ("a.wav", "b.wav"):
+                    open(os.path.join(folder, name), "wb").write(b"\0" * 16)
+                with self.assertRaises(batch.BatchError):
+                    batch.run([folder], "web", ffmpeg="ffmpeg",
+                              ffprobe="ffprobe", depth="full")
+        finally:
+            batch.preflight.run = original
+        self.assertEqual(seen, ["full", "full"])

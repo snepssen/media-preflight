@@ -97,11 +97,37 @@ blackdetect -> freezedetect -> idet -> signalstats -> metadata(print)
 
 It is a **separate** decode, deliberately. The two read different streams, and
 combining them would put two metadata printers on one pipe with nothing keeping
-their blocks apart. It runs only when the target has a rule that needs it —
-`preflight.VIDEO_METRICS` is the list — because decoding a feature to count
-black frames is minutes of somebody's time and a podcast profile has no reason
-to spend them. `parse_luma_stream` keeps only `YAVG`: signalstats prints
+their blocks apart. `parse_luma_stream` keeps only `YAVG`: signalstats prints
 fifteen fields a frame, and a ninety-minute film is 130,000 frames.
+
+**The chain is built to order.** It runs only when the target has a rule that
+needs it, and then carries only the filters those rules read —
+`video.FILTER_METRICS` maps one to the other, `preflight.picture_filters`
+applies it. This is not a micro-optimisation. Timed on a 1080p60 file, the
+whole chain runs at roughly 0.9x the file's own duration: a ninety-minute
+feature is about eighty minutes of work, of which `idet` is half and
+`signalstats` a third, while `blackdetect` and `freezedetect` together are a
+tenth. A target that asks only about black frames should not pay for the
+field detector, and before this it did.
+
+Anything switched off measures **None, not zero**. `_derive` guards every
+total for that reason: zero seconds of black is a finding and no answer is
+not, and a check nobody ran must not be able to come back green.
+
+**`--picture full` exists because "the target does not ask" and "the file is
+fine" are different sentences.** It measures everything whatever the target
+wants, and `report.picture_lines` prints what no rule read — otherwise paying
+for the full pass would buy nothing anybody can see.
+
+**On making it faster.** Three things were measured on an 8-core machine, and
+two of them do nothing: `-filter_threads 8` came back at 1.05x the baseline,
+and `-hwaccel videotoolbox` at 0.98x — the cost is in the filters, which run
+on one core, not in the decode. Halving the width does help, roughly 1.8x, and
+quartering it 3.5x. `video.width_divisor` allows it and refuses it with the
+field checks: on a near-static picture with one small moving element, full
+width reports progressive and half width reports that it cannot tell. An
+inconclusive answer is not a cheaper answer. Vertical scaling is never offered
+at all, because blending adjacent lines is exactly what `idet` compares.
 
 Captions cost no decode at all unless they are embedded, in which case one
 `ffmpeg -f ass -` extraction reads them.
@@ -381,7 +407,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 307 checks, about thirty seconds
+python3 -m unittest discover -s tests    # 342 checks, about thirty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media

@@ -95,8 +95,13 @@ def natural_key(path):
 # ------------------------------------------------------------------- running
 
 def run(paths, target="web", ffmpeg=None, ffprobe=None, recursive=False,
-        progress=None, on_file=None):
-    """Check every file against one target, then check the set. """
+        progress=None, on_file=None, depth="selective", width_divide=None):
+    """Check every file against one target, then check the set.
+
+    ``depth`` is passed straight through to every file. A delivery measured
+    two ways is not one delivery, so it is decided once here rather than per
+    file.
+    """
     if ffmpeg is None or ffprobe is None:
         ffmpeg, ffprobe = platform_support.require_tools()
     profile = profiles.get(target) if not isinstance(target, dict) else target
@@ -109,7 +114,8 @@ def run(paths, target="web", ffmpeg=None, ffprobe=None, recursive=False,
         try:
             facts, measurements, result, _ = preflight.run(
                 path, profile, ffmpeg, ffprobe,
-                progress=_slice(progress, index, len(files)))
+                progress=_slice(progress, index, len(files)),
+                depth=depth, width_divide=width_divide)
         except Exception as error:            # noqa: BLE001 — reported, not lost
             failed.append({"path": path, "name": os.path.basename(path),
                            "error": str(error) or error.__class__.__name__})

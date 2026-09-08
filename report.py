@@ -82,6 +82,7 @@ def envelope(facts, measurements, result, profile, corrections=None):
         "counts": result["counts"],
         "findings": result["findings"],
         "measurements": _measurement_summary(measurements),
+        "picture": _picture_summary(measurements),
         "corrections": corrections or [],
         "chapters": chart.chapters(facts.get("chapters"),
                                    measurements.get("timeline")),
@@ -110,6 +111,62 @@ def _measurement_summary(m):
                        for c in (m.get("channels") or [])]
     out["silences"] = m.get("silences") or []
     return out
+
+
+# What the picture pass read, and what it found. Kept apart from the audio
+# scalars because the two passes answer to different filters and because this
+# block is the only place a measurement nobody checked can be seen: a target
+# that says nothing about black frames still leaves somebody wanting to know
+# there are ninety seconds of them at the end.
+PICTURE_FIELDS = (
+    ("black_seconds", "Black", "s"),
+    ("longest_black_s", "Longest black run", "s"),
+    ("leading_black_s", "Black at the head", "s"),
+    ("trailing_black_s", "Black at the tail", "s"),
+    ("frozen_seconds", "Frozen", "s"),
+    ("longest_frozen_s", "Longest frozen run", "s"),
+    ("flash_regions", "Flashing passages", ""),
+    ("interlace_detected", "Fields", ""),
+    ("telecine_ratio", "Repeated fields", ""),
+)
+
+
+def _picture_summary(m):
+    """None when no picture pass ran. Otherwise what it was asked to read."""
+    if not m.get("picture_filters"):
+        return None
+    out = {"filters": list(m["picture_filters"]),
+           "width_divide": m.get("width_divide", 1),
+           "frames_measured": m.get("frames_measured")}
+    for key, _label, _unit in PICTURE_FIELDS:
+        out[key] = _plain(m.get(key))
+    return out
+
+
+def picture_lines(report):
+    """The picture numbers no finding already reports.
+
+    A measurement the target checked is already on the page above with a
+    verdict beside it; repeating it here without one would be worse than
+    silence. What is left is the reason somebody asked for the full pass.
+    """
+    picture = report.get("picture")
+    if not picture:
+        return []
+    checked = {f.get("metric") for f in report.get("findings", [])
+               if f.get("status") != "skip"}
+    rows = []
+    for key, label, unit in PICTURE_FIELDS:
+        if key in checked:
+            continue
+        value = picture.get(key)
+        if value is None:
+            continue
+        rows.append("  %-24s %s%s" % (label, value, unit))
+    if not rows:
+        return []
+    head = "Also measured in the picture, against nothing:"
+    return [head] + rows
 
 
 def _plain(value):
@@ -213,6 +270,11 @@ def text(report, width=68, show_passes=True):
         more = "" if len(skipped) <= 6 else f", and {len(skipped) - 6} more"
         lines.append(f"· {len(skipped)} not checked — nothing in this file to "
                      f"measure them against: {names}{more}")
+
+    measured = picture_lines(report)
+    if measured:
+        lines.append("")
+        lines.extend(measured)
 
     picture = chart.strip(report.get("timeline"), report.get("band"),
                           report.get("events"))

@@ -147,6 +147,14 @@
       <button id="runFolder" title="Check a folder as one delivery">Check a folder…</button>
     </div>
     <p class="note" id="targetNote"></p>
+    <div class="row hidden" id="pictureRow">
+      <label for="depth">Picture</label>
+      <select id="depth">
+        <option value="selective">Only what this target checks</option>
+        <option value="full">Everything the picture can be asked</option>
+      </select>
+    </div>
+    <p class="note hidden" id="pictureNote"></p>
     <p class="error hidden" id="toolError"></p>
   </section>
 
@@ -198,6 +206,7 @@
       <figcaption id="chartNote"></figcaption>
     </figure>
     <div id="findings"></div>
+    <div class="hidden" id="pictureExtras"></div>
     <p class="stamps hidden" id="stamps"></p>
     <div class="row">
       <button id="fix">Create corrected copy</button>
@@ -283,6 +292,39 @@ function timecode(seconds) {
   return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+// What the picture pass measured that no rule read. Empty for a selective
+// pass, which is the point of it; the reason to choose the full one is to see
+// this block, so leaving it out of the window would make the choice pointless.
+const PICTURE_LABELS = [
+  ["black_seconds", "Black", "s"],
+  ["longest_black_s", "Longest black run", "s"],
+  ["leading_black_s", "Black at the head", "s"],
+  ["trailing_black_s", "Black at the tail", "s"],
+  ["frozen_seconds", "Frozen", "s"],
+  ["longest_frozen_s", "Longest frozen run", "s"],
+  ["flash_regions", "Flashing passages", ""],
+  ["interlace_detected", "Fields", ""],
+  ["telecine_ratio", "Repeated fields", ""],
+];
+
+function renderPictureExtras(envelope) {
+  const box = $("pictureExtras");
+  const picture = envelope.picture;
+  if (!picture) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  const checked = new Set(envelope.findings
+    .filter((f) => f.status !== "skip").map((f) => f.metric));
+  const rows = PICTURE_LABELS
+    .filter(([key]) => !checked.has(key) && picture[key] !== null &&
+                       picture[key] !== undefined)
+    .map(([key, label, unit]) =>
+      `<div class="finding"><span class="mark skip">·</span>
+        <span>${esc(label)}: ${esc(String(picture[key]))}${unit}</span></div>`);
+  if (!rows.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  box.classList.remove("hidden");
+  box.innerHTML = `<h3 class="subhead-sm">Also measured in the picture,
+    against nothing</h3>${rows.join("")}`;
+}
+
 function describeFile(file) {
   const bits = [file.name];
   if (file.duration_s) bits.push(timecode(file.duration_s));
@@ -349,6 +391,8 @@ function renderReport(envelope) {
         nothing in this file to measure them against:
         ${esc(skipped.slice(0, 8).map((f) => f.label.toLowerCase()).join(", "))}</span>
     </div>` : "");
+
+  renderPictureExtras(envelope);
 
   const stamps = [...new Set(envelope.findings
     .filter((f) => f.status === "fail" || f.status === "warn")
@@ -434,7 +478,9 @@ async function boot() {
   $("target").innerHTML = state.targets.map((t) =>
     `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join("");
   $("target").value = localStorage.getItem("target") || "web";
+  $("depth").value = localStorage.getItem("depth") || "selective";
   describeTarget();
+  refreshPicturePlan();
   if (!state.ffmpeg) fail(`ffmpeg was not found. Install it with: ${state.ffmpeg_hint}`);
 }
 
@@ -451,12 +497,86 @@ function describeTarget() {
 $("target").addEventListener("change", () => {
   localStorage.setItem("target", $("target").value);
   describeTarget();
+  refreshPicturePlan();
 });
+
+function depth() {
+  return $("depth").value === "full" ? "full" : "selective";
+}
+
+// How long the picture pass will take, asked before it starts rather than
+// discovered while it runs. A file with no picture hides the whole control:
+// there is no choice to make and an empty question is worse than none.
+let planToken = 0;
+let lastPicturePlan = null;
+async function refreshPicturePlan() {
+  const path = $("path").value.trim();
+  const mine = ++planToken;
+  if (!path) return showPicturePlan(null);
+  let plan = null;
+  try {
+    plan = await api("/picture_plan", { path, target: $("target").value });
+  } catch (error) { plan = null; }
+  if (mine === planToken) showPicturePlan(plan);
+}
+
+function showPicturePlan(plan) {
+  lastPicturePlan = plan;
+  const row = $("pictureRow"), note = $("pictureNote");
+  if (!plan || !plan.selective) {
+    row.classList.add("hidden");
+    note.classList.add("hidden");
+    return;
+  }
+  row.classList.remove("hidden");
+  const label = (which, text) => {
+    const seconds = plan[which].seconds;
+    const option = $("depth").options[which === "selective" ? 0 : 1];
+    option.textContent = plan[which].filters.length
+      ? `${text} — about ${spell(seconds)}`
+      : `${text} — nothing to read here`;
+  };
+  label("selective", "Only what this target checks");
+  label("full", "Everything the picture can be asked");
+
+  const chosen = plan[depth()];
+  if (!chosen.filters.length || chosen.seconds < 30) {
+    note.classList.add("hidden");
+    return;
+  }
+  note.textContent = `Reading ${chosen.filters.join(", ")} means decoding every `
+    + `frame: roughly ${spell(chosen.seconds)} on a recent laptop, and longer `
+    + `on a slower machine. The sound is measured either way.`;
+  note.classList.remove("hidden");
+}
+
+function spell(seconds) {
+  seconds = Math.round(seconds);
+  if (seconds < 90) return `${seconds} seconds`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ${String(seconds % 60).padStart(2, "0")} s`;
+  return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, "0")} min`;
+}
+
+$("depth").addEventListener("change", () => {
+  localStorage.setItem("depth", $("depth").value);
+  showPicturePlan(lastPicturePlan);
+});
+
+$("path").addEventListener("input", () => {
+  clearTimeout(planTimer);
+  planTimer = setTimeout(refreshPicturePlan, 400);
+});
+let planTimer = null;
 
 $("drop").addEventListener("click", async () => {
   try {
     const { path } = await api("/pick", {});
-    if (path) { $("path").value = path; $("dropTitle").textContent = path.split(/[\\/]/).pop(); }
+    if (path) {
+      $("path").value = path;
+      $("dropTitle").textContent = path.split(/[\\/]/).pop();
+      refreshPicturePlan();
+    }
   } catch (error) { fail(error.message); }
 });
 
@@ -572,7 +692,8 @@ async function openFile(file) {
   busy(true);
   try {
     const { job } = await api("/check", { path: file.path,
-                                          target: $("target").value });
+                                          target: $("target").value,
+                                          depth: depth() });
     poll(job, (envelope) => {
       busy(false);
       renderReport(envelope);
@@ -667,7 +788,8 @@ $("run").addEventListener("click", async () => {
   if (!path) return fail("Choose a file first.");
   busy(true);
   try {
-    const { job } = await api("/check", { path, target: $("target").value });
+    const { job } = await api("/check", { path, target: $("target").value,
+                                          depth: depth() });
     poll(job, (envelope) => {
       busy(false);
       delivery = null;
@@ -687,7 +809,8 @@ $("togglePasses").addEventListener("click", () => {
 $("fix").addEventListener("click", async () => {
   try {
     lastPlan = await api("/plan", { path: $("path").value.trim(),
-                                    target: $("target").value });
+                                    target: $("target").value,
+                                    depth: depth() });
     $("planSteps").innerHTML = lastPlan.steps.map((s) =>
       `<li>${esc(s.description)}${s.caveat ? `<span class="caveat">⚠ ${esc(s.caveat)}</span>` : ""}</li>`
     ).join("");
@@ -710,7 +833,7 @@ $("applyFix").addEventListener("click", async () => {
   try {
     const { job } = await api("/fix", { path: $("path").value.trim(),
                                         target: $("target").value,
-                                        overwrite: true });
+                                        overwrite: true, depth: depth() });
     poll(job, (result) => {
       busy(false);
       renderReport(result.after);

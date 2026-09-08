@@ -224,3 +224,105 @@ class InterlaceTests(unittest.TestCase):
     def test_the_detector_is_in_the_chain_that_already_runs(self):
         chain = video.build_filter_chain(dict(video.DEFAULTS))
         self.assertIn("idet", chain, "no second decode for this")
+
+
+class DepthOfThePicturePass(unittest.TestCase):
+    """The chain carries what was asked for, and nothing else."""
+
+    def chain(self, *filters):
+        return video.build_filter_chain(dict(video.DEFAULTS), set(filters))
+
+    def test_everything_by_default(self):
+        chain = video.build_filter_chain(dict(video.DEFAULTS))
+        for filter_name in ("blackdetect", "freezedetect", "idet",
+                            "signalstats"):
+            self.assertIn(filter_name, chain)
+
+    def test_only_what_was_asked_for(self):
+        chain = self.chain("black", "freeze")
+        self.assertIn("blackdetect", chain)
+        self.assertIn("freezedetect", chain)
+        self.assertNotIn("idet", chain)
+        self.assertNotIn("signalstats", chain)
+
+    def test_the_expensive_half_can_be_left_out(self):
+        self.assertNotIn("idet", self.chain("black", "freeze", "luma"))
+
+    def test_progress_survives_an_empty_chain(self):
+        # metadata=print is what the progress bar counts frames from, so it
+        # stays even when nothing upstream has anything to print.
+        self.assertIn("metadata=print", self.chain("black"))
+
+    def test_every_metric_belongs_to_exactly_one_filter(self):
+        seen = []
+        for metrics in video.FILTER_METRICS.values():
+            seen.extend(metrics)
+        self.assertEqual(len(seen), len(set(seen)))
+        self.assertEqual(set(seen), set(video.PICTURE_METRICS))
+
+
+class WhatWasNotMeasured(unittest.TestCase):
+    """A check nobody ran must not be able to pass."""
+
+    def derive(self, *filters):
+        filters = set(filters)
+        measurements = {
+            "black": [] if "black" in filters else None,
+            "frozen": [] if "freeze" in filters else None,
+            "flashes": [] if "luma" in filters else None,
+        }
+        video._derive(measurements, 60.0)
+        return measurements
+
+    def test_a_filter_that_ran_and_found_nothing_says_zero(self):
+        out = self.derive("black", "freeze", "luma")
+        self.assertEqual(out["black_seconds"], 0.0)
+        self.assertEqual(out["frozen_seconds"], 0.0)
+        self.assertEqual(out["flash_regions"], 0)
+
+    def test_a_filter_that_did_not_run_says_nothing(self):
+        out = self.derive("black")
+        self.assertEqual(out["black_seconds"], 0.0)
+        self.assertIsNone(out["frozen_seconds"])
+        self.assertIsNone(out["longest_frozen_s"])
+        self.assertIsNone(out["flash_regions"])
+
+
+class ReducedWidth(unittest.TestCase):
+    """Cheaper only where it cannot change the answer."""
+
+    def test_full_width_is_no_filter_at_all(self):
+        self.assertIsNone(video.width_divisor({"black"}, None))
+        self.assertIsNone(video.width_divisor({"black"}, 1))
+
+    def test_it_scales_the_width_and_leaves_the_height(self):
+        prefix = video.width_divisor({"black", "luma"}, 2)
+        self.assertIn("iw/2", prefix)
+        self.assertIn(":ih", prefix, "vertical scaling would blend the fields")
+
+    def test_it_is_refused_with_the_interlacing_checks(self):
+        with self.assertRaises(ValueError) as caught:
+            video.width_divisor({"black", "fields"}, 2)
+        self.assertIn("idet", str(caught.exception))
+
+    def test_only_halves_and_quarters(self):
+        with self.assertRaises(ValueError):
+            video.width_divisor({"black"}, 3)
+
+
+class TheEstimate(unittest.TestCase):
+    """Roughly right, and honest about which way it is wrong."""
+
+    def test_it_grows_with_the_pixel_rate(self):
+        hd = video.estimate_seconds(video.ALL_FILTERS, 60, 1920, 1080, 30)
+        sd = video.estimate_seconds(video.ALL_FILTERS, 60, 720, 576, 30)
+        self.assertGreater(hd, sd * 3)
+
+    def test_leaving_out_the_field_checks_saves_about_half(self):
+        everything = video.estimate_seconds(video.ALL_FILTERS, 60, 1920, 1080, 60)
+        without = video.estimate_seconds(
+            set(video.ALL_FILTERS) - {"fields"}, 60, 1920, 1080, 60)
+        self.assertLess(without, everything * 0.6)
+
+    def test_an_unknown_duration_estimates_nothing(self):
+        self.assertIsNone(video.estimate_seconds(video.ALL_FILTERS, None))

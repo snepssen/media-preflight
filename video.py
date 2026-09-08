@@ -12,6 +12,11 @@ per-frame statistics that metadata prints to stdout. Both streams are read at
 once, for the same reason the audio pass does it: a filled pipe nobody is
 draining is a deadlock that looks exactly like a slow file.
 
+The chain is built to order. Every one of those filters reads every frame and
+the expensive ones are expensive enough to notice on a feature, so the pass
+carries only the filters whose measurements somebody asked for. See
+FILTER_METRICS below for which is which, and what each one costs.
+
 On flashing
 -----------
 The flashing check is a *screening* heuristic and says so everywhere it
@@ -70,29 +75,128 @@ class VideoError(RuntimeError):
     """ffmpeg could not measure the picture, with its own last word attached."""
 
 
-def build_filter_chain(options):
-    return ",".join([
-        "blackdetect=d=%g:pic_th=%g:pix_th=%g" % (
+# ------------------------------------------------------- what to switch on
+#
+# Every filter in the chain reads every frame, and they are not equally
+# priced. Timed on one 8-core laptop against a 3-minute 1080p60 file, the
+# whole chain ran at 0.90x the file's own duration, split roughly: idet half
+# of it, signalstats a third, decode and the two detectors the rest. A
+# ninety-minute feature is therefore about eighty minutes of work with
+# everything on, and about ten with only the cheap detectors.
+#
+# So the pass is built from the measurements somebody actually asked for.
+# What no rule reads is not measured, and says None rather than zero — a
+# check that was never run must not be able to pass.
+
+FILTER_METRICS = {
+    "black": {"black_seconds", "longest_black_s",
+              "leading_black_s", "trailing_black_s"},
+    "freeze": {"frozen_seconds", "longest_frozen_s"},
+    "luma": {"flash_regions"},
+    "fields": {"interlaced", "interlace_detected",
+               "field_order_disagrees", "telecine_ratio"},
+}
+ALL_FILTERS = frozenset(FILTER_METRICS)
+PICTURE_METRICS = frozenset().union(*FILTER_METRICS.values())
+
+# Seconds of work per second of 1920x1080 60fps video, from the run above.
+# Scaled by pixel rate at the call site, because these filters are per-pixel
+# and the difference between SD and 4K dwarfs the difference between machines.
+FILTER_COST = {"black": 0.04, "freeze": 0.07, "luma": 0.28, "fields": 0.45}
+DECODE_COST = 0.06
+_REFERENCE_PIXEL_RATE = 1920 * 1080 * 60
+
+
+def estimate_seconds(filters, duration_s, width=None, height=None, fps=None):
+    """Roughly how long a picture pass will take. An estimate, and no more.
+
+    Machines differ, codecs differ, and a laptop on battery differs from
+    itself on mains. This exists so nobody starts a ninety-minute job
+    believing it is a ten-second one, not so anybody can set a timer by it.
+    """
+    if not duration_s:
+        return None
+    rate = (width or 1920) * (height or 1080) * (fps or 30)
+    scale = rate / float(_REFERENCE_PIXEL_RATE)
+    cost = DECODE_COST + sum(FILTER_COST[f] for f in filters if f in FILTER_COST)
+    return duration_s * cost * scale
+
+
+def build_filter_chain(options, filters=ALL_FILTERS):
+    chain = []
+    if "black" in filters:
+        chain.append("blackdetect=d=%g:pic_th=%g:pix_th=%g" % (
             options["black_min_s"], options["black_picture_threshold"],
-            options["black_pixel_threshold"]),
-        "freezedetect=n=%gdB:d=%g" % (
-            options["freeze_noise_db"], options["freeze_min_s"]),
-        "idet",
-        "signalstats",
-        "metadata=print:file=-",
-    ])
+            options["black_pixel_threshold"]))
+    if "freeze" in filters:
+        chain.append("freezedetect=n=%gdB:d=%g" % (
+            options["freeze_noise_db"], options["freeze_min_s"]))
+    if "fields" in filters:
+        chain.append("idet")
+    if "luma" in filters:
+        chain.append("signalstats")
+    # Always last, and always present: signalstats needs it to report, and
+    # with nothing to report it still prints one line a frame, which is what
+    # the progress bar counts. That line costs about 3% of the pass.
+    chain.append("metadata=print:file=-")
+    return ",".join(chain)
 
 
-def analyse(path, ffmpeg=None, duration_s=None, options=None, progress=None):
-    """Measure one file's first moving-picture stream."""
+def width_divisor(filters, divisor):
+    """Validate a horizontal downscale, or raise saying why it is refused.
+
+    Reading fewer pixels is the only real saving available here: hardware
+    decode and filter threading were both measured and neither moved the
+    number, because the cost is in the filters and they run on one core.
+    Halving the width halves most of the work.
+
+    It is horizontal only, and it is not allowed with the field checks.
+    Vertical scaling would blend adjacent lines, which is precisely what idet
+    compares, so it cannot be offered at all. Horizontal scaling leaves field
+    structure intact but still costs idet its evidence: on a near-static
+    picture with one small moving element, full resolution reports
+    progressive and half width reports that it cannot tell. An inconclusive
+    answer is not a cheaper answer, so this refuses rather than degrades.
+
+    What survives: average luma is the mean of the same pixels either way, so
+    the flash screening is unaffected by construction. blackdetect counts the
+    proportion of pixels under a threshold, which averaging can in principle
+    move; it matched at full, half and quarter width on every fixture tried,
+    including a near-black frame holding a small bright bar.
+    """
+    if divisor in (None, 1):
+        return None
+    if divisor not in (2, 4):
+        raise ValueError("Width can be halved or quartered, not divided by %r."
+                         % (divisor,))
+    if "fields" in filters:
+        raise ValueError(
+            "Reduced width cannot be combined with the interlacing checks: "
+            "idet needs the full picture to reach a verdict.")
+    return "scale=iw/%d:ih:flags=area" % divisor
+
+
+def analyse(path, ffmpeg=None, duration_s=None, options=None, progress=None,
+            filters=None, width_divide=None):
+    """Measure one file's first moving-picture stream.
+
+    `filters` names which of black/freeze/luma/fields to switch on; None
+    means all of them. Anything switched off measures None, not zero.
+    """
     if ffmpeg is None:
         ffmpeg, _ = platform_support.require_tools()
     settings = dict(DEFAULTS)
     settings.update(options or {})
 
+    filters = ALL_FILTERS if filters is None else frozenset(filters)
+    chain = build_filter_chain(settings, filters)
+    prefix = width_divisor(filters, width_divide)
+    if prefix:
+        chain = prefix + "," + chain
+
     command = [ffmpeg, "-hide_banner", "-nostats", "-v", "info",
                "-i", path, "-map", "0:v:0",
-               "-vf", build_filter_chain(settings),
+               "-vf", chain,
                "-f", "null", "-"]
 
     process = subprocess.Popen(command, stdout=subprocess.PIPE,
@@ -122,12 +226,23 @@ def analyse(path, ffmpeg=None, duration_s=None, options=None, progress=None):
 
     measurements = {
         "settings": settings,
-        "black": parse_black(stderr, duration_s),
-        "frozen": parse_freeze(stderr, duration_s),
-        "flashes": find_flashing(luma, settings, duration_s),
+        # Namespaced: the audio pass's measurements are merged into the same
+        # dict, and "filters" alone would be a question with two answers.
+        "picture_filters": sorted(filters),
+        "width_divide": width_divide or 1,
+        "black": parse_black(stderr, duration_s) if "black" in filters else None,
+        "frozen": parse_freeze(stderr, duration_s) if "freeze" in filters else None,
+        "flashes": find_flashing(luma, settings, duration_s)
+                   if "luma" in filters else None,
         "frames_measured": len(luma),
     }
-    measurements.update(classify_fields(parse_idet(stderr), settings))
+    if "fields" in filters:
+        measurements.update(classify_fields(parse_idet(stderr), settings))
+    else:
+        measurements.update({"idet": None, "interlace_share": None,
+                             "field_dominance": None,
+                             "interlace_detected": None,
+                             "telecine_ratio": None})
     _derive(measurements, duration_s)
     return measurements
 
@@ -323,20 +438,29 @@ def find_flashing(luma, options, duration_s=None):
 
 
 def _derive(measurements, duration_s):
-    black = measurements["black"]
-    frozen = measurements["frozen"]
-    measurements["black_seconds"] = round(sum(b["duration"] for b in black), 3)
-    measurements["longest_black_s"] = round(
+    """Totals from the runs. A filter that did not run derives None.
+
+    The distinction matters more than it looks: zero seconds of black is a
+    finding, and no answer is not. Reporting the second as the first would
+    let a check nobody ran come back green.
+    """
+    black = measurements.get("black")
+    frozen = measurements.get("frozen")
+    flashes = measurements.get("flashes")
+
+    measurements["black_seconds"] = None if black is None else round(
+        sum(b["duration"] for b in black), 3)
+    measurements["longest_black_s"] = None if black is None else round(
         max((b["duration"] for b in black), default=0.0), 3)
-    measurements["leading_black_s"] = round(
+    measurements["leading_black_s"] = None if black is None else round(
         sum(b["duration"] for b in black if b["position"] == "head"), 3)
-    measurements["trailing_black_s"] = round(
+    measurements["trailing_black_s"] = None if black is None else round(
         sum(b["duration"] for b in black if b["position"] == "tail"), 3)
-    measurements["frozen_seconds"] = round(
+    measurements["frozen_seconds"] = None if frozen is None else round(
         sum(f["duration"] for f in frozen), 3)
-    measurements["longest_frozen_s"] = round(
+    measurements["longest_frozen_s"] = None if frozen is None else round(
         max((f["duration"] for f in frozen), default=0.0), 3)
-    measurements["flash_regions"] = len(measurements["flashes"])
+    measurements["flash_regions"] = None if flashes is None else len(flashes)
     measurements["video_duration_s"] = duration_s
 
 

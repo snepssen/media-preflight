@@ -41,28 +41,33 @@ class PreflightError(RuntimeError):
     """Anything the person running this needs to read as a sentence."""
 
 
-# Everything the picture pass answers. Decoding a ninety-minute film to
-# measure black frames is minutes of somebody's time, so it happens only when
-# the target actually asks one of these questions.
-VIDEO_METRICS = {
-    "black_seconds", "longest_black_s", "leading_black_s", "trailing_black_s",
-    "frozen_seconds", "longest_frozen_s", "flash_regions",
-    # Interlacing is measured rather than read off the header, so asking about
-    # it costs the picture pass. That is the point: the header is a claim, and
-    # on this question it is a claim that is often wrong.
-    "interlaced", "interlace_detected", "field_order_disagrees",
-    "telecine_ratio",
-}
+# Decoding a ninety-minute film to measure black frames is minutes of
+# somebody's time, so the picture pass happens only when the target actually
+# asks a question about the picture — and then it carries only the filters
+# those questions need. video.FILTER_METRICS holds the mapping,
+# picture_filters applies it. Interlacing is measured rather than read off the
+# header, which is the expensive half of the pass and the point of it, because
+# the header is a claim and on this question it is a claim that is often wrong.
+#
+# How much of the picture to read.
+#   selective — only the filters the target's rules actually read. The default.
+#   full      — every picture measurement, whether or not anything checks it.
+# Full exists because "the target does not ask" and "the file is fine" are
+# different sentences, and somebody handing over a master may want both
+# answered. It costs what it costs; see picture_plan.
+DEPTHS = ("selective", "full")
 CAPTION_METRICS = {name for name in checks.METRICS if name.startswith("caption_")}
 
 
 def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None,
-        caption_path=None, stage=None):
+        caption_path=None, stage=None, depth="selective", width_divide=None):
     """Measure one file against one target. Returns the report envelope.
 
     ``stage`` is called with 'container', 'audio', 'video', 'captions' or
     'target' as each begins, so a window can show which part of the file is
     being read rather than a bar with no subject.
+
+    ``depth`` is 'selective' or 'full'; see DEPTHS.
     """
     if ffmpeg is None or ffprobe is None:
         ffmpeg, ffprobe = platform_support.require_tools()
@@ -83,7 +88,12 @@ def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None,
     audio = facts.get("audio") or {}
     duration = facts["container"]["duration_s"] or audio.get("duration_s")
 
-    wants_video = bool(facts.get("video")) and _needs(profile, VIDEO_METRICS)
+    picture = picture_filters(profile, depth) if facts.get("video") else set()
+    # Checked here rather than where it is used: a request that cannot be
+    # honoured should be refused before the audio pass spends minutes on a
+    # job that is going to end in an error message anyway.
+    video.width_divisor(picture, width_divide)
+    wants_video = bool(picture)
     audio_share = 0.5 if wants_video else 1.0
 
     measurements = {"settings": dict(analysis.DEFAULTS)}
@@ -100,7 +110,7 @@ def run(path, target="web", ffmpeg=None, ffprobe=None, progress=None,
         announce("video")
         measurements.update(_video_measurements(
             path, facts, profile, ffmpeg, duration,
-            _scaled(progress, audio_share, 1.0)))
+            _scaled(progress, audio_share, 1.0), picture, width_divide))
     if _needs(profile, {"frame_rate_mode"}) and facts.get("video"):
         measurements["frame_rate_mode"] = video.frame_rate_mode(
             path, duration, ffprobe)
@@ -129,6 +139,49 @@ def _needs(profile, metrics):
     return any(rule["metric"] in metrics for rule in profile.get("rules", []))
 
 
+def picture_filters(profile, depth="selective"):
+    """Which picture filters this job needs. Empty means skip the pass."""
+    if depth not in DEPTHS:
+        raise PreflightError(
+            "Depth is %s, not %r." % (" or ".join(DEPTHS), depth))
+    if depth == "full":
+        return set(video.ALL_FILTERS)
+    return {name for name, metrics in video.FILTER_METRICS.items()
+            if _needs(profile, metrics)}
+
+
+def picture_plan(path, target="web", depth="selective", ffprobe=None,
+                 facts=None):
+    """What the picture pass will read, and roughly how long it will take.
+
+    Returned before anything is decoded so the choice between depths can be
+    made with a number attached. Everything in it is an estimate except the
+    filter list, which is exact.
+    """
+    profile = profiles.get(target) if not isinstance(target, dict) else target
+    if facts is None:
+        if ffprobe is None:
+            _, ffprobe = platform_support.require_tools()
+        facts = probe.inspect(path, ffprobe)
+    stream = facts.get("video") or {}
+    if not stream:
+        return None
+
+    duration = facts["container"]["duration_s"] or stream.get("duration_s")
+    plans = {}
+    for name in DEPTHS:
+        filters = picture_filters(profile, name)
+        plans[name] = {
+            "filters": sorted(filters),
+            "seconds": video.estimate_seconds(
+                filters, duration, stream.get("width"), stream.get("height"),
+                stream.get("avg_frame_rate")) if filters else 0.0,
+        }
+    plans["chosen"] = depth
+    plans["duration_s"] = duration
+    return plans
+
+
 def _scaled(progress, start, end):
     """A progress callback covering one slice of the whole job."""
     if progress is None:
@@ -136,9 +189,11 @@ def _scaled(progress, start, end):
     return lambda fraction: progress(start + fraction * (end - start))
 
 
-def _video_measurements(path, facts, profile, ffmpeg, duration, progress):
+def _video_measurements(path, facts, profile, ffmpeg, duration, progress,
+                        filters=None, width_divide=None):
     out = video.analyse(path, ffmpeg=ffmpeg, duration_s=duration,
-                        options=profile.get("options"), progress=progress)
+                        options=profile.get("options"), progress=progress,
+                        filters=filters, width_divide=width_divide)
     # The audio pass already owns "settings"; the picture pass keeps its own
     # under a name of its own rather than overwriting it.
     out["video_settings"] = out.pop("settings", {})
@@ -211,9 +266,12 @@ def _add_clipping(path, facts, measurements, ffmpeg):
 # ----------------------------------------------------------------- commands
 
 def command_check(args):
+    if not args.quiet:
+        sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
     facts, measurements, result, profile = run(
         args.file, args.target, progress=_progress(args),
-        caption_path=args.captions)
+        caption_path=args.captions, depth=args.picture,
+        width_divide=args.width_divide)
     envelope = report.envelope(facts, measurements, result, profile)
     _write_outputs(args, envelope)
     if not args.quiet:
@@ -223,9 +281,12 @@ def command_check(args):
 
 
 def command_fix(args):
+    if not args.quiet:
+        sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
     facts, measurements, result, profile = run(
         args.file, args.target, progress=_progress(args),
-        caption_path=args.captions)
+        caption_path=args.captions, depth=args.picture,
+        width_divide=args.width_divide)
     envelope = report.envelope(facts, measurements, result, profile)
 
     planned = corrections.plan(facts, measurements, result, profile)
@@ -303,8 +364,11 @@ def command_fix(args):
 
 def command_batch(args):
     """Check a folder, or a list of files, as one delivery."""
+    if not args.quiet:
+        sys.stderr.write(_delivery_notice(args))
     result = batch.run(args.files, args.target, recursive=args.recursive,
-                       progress=None, on_file=_file_progress(args))
+                       progress=None, on_file=_file_progress(args),
+                       depth=args.picture, width_divide=args.width_divide)
     envelope = report.set_envelope(result)
 
     if args.fix:
@@ -556,6 +620,120 @@ def _exit_code(envelope, strict=False):
     return 0
 
 
+def _picture_flags(sub):
+    sub.add_argument("--picture", choices=DEPTHS, default="selective",
+                     help="how much of the picture to read: 'selective' "
+                          "(default) measures only what the target checks; "
+                          "'full' measures everything, which on a long file "
+                          "is minutes rather than seconds")
+    sub.add_argument("--half-width", dest="width_divide", action="store_const",
+                     const=2, default=None,
+                     help="read the picture at half width, roughly halving "
+                          "the time; refused with the interlacing checks, "
+                          "which need the full picture")
+    sub.add_argument("--quarter-width", dest="width_divide",
+                     action="store_const", const=4,
+                     help="as --half-width, but a quarter")
+
+
+def _picture_notice(path, target, depth, ffprobe=None, facts=None):
+    """The sentence warning somebody that this will take a while.
+
+    Only when it will. A pass that finishes before anybody looks up does not
+    need announcing, and a warning printed every time is a warning nobody
+    reads.
+    """
+    try:
+        plan = picture_plan(path, target, depth, ffprobe=ffprobe, facts=facts)
+    except (probe.ProbeError, ValueError, PreflightError):
+        return ""
+    if not plan:
+        return ""
+    chosen = plan[depth]
+    if not chosen["filters"] or chosen["seconds"] < 30:
+        return ""
+
+    lines = ["Reading the picture: %s (%s)."
+             % (", ".join(chosen["filters"]), depth)]
+    lines.append("  Roughly %s on a recent laptop — it reads every frame, and "
+                 "a slower machine will take longer." % _duration(chosen["seconds"]))
+    other = "full" if depth == "selective" else "selective"
+    if plan[other]["filters"] != chosen["filters"]:
+        if other == "selective":
+            if plan[other]["filters"]:
+                lines.append("  --picture selective would read only %s, in "
+                             "about %s."
+                             % (", ".join(plan[other]["filters"]),
+                                _duration(plan[other]["seconds"])))
+            else:
+                lines.append("  --picture selective would skip the picture "
+                             "entirely: this target checks nothing about it.")
+        else:
+            lines.append("  --picture full would also read %s, in about %s."
+                         % (", ".join(sorted(set(plan[other]["filters"])
+                                             - set(chosen["filters"]))),
+                            _duration(plan[other]["seconds"])))
+    if "fields" not in chosen["filters"]:
+        lines.append("  --half-width would roughly halve it.")
+    return "\n".join(lines) + "\n"
+
+
+def _delivery_notice(args):
+    """One notice for the whole delivery, summed across its files.
+
+    A per-file notice twenty times over is a wall nobody reads, and the first
+    file's figure is not the answer to "how long will this take" when there
+    are twenty of them. ffprobe on each is milliseconds against a job about
+    to decode all of them.
+    """
+    try:
+        files = batch.collect(args.files, args.recursive)
+    except Exception:                          # noqa: BLE001 — reported later
+        return ""
+
+    _, ffprobe = platform_support.require_tools()
+    totals = {name: 0.0 for name in DEPTHS}
+    filters, counted = set(), 0
+    for path in files:
+        try:
+            plan = picture_plan(path, args.target, args.picture, ffprobe)
+        except Exception:                      # noqa: BLE001 — reported later
+            continue
+        if not plan:
+            continue
+        counted += 1
+        filters |= set(plan[args.picture]["filters"])
+        for name in DEPTHS:
+            totals[name] += plan[name]["seconds"]
+
+    if not counted or totals[args.picture] < 30:
+        return ""
+    lines = ["Reading the picture in %d of %d files: %s (%s)."
+             % (counted, len(files), ", ".join(sorted(filters)), args.picture)]
+    lines.append("  Roughly %s in total on a recent laptop — every frame of "
+                 "each — and longer on a slower machine."
+                 % _duration(totals[args.picture]))
+    other = "full" if args.picture == "selective" else "selective"
+    if totals[other] < 1:
+        lines.append("  --picture selective would skip the picture entirely: "
+                     "this target checks nothing about it.")
+    elif abs(totals[other] - totals[args.picture]) > 30:
+        lines.append("  --picture %s would take about %s."
+                     % (other, _duration(totals[other])))
+    return "\n".join(lines) + "\n"
+
+
+def _duration(seconds):
+    seconds = int(round(seconds))
+    if seconds < 90:
+        return "%d seconds" % seconds
+    minutes, rest = divmod(seconds, 60)
+    if minutes < 60:
+        return "%d min %02d s" % (minutes, rest)
+    hours, minutes = divmod(minutes, 60)
+    return "%d h %02d min" % (hours, minutes)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="preflight",
@@ -579,6 +757,7 @@ def build_parser():
                          help="caption file to check with this media; by "
                               "default a sidecar beside it, then an embedded "
                               "subtitle stream")
+        _picture_flags(sub)
 
     check = subparsers.add_parser("check", help="measure and report")
     shared(check)
@@ -633,6 +812,7 @@ def build_parser():
     batch_command.add_argument("--directory", "-d",
                                help="write the corrected copies into this "
                                     "folder")
+    _picture_flags(batch_command)
     batch_command.add_argument("--recipe",
                                help="with --fix: write the JSON recipe here")
     batch_command.set_defaults(handler=command_batch)

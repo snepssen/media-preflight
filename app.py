@@ -52,18 +52,19 @@ _jobs = {}
 _jobs_lock = threading.Lock()
 
 
-def _key(path, target):
+def _key(path, target, depth="selective"):
     try:
         stat = os.stat(path)
     except OSError:
         return None
     if not os.path.isfile(path):
         return None
-    return (os.path.abspath(path), target, stat.st_size, int(stat.st_mtime))
+    return (os.path.abspath(path), target, depth,
+            stat.st_size, int(stat.st_mtime))
 
 
-def _remember(path, target, payload):
-    key = _key(path, target)
+def _remember(path, target, payload, depth="selective"):
+    key = _key(path, target, depth)
     if key:
         with _cache_lock:
             _cache[key] = payload
@@ -73,8 +74,8 @@ def _remember(path, target, payload):
                 _cache.pop(next(iter(_cache)))
 
 
-def _recall(path, target):
-    key = _key(path, target)
+def _recall(path, target, depth="selective"):
+    key = _key(path, target, depth)
     with _cache_lock:
         return _cache.get(key) if key else None
 
@@ -129,9 +130,25 @@ def _stage_reporter(update):
     return announce
 
 
-def check_job(path, target):
+def _depth(body):
+    """'full' only when asked for in those words. Anything else is selective."""
+    return "full" if (body or {}).get("depth") == "full" else "selective"
+
+
+def picture_plan(path, target):
+    """What each depth would read, and roughly how long it would take."""
+    try:
+        return preflight.picture_plan(path, target)
+    except Exception:
+        # A file the picture pass cannot plan for is a file the check itself
+        # will report on properly. Refusing to open the window over it would
+        # be the wrong end to fail at.
+        return None
+
+
+def check_job(path, target, depth="selective"):
     def work(update):
-        cached = _recall(path, target)
+        cached = _recall(path, target, depth)
         if cached:
             update(stage="already measured", phase="target", progress=1.0)
             return cached["envelope"]
@@ -143,14 +160,15 @@ def check_job(path, target):
             update(progress=0.05 + fraction * 0.9)
 
         facts, measurements, result, profile = preflight.run(
-            path, profile, progress=progress, stage=_stage_reporter(update))
+            path, profile, progress=progress, stage=_stage_reporter(update),
+            depth=depth)
         update(stage="comparing against the target", phase="target",
                progress=0.97)
         envelope = report.envelope(facts, measurements, result, profile)
         envelope["chart"] = report.chart_svg(envelope, theme="auto")
         _remember(path, target, {"facts": facts, "measurements": measurements,
                                  "result": result, "profile": profile,
-                                 "envelope": envelope})
+                                 "envelope": envelope}, depth)
         return envelope
     return start_job(work)
 
@@ -265,17 +283,24 @@ def delivery_fix_job(paths, target, overwrite=False):
     return start_job(work)
 
 
-def plan_for(path, target):
-    """The correction plan, from the cached measurement or a fresh one."""
-    cached = _recall(path, target)
+def plan_for(path, target, depth="selective"):
+    """The correction plan, from the cached measurement or a fresh one.
+
+    The depth has to match the check that was just run or this misses the
+    cache and decodes the picture a second time — which on a feature is the
+    difference between a plan appearing at once and a plan appearing after
+    eighty minutes.
+    """
+    cached = _recall(path, target, depth)
     if not cached:
         profile = profiles.get(target)
-        facts, measurements, result, profile = preflight.run(path, profile)
+        facts, measurements, result, profile = preflight.run(
+            path, profile, depth=depth)
         cached = {"facts": facts, "measurements": measurements,
                   "result": result, "profile": profile,
                   "envelope": report.envelope(facts, measurements, result,
                                               profile)}
-        _remember(path, target, cached)
+        _remember(path, target, cached, depth)
 
     planned = corrections.plan(cached["facts"], cached["measurements"],
                                cached["result"], cached["profile"])
@@ -296,19 +321,20 @@ def plan_for(path, target):
     }
 
 
-def fix_job(path, target, overwrite=False):
+def fix_job(path, target, overwrite=False, depth="selective"):
     def work(update):
-        cached = _recall(path, target)
+        cached = _recall(path, target, depth)
         if not cached:
             update(stage="measuring the audio", phase="audio",
                    progress=0.05)
             profile = profiles.get(target)
-            facts, measurements, result, profile = preflight.run(path, profile)
+            facts, measurements, result, profile = preflight.run(
+                path, profile, depth=depth)
             cached = {"facts": facts, "measurements": measurements,
                       "result": result, "profile": profile,
                       "envelope": report.envelope(facts, measurements, result,
                                                   profile)}
-            _remember(path, target, cached)
+            _remember(path, target, cached, depth)
 
         planned = corrections.plan(cached["facts"], cached["measurements"],
                                    cached["result"], cached["profile"])
@@ -463,18 +489,28 @@ class Handler(BaseHTTPRequestHandler):
 
             if url.path == "/api/check":
                 path = self._require_file(body)
-                return self._json({"job": check_job(path, body.get("target",
-                                                                   "web"))})
+                return self._json({"job": check_job(
+                    path, body.get("target", "web"),
+                    _depth(body))})
+
+            if url.path == "/api/picture_plan":
+                # Asked before anything is decoded, so the choice between
+                # depths can be offered with a number attached rather than
+                # after the wait it was meant to warn about.
+                path = self._require_file(body)
+                return self._json(picture_plan(
+                    path, body.get("target", "web")) or {})
 
             if url.path == "/api/plan":
                 path = self._require_file(body)
-                return self._json(plan_for(path, body.get("target", "web")))
+                return self._json(plan_for(path, body.get("target", "web"),
+                                           _depth(body)))
 
             if url.path == "/api/fix":
                 path = self._require_file(body)
                 return self._json({"job": fix_job(
                     path, body.get("target", "web"),
-                    bool(body.get("overwrite")))})
+                    bool(body.get("overwrite")), _depth(body))})
 
             if url.path == "/api/delivery_plan":
                 paths = [os.path.expanduser(p) for p in

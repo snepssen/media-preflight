@@ -425,6 +425,44 @@ of one more, and only when the target actually asks a question about the
 picture — decoding a ninety-minute film to count black frames is minutes of
 somebody's time, and a podcast profile has no reason to spend them.
 
+That pass is also built to order. Reading the picture means reading every
+frame of it, and the four things it can read are not equally priced: on a
+1080p60 file the whole chain takes about as long as the file itself, of which
+the interlacing detector is half and the luminance statistics a third, while
+black and frozen frame detection together are a tenth. So the pass carries
+only the filters the target's rules actually read. A broadcast loudness check
+on a video file now skips the picture entirely; an Instagram check reads black
+and luminance and leaves the field detector out.
+
+You can override that:
+
+```
+preflight check film.mov --target youtube --picture full
+```
+
+`--picture full` measures everything the picture can be asked, whether or not
+the target checks it, and the report gains an *"also measured in the picture,
+against nothing"* section for the answers no rule read. It is the slower
+choice and says so before it starts:
+
+```
+Reading the picture: black, fields, freeze, luma (full).
+  Roughly 78 min 40 s on a recent laptop — it reads every frame, and a
+  slower machine will take longer.
+  --picture selective would read only black, luma, in about 26 min 10 s.
+```
+
+The window offers the same choice as a dropdown with both times on it, asked
+before anything is decoded rather than discovered while you wait.
+
+Two other things were tried and are not offered, because they were measured
+and they do not work: filter threading (`-filter_threads 8`) came back within
+noise of the baseline, and hardware decoding (`-hwaccel videotoolbox`) did
+too. The cost is in the filters, which run on one core, and not in the decode.
+Reading the picture at reduced width does help — `--half-width` roughly halves
+it — and is refused whenever the interlacing checks are on, because the
+detector needs the full picture to reach a verdict at all.
+
 Two things earn a pass of their own, each on a condition: locating peaks and
 clipping, when the whole-file peak says a peak problem can exist at all; and
 loudnorm's own measurement, because it will not accept another filter's
@@ -518,7 +556,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 307 checks, about thirty seconds
+python3 -m unittest discover -s tests     # 342 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

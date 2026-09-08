@@ -13,7 +13,9 @@ sys.path.insert(0, str(TOOL))
 import checks  # noqa: E402
 import probe  # noqa: E402
 import profiles  # noqa: E402
+import preflight  # noqa: E402
 import report  # noqa: E402
+import video  # noqa: E402
 from test_checks import facts, measurements  # noqa: E402
 
 
@@ -349,3 +351,59 @@ class BeforeAndAfterTests(unittest.TestCase):
         drawing = report.chart_svg(after, baseline=before)
         self.assertIn('class="before"', drawing)
         self.assertNotIn('class="before"', report.chart_svg(after))
+
+
+class WhichFiltersATargetNeeds(unittest.TestCase):
+    """The pass is built from the rules, not from a fixed list."""
+
+    def test_a_loudness_target_needs_no_picture_at_all(self):
+        self.assertEqual(
+            preflight.picture_filters(profiles.get("ebu_r128")), set())
+
+    def test_youtube_asks_about_fields_so_it_pays_for_them(self):
+        self.assertIn("fields", preflight.picture_filters(profiles.get("youtube")))
+
+    def test_full_reads_everything_whatever_the_target_asks(self):
+        for name in ("ebu_r128", "acx", "youtube"):
+            self.assertEqual(
+                preflight.picture_filters(profiles.get(name), "full"),
+                set(video.ALL_FILTERS))
+
+    def test_selective_is_never_more_than_full(self):
+        for profile in profiles.all_profiles():
+            self.assertLessEqual(
+                preflight.picture_filters(profile),
+                set(video.ALL_FILTERS))
+
+    def test_an_unknown_depth_is_refused(self):
+        with self.assertRaises(preflight.PreflightError):
+            preflight.picture_filters(profiles.get("web"), "thorough")
+
+
+class MeasurementsNobodyChecked(unittest.TestCase):
+    """The full pass has to show its work or there is no point paying for it."""
+
+    def envelope(self, findings, picture):
+        return {"findings": findings, "picture": picture}
+
+    def test_nothing_to_say_without_a_picture_pass(self):
+        self.assertEqual(report.picture_lines(self.envelope([], None)), [])
+
+    def test_a_measurement_no_rule_read_is_reported(self):
+        lines = report.picture_lines(self.envelope([], {
+            "filters": ["black"], "trailing_black_s": 12.0,
+            "black_seconds": 12.0}))
+        self.assertTrue(any("12.0" in line for line in lines))
+
+    def test_a_measurement_a_rule_already_reported_is_not_repeated(self):
+        lines = report.picture_lines(self.envelope(
+            [{"metric": "trailing_black_s", "status": "fail"}],
+            {"filters": ["black"], "trailing_black_s": 12.0}))
+        self.assertEqual(lines, [])
+
+    def test_a_filter_that_did_not_run_is_not_reported_as_zero(self):
+        lines = report.picture_lines(self.envelope([], {
+            "filters": ["black"], "black_seconds": 0.0,
+            "frozen_seconds": None, "flash_regions": None}))
+        self.assertFalse(any("Frozen" in line for line in lines))
+        self.assertFalse(any("Flashing" in line for line in lines))
