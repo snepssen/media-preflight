@@ -675,6 +675,7 @@ async function sortSelection(paths) {
       busy(false);
       queue = result;
       choices = {};
+      groupOn = {};
       for (const row of queue.items) {
         if (row.kind === "unsupported") continue;
         choices[row.path] = {
@@ -794,19 +795,51 @@ function wireQueue() {
   });
 }
 
+// Suggested, never assumed — so these start unticked. Ten files in a folder
+// might be one audiobook that has to be consistent with itself, or ten
+// unrelated episodes that have no business being compared, and the set-level
+// rules make that difference real: loudness spread across a set is a true
+// finding about an album and a meaningless one about a playlist. Ticking it
+// is one click; un-inventing a false finding is not.
+let groupOn = {};
+
+function groupState(index) {
+  const group = queue.groups[index];
+  const live = group.paths.filter((p) => choices[p]?.action !== "skip");
+  const targets = [...new Set(live.map((p) => choices[p]?.target))];
+  return { group, live, targets };
+}
+
 function renderGroups() {
   const box = $("queueGroups");
   if (!queue.groups.length) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
-  // Suggested, never assumed: ten files in a folder might be one audiobook
-  // that has to be consistent with itself, or ten unrelated episodes that
-  // have no business being compared.
-  box.innerHTML = queue.groups.map((g, i) => `<label>
-      <input type="checkbox" data-group="${i}" ${g.count >= 3 ? "checked" : ""}>
-      ${esc(g.sequence)} — ${g.count} ${esc(g.kind)} files in one folder.
-      Check them as a single delivery?
-      ${g.missing.length ? `<b>${esc(g.missing.join(", "))} missing.</b>` : ""}
-    </label>`).join("<br>");
+
+  box.innerHTML = queue.groups.map((g, i) => {
+    const { live, targets } = groupState(i);
+    // One delivery is checked against one target. Rows that disagree are not
+    // a delivery this can run, and saying so beats silently picking one.
+    const split = targets.length > 1;
+    const dropped = g.paths.length - live.length;
+    const note = split
+      ? `<span class="qsub">— not while these rows are set to different targets.</span>`
+      : dropped ? `<span class="qsub">— ${dropped} skipped, so ${live.length} of ${g.count}.</span>`
+                : "";
+    return `<label>
+      <input type="checkbox" data-group="${i}" ${groupOn[i] && !split && live.length > 1 ? "checked" : ""}
+             ${split || live.length < 2 ? "disabled" : ""}>
+      <span><b>${esc(g.sequence)}</b> — ${g.count} ${esc(g.kind)} files in one folder.
+      Also check them against each other?${
+        g.missing.length ? ` <b>${esc(g.missing.join(", "))} missing.</b>` : ""} ${note}</span>
+    </label>`;
+  }).join("<br>");
+
+  box.querySelectorAll("input[data-group]").forEach((box_) => {
+    box_.addEventListener("change", () => {
+      groupOn[box_.dataset.group] = box_.checked;
+      refreshEstimate();
+    });
+  });
 }
 
 async function refreshEstimate() {
@@ -837,37 +870,70 @@ async function refreshEstimate() {
 // seconds each, so counting files would spend half the travel on one percent
 // of the work.
 let queueResults = [];
+let shownResults = [];
+
+// One job per delivery, one per remaining file. A ticked group goes through
+// /api/batch, which is the only path that runs the set-level rules — whether
+// the chapters are consistent with each other is a question about the set and
+// cannot be asked one file at a time. batch remembers each file individually
+// on the way through, so opening any row afterwards is still a lookup.
+function planJobs() {
+  const claimed = new Set();
+  const jobs = [];
+
+  queue.groups.forEach((g, i) => {
+    if (!groupOn[i]) return;
+    const { live, targets } = groupState(i);
+    if (targets.length !== 1 || live.length < 2) return;
+    live.forEach((p) => claimed.add(p));
+    jobs.push({ kind: "delivery", label: g.sequence, paths: live,
+                target: targets[0], depth: choices[live[0]].depth });
+  });
+
+  for (const [path, choice] of Object.entries(choices)) {
+    if (choice.action === "skip" || claimed.has(path)) continue;
+    jobs.push({ kind: "file", label: path.split(/[\\/]/).pop(), paths: [path],
+                path, target: choice.target, depth: choice.depth });
+  }
+  return jobs;
+}
 
 $("startQueue").addEventListener("click", async () => {
+  const jobs = planJobs();
   const todo = Object.entries(choices)
     .filter(([, c]) => c.action !== "skip")
     .map(([path, c]) => ({ path, ...c }));
-  if (!todo.length) return;
+  if (!jobs.length) return;
 
   let weights = {};
   try {
     const out = await api("/estimate", { intake: queue.intake, assignments: todo });
     for (const row of out.per_file) weights[row.path] = row.seconds;
   } catch (error) { /* an unweighted bar still moves */ }
-  const total = todo.reduce((sum, t) => sum + (weights[t.path] || 1), 0);
+  const cost = (job) => job.paths.reduce((sum, p) => sum + (weights[p] || 1), 0);
+  const total = jobs.reduce((sum, j) => sum + cost(j), 0);
 
   $("queuePanel").classList.add("hidden");
   $("progressPanel").classList.remove("hidden");
   queueResults = [];
   let done = 0;
 
-  for (const item of todo) {
-    const name = item.path.split(/[\\/]/).pop();
-    $("stage").textContent = `${name} — ${queueResults.length + 1} of ${todo.length}`;
+  for (const job of jobs) {
+    const of = ` — ${queueResults.length + 1} of ${jobs.length}`;
+    $("stage").textContent = (job.kind === "delivery"
+      ? `${job.label} — ${job.paths.length} files as one delivery` : job.label) + of;
     try {
-      const { job } = await api("/check", {
-        path: item.path, target: item.target, depth: item.depth });
-      const envelope = await settle(job, done, done + (weights[item.path] || 1), total);
-      queueResults.push({ path: item.path, name, envelope });
+      const started = job.kind === "delivery"
+        ? await api("/batch", { paths: job.paths, target: job.target,
+                                depth: job.depth })
+        : await api("/check", { path: job.path, target: job.target,
+                                depth: job.depth });
+      const envelope = await settle(started.job, done, done + cost(job), total);
+      queueResults.push({ ...job, envelope });
     } catch (error) {
-      queueResults.push({ path: item.path, name, error: error.message });
+      queueResults.push({ ...job, error: error.message });
     }
-    done += weights[item.path] || 1;
+    done += cost(job);
   }
 
   $("progressPanel").classList.add("hidden");
@@ -892,36 +958,80 @@ function settle(jobId, from, to, total) {
   });
 }
 
+// A delivery envelope and a single-file one are different shapes: one keeps
+// its own verdicts under `set` with the files beside it, the other has
+// findings at the top. Both are counted in files here, because "one of one
+// would be rejected" is a true sentence about jobs and a useless one about an
+// album of eight.
+function tally(result) {
+  const envelope = result.envelope;
+  if (!envelope) return { fail: 0, warn: 0, pass: 0, broke: 1 };
+  if (result.kind === "delivery") {
+    const files = envelope.files || [];
+    return {
+      fail: files.filter((f) => f.verdict === "fail").length,
+      warn: files.filter((f) => f.verdict === "warn").length,
+      pass: files.filter((f) => f.verdict === "pass").length,
+      broke: (envelope.unreadable || []).length,
+    };
+  }
+  const v = envelope.verdict;
+  return { fail: +(v === "fail"), warn: +(v === "warn"),
+           pass: +(v === "pass"), broke: 0 };
+}
+
+function resultLine(result) {
+  if (result.error) return result.error;
+  const envelope = result.envelope;
+  if (result.kind === "delivery") {
+    const set = envelope.set || {};
+    const bad = (set.findings || []).filter((f) => f.status === "fail"
+                                                || f.status === "warn");
+    const counted = tally(result);
+    const files = `${envelope.files.length} files, `
+      + (counted.fail ? `${counted.fail} failing`
+         : counted.warn ? `${counted.warn} with warnings` : "all ready");
+    return files + " · " + (bad.length
+      ? `across the delivery: ${bad.map((f) => f.label).join(", ")}`
+      : "nothing wrong with the delivery as a whole");
+  }
+  const worst = (envelope.findings || [])
+    .filter((f) => f.status === "fail" || f.status === "warn")
+    .map((f) => f.label)[0];
+  return `${envelope.file?.name || ""}${worst ? " · " + worst : " · nothing to report"}`;
+}
+
 function renderQueueResults() {
   const worst = { fail: 0, warn: 1, pass: 2 };
   const rows = [...queueResults].sort((a, b) =>
     (worst[a.envelope?.verdict] ?? -1) - (worst[b.envelope?.verdict] ?? -1));
 
-  const failed = rows.filter((r) => r.envelope?.verdict === "fail").length;
-  const warned = rows.filter((r) => r.envelope?.verdict === "warn").length;
-  const broke = rows.filter((r) => r.error).length;
+  const sum = rows.map(tally).reduce((a, b) => ({
+    fail: a.fail + b.fail, warn: a.warn + b.warn,
+    pass: a.pass + b.pass, broke: a.broke + b.broke }),
+    { fail: 0, warn: 0, pass: 0, broke: 0 });
+  const files = sum.fail + sum.warn + sum.pass + sum.broke;
 
-  $("queueTitle").textContent = failed
-    ? `${MARK.fail} ${failed} of ${rows.length} would be rejected.`
-    : warned ? `${MARK.warn} Deliverable, with things worth looking at.`
-             : `${MARK.pass} All ${rows.length} are ready.`;
-  $("queueTitle").className = "verdict " + (failed ? "fail" : warned ? "warn" : "pass");
+  $("queueTitle").textContent = sum.fail
+    ? `${MARK.fail} ${sum.fail} of ${files} would be rejected.`
+    : sum.warn ? `${MARK.warn} Deliverable, with things worth looking at.`
+               : `${MARK.pass} All ${files} are ready.`;
+  $("queueTitle").className = "verdict "
+    + (sum.fail ? "fail" : sum.warn ? "warn" : "pass");
   $("queueCounts").textContent =
-    `${failed} failed, ${warned} warned, ${rows.length - failed - warned - broke} passed`
-    + (broke ? `, ${broke} could not be measured` : "") + ".";
+    `${sum.fail} failed, ${sum.warn} warned, ${sum.pass} passed`
+    + (sum.broke ? `, ${sum.broke} could not be measured` : "") + ".";
 
-  $("queueBody").innerHTML = `<div class="qgroup">` + rows.map((r) => {
+  $("queueBody").innerHTML = `<div class="qgroup">` + rows.map((r, i) => {
     const v = r.envelope?.verdict;
-    const worstFinding = r.envelope && [...r.envelope.findings]
-      .filter((f) => f.status === "fail" || f.status === "warn")
-      .map((f) => f.label)[0];
     return `<div class="qrow"><span class="qname">
-        <b>${MARK[v] || "·"} ${esc(r.name)}</b>
-        <span class="qsub">${esc(r.error || worstFinding || "Nothing to report.")}</span>
+        <b>${MARK[v] || "·"} ${esc(r.label)}</b>
+        <span class="qsub">${esc(resultLine(r))}</span>
       </span>
-      <button class="toggle" data-open="${esc(r.path)}">open</button>
+      <button class="toggle" data-open="${i}">open</button>
       <span class="qcost"></span></div>`;
   }).join("") + `</div>`;
+  shownResults = rows;
 
   $("queueGroups").classList.add("hidden");
   $("startQueue").classList.add("hidden");
@@ -930,8 +1040,14 @@ function renderQueueResults() {
 
   $("queueBody").querySelectorAll("button[data-open]").forEach((button) => {
     button.addEventListener("click", () => {
-      const found = queueResults.find((r) => r.path === button.dataset.open);
+      const found = shownResults[Number(button.dataset.open)];
       if (!found || !found.envelope) return;
+      if (found.kind === "delivery") {
+        delivery = found.envelope;
+        renderDelivery(found.envelope);
+        $("deliveryPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
       $("path").value = found.path;
       renderReport(found.envelope);
       $("reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
