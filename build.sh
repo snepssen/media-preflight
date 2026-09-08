@@ -27,8 +27,8 @@ BUILD="$ROOT/build"
 # fixtures, no build scripts. A bundle that carries its own test suite is a
 # bundle nobody checked the contents of.
 MODULES=(analysis.py app.py batch.py captions.py chart.py checks.py \
-         corrections.py index.html platform_support.py preflight.py probe.py \
-         profiles.py report.py video.py __main__.py)
+         corrections.py index.html intake.py platform_support.py \
+         preflight.py probe.py profiles.py report.py video.py __main__.py)
 
 say() { printf '  %s\n' "$*"; }
 

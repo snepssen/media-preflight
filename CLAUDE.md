@@ -380,9 +380,12 @@ interrupt, so `/api/quit` shuts the server down and the page offers it.
 - **ffmpeg's mono-to-stereo upmix attenuates.** A fixture built with `-ac 2`
   from one expression comes out three decibels quieter than its mono siblings,
   which silently ruins a loudness comparison. Generate `expr|expr` instead.
-- **The app cache is keyed on size and mtime**, so it must refuse directories:
-  `os.stat` succeeds on a folder and would cache a delivery under a key that
-  never invalidates.
+- **The app cache is keyed on file identity**, including size, nanosecond
+  modification and change times, device and inode. It must still refuse
+  directories: `os.stat` succeeds on a folder, but a delivery cache is valid
+  only while every measured input is still the same regular file. Picture
+  depth is part of both single-file and delivery keys so a selective pass can
+  never stand in for a full one.
 
 ## The numbers in profiles.py
 
@@ -464,4 +467,3 @@ Nothing in the original three-week plan, and nothing named since. The list of
 things this tool could deterministically catch and does not is, for the
 moment, empty. When something goes on it, the three questions under "Adding a
 check" are how to decide what shape it takes.
-

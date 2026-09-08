@@ -37,10 +37,17 @@ class BatchError(RuntimeError):
     """Nothing to check, or nothing checkable, with the reason."""
 
 
+# Collecting for the intake stage rather than for a check: everything found
+# is kept, including files this tool cannot read. A selection that silently
+# loses four files is worse than one that names them and says why.
+ANY_EXTENSION = object()
+
+
 def collect(paths, recursive=False, extensions=None):
     """Turn files and folders into an ordered list of files to check."""
-    extensions = extensions or (platform_support.MEDIA_EXTS
-                                + platform_support.CAPTION_EXTS)
+    if extensions is not ANY_EXTENSION:
+        extensions = extensions or (platform_support.MEDIA_EXTS
+                                    + platform_support.CAPTION_EXTS)
     found = []
     for path in paths:
         path = os.path.expanduser(path)
@@ -58,6 +65,8 @@ def collect(paths, recursive=False, extensions=None):
         seen.add(path)
         ordered.append(path)
     if not ordered:
+        if extensions is ANY_EXTENSION:
+            raise BatchError("Nothing there to look at.")
         raise BatchError(
             "Nothing to check. Looked for: "
             + ", ".join("." + e for e in sorted(extensions)[:8]) + "…")
@@ -71,7 +80,9 @@ def _scan(folder, recursive, extensions):
         for name in files:
             if name.startswith(".") or OUTPUT_MARKER in name:
                 continue
-            if name.rsplit(".", 1)[-1].lower() in extensions:
+            if extensions is ANY_EXTENSION:
+                out.append(os.path.join(root, name))
+            elif name.rsplit(".", 1)[-1].lower() in extensions:
                 out.append(os.path.join(root, name))
         if not recursive:
             break
