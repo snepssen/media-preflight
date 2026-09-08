@@ -434,3 +434,51 @@ class ImpossibleFlagsAreRefusedOnce(unittest.TestCase):
         for target in ("youtube", "social_vertical", "ebu_r128"):
             preflight.check_picture_flags(
                 self.args(target, width_divide=None))
+
+
+class WhatEachProfileIsFor(unittest.TestCase):
+    """Read off the rules, because the label was wrong and nobody noticed."""
+
+    def test_a_picture_target_is_offered_only_for_video(self):
+        for name in ("youtube", "social_vertical", "web"):
+            self.assertEqual(profiles.applies_to(profiles.get(name)),
+                             ("video",), name)
+
+    def test_a_sound_target_also_applies_to_a_video_soundtrack(self):
+        # A broadcast video's audio still has to meet R 128; the profile
+        # simply has nothing to say about the picture.
+        self.assertEqual(profiles.applies_to(profiles.get("ebu_r128")),
+                         ("audio", "video"))
+
+    def test_the_caption_target_is_captions_only(self):
+        self.assertEqual(profiles.applies_to(profiles.get("subtitles")),
+                         ("captions",))
+
+    def test_the_universal_rules_do_not_decide_what_a_profile_is_for(self):
+        # Every profile inherits clipping, phase and silent-channel rules.
+        # Counting them would make the subtitle target an audio target.
+        subtitles = profiles.get("subtitles")
+        inherited = [r for r in subtitles["rules"] if r.get("universal")]
+        self.assertTrue(any(checks.needs_of(r["metric"]) == "audio"
+                            for r in inherited))
+        self.assertNotIn("audio", profiles.applies_to(subtitles))
+
+    def test_a_picture_target_is_never_offered_for_a_caption_file(self):
+        for profile in profiles.for_kind("captions"):
+            self.assertNotIn("video_codec",
+                             [r["metric"] for r in profile["rules"]])
+
+    def test_every_kind_has_something_to_choose_from(self):
+        for kind in ("audio", "video", "captions"):
+            self.assertTrue(profiles.for_kind(kind), kind)
+
+    def test_the_server_refuses_what_the_page_would_have_hidden(self):
+        self.assertFalse(profiles.accepts(profiles.get("youtube"), "audio"))
+        self.assertTrue(profiles.accepts(profiles.get("youtube"), "video"))
+
+    def test_every_metric_declares_the_stream_it_needs(self):
+        self.assertEqual(set(checks.METRICS) - set(checks.NEEDS), set())
+
+    def test_a_caption_target_can_never_start_a_picture_pass(self):
+        for profile in profiles.for_kind("captions"):
+            self.assertEqual(preflight.picture_filters(profile), set())

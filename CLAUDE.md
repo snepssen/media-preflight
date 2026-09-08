@@ -387,6 +387,37 @@ interrupt, so `/api/quit` shuts the server down and the page offers it.
   depth is part of both single-file and delivery keys so a selective pass can
   never stand in for a full one.
 
+## What a profile is for
+
+`profiles.applies_to` reads it off the rules. Profiles used to carry a `kind`
+field; it was consumed nowhere and it was wrong — `youtube`, `web` and
+`social_vertical` all declared `audio` while carrying eleven, nine and five
+picture rules, and `house` declared nothing. It has been removed rather than
+corrected, because a label kept beside the rules drifts from them and the
+rules cannot drift from themselves.
+
+`checks.NEEDS` says which stream each metric is a question about — `audio`,
+`picture`, `captions` or `any`. A profile stating a picture rule is a picture
+target and is offered for video only. One stating no picture rule but some
+audio rule is offered for audio *and* video, because a video's soundtrack
+still has to meet R 128 and the profile simply has nothing to say about the
+picture. The converse does not hold: offering YouTube for a WAV is a dropdown
+proposing to check the frame rate of a sound file.
+
+Two traps, both of which caught this on the way in:
+
+- **`av_duration_gap_s` is `any`, not `picture`.** Every profile carries it,
+  so counting it as a picture question makes every profile a video target.
+- **The universal rules do not decide what a profile is for.** Clipping,
+  phase, silent channels and overlapping captions are attached to *every*
+  profile including the caption one, which presents as an audio target until
+  they are set aside. `with_universal` marks what it injects with
+  `universal: True` and `applies_to` skips those.
+
+`profiles.for_kind` lists what to offer; `profiles.accepts` refuses on the
+server what the page would have hidden, because a dropdown is a convenience
+and not a guarantee about what will arrive.
+
 ## The numbers in profiles.py
 
 Every built-in target carries `source`, `checked` and `confidence`, and every

@@ -268,6 +268,43 @@ DECLARED_METRICS = {
 }
 
 
+# Which stream a metric is a question about. `scope_of` says what kind of
+# answer a metric gives; this says what a file must carry for the question to
+# mean anything, which is a different axis and the one a profile's
+# applicability turns on.
+#
+# "any" is for the handful that survive whatever the file is: container
+# properties, and the cross-checks that compare two streams and skip quietly
+# when only one is present. av_duration_gap_s is deliberately here rather than
+# under picture — every profile carries it, and counting it as a picture
+# question would make every profile a video profile.
+NEEDS = {}
+NEEDS.update(dict.fromkeys((
+    "aspect_ratio", "black_seconds", "field_order_disagrees", "flash_regions",
+    "frame_rate", "frame_rate_mode", "frozen_seconds", "interlace_declared",
+    "interlace_detected", "interlaced", "leading_black_s", "longest_black_s",
+    "longest_frozen_s", "pix_fmt", "resolution", "telecine_ratio",
+    "trailing_black_s", "video_bitrate_kbps", "video_codec", "video_height",
+    "video_width"), "picture"))
+NEEDS.update(dict.fromkeys((
+    "audio_bitrate_kbps", "audio_codec", "bit_depth", "bitrate_mode",
+    "channel_rms_spread_db", "channels", "clipping_seconds", "dc_offset_max",
+    "ends_abruptly", "integrated_lufs", "lead_silence_s",
+    "longest_mid_silence_s", "loudness_range_lu", "noise_floor_dbfs",
+    "peak_dbfs", "phase_min", "rms_dbfs", "sample_rate",
+    "short_term_excursions", "silent_channel_count", "tail_silence_s",
+    "true_peak_dbfs"), "audio"))
+NEEDS.update({name: "captions" for name in METRICS if name.startswith("caption_")})
+NEEDS.update(dict.fromkeys((
+    "av_duration_gap_s", "container", "cover_art", "duration_min",
+    "duration_s", "fast_start"), "any"))
+
+
+def needs_of(metric):
+    """'audio', 'picture', 'captions' or 'any' — what the file must carry."""
+    return NEEDS.get(metric, "any")
+
+
 def scope_of(metric):
     """'declared', 'moment' or 'file' — what kind of answer this metric is."""
     if metric in DECLARED_METRICS:

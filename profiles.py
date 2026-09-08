@@ -23,6 +23,8 @@ import copy
 import json
 import os
 
+import checks
+
 
 # ---------------------------------------------------------------- rule kinds
 #
@@ -53,7 +55,6 @@ import os
 ACX = {
     "id": "acx",
     "label": "Audiobook — ACX",
-    "kind": "audio",
     "summary": "Retail audiobook delivery: RMS window, hard peak ceiling, "
                "quiet noise floor, room tone at both ends.",
     "source": "ACX audio submission requirements",
@@ -136,7 +137,6 @@ ACX = {
 EBU_R128 = {
     "id": "ebu_r128",
     "label": "Broadcast — EBU R128",
-    "kind": "audio",
     "summary": "European broadcast loudness: -23 LUFS programme loudness, "
                "-1 dBTP ceiling.",
     "source": "EBU R 128 (loudness normalisation and permitted maximum level)",
@@ -171,7 +171,6 @@ EBU_R128 = {
 SPOTIFY_PODCAST = {
     "id": "spotify_podcast",
     "label": "Podcast — Spotify",
-    "kind": "audio",
     "summary": "-14 LUFS integrated, -1 dBTP ceiling, stereo or mono AAC/MP3. "
                "Spotify's published figure is for music playback, not podcast "
                "delivery.",
@@ -226,7 +225,6 @@ SPOTIFY_PODCAST = {
 YOUTUBE = {
     "id": "youtube",
     "label": "YouTube",
-    "kind": "audio",
     "summary": "Published upload encoding settings, plus the -14 LUFS "
                "normalisation everybody measures and YouTube does not publish.",
     "source": "YouTube recommended upload encoding settings (published); the "
@@ -358,7 +356,6 @@ YOUTUBE = {
 SOCIAL_VERTICAL = {
     "id": "social_vertical",
     "label": "Instagram / TikTok",
-    "kind": "audio",
     "summary": "Around -14 LUFS with a -1 dBTP ceiling. Neither platform "
                "publishes a specification.",
     "source": "Not formally published; widely reported behaviour",
@@ -403,7 +400,6 @@ SOCIAL_VERTICAL = {
 GENERIC_WEB = {
     "id": "web",
     "label": "Generic web video",
-    "kind": "audio",
     "summary": "The faults that are faults everywhere: clipping, dead "
                "channels, DC offset, silence where there should be sound.",
     "source": "This tool's own defaults",
@@ -518,7 +514,6 @@ UNIVERSAL = [
 SUBTITLES = {
     "id": "subtitles",
     "label": "Subtitles — readability",
-    "kind": "captions",
     "summary": "Reading speed, line length and cue timing, against the "
                "conventions most subtitling guidance is written in.",
     "source": "Common subtitling practice, not a platform requirement",
@@ -608,6 +603,62 @@ def all_profiles(include_custom=True):
     return [found[i] for i in order]
 
 
+# What a profile is a target *for*, read off its rules rather than off a label.
+#
+# Profiles carry a `kind` field. It is wrong — youtube, web and
+# social_vertical all declare "audio" while carrying eleven, nine and five
+# picture rules between them, and house declares nothing — and it was
+# consumed nowhere, which is why nobody noticed. A label kept beside the rules
+# drifts from them; the rules cannot drift from themselves. Add a picture rule
+# to a profile and it becomes a picture target here, with nothing else to
+# remember.
+#
+# An audio target also applies to video, because a video deliverable's
+# soundtrack still has to meet R 128, and the profile simply has nothing to
+# say about the picture. The converse does not hold: a picture target applied
+# to a file with no picture is a dropdown offering to check the frame rate of
+# a WAV.
+
+
+def applies_to(profile):
+    """The file kinds this profile is meaningfully a target for.
+
+    Judged on the rules the profile states, not the ones every profile
+    inherits. The universal set is a safety net — clipping, silent channels,
+    phase, overlapping captions — and it is attached to the caption profile
+    too. Counting it would make the subtitle target an audio target, which is
+    how it presents before those rules are set aside.
+    """
+    needs = {checks.needs_of(rule["metric"])
+             for rule in profile.get("rules", [])
+             if not rule.get("universal")}
+    if "picture" in needs:
+        return ("video",)
+    if "audio" in needs:
+        return ("audio", "video")
+    if "captions" in needs:
+        return ("captions",)
+    return ("audio", "video", "captions")
+
+
+def for_kind(kind, include_custom=True):
+    """Every profile that makes sense for a file of this kind."""
+    return [p for p in all_profiles(include_custom)
+            if kind in applies_to(p)]
+
+
+def accepts(profile, kind):
+    """Whether this profile may be run against a file of this kind.
+
+    Checked on the server as well as hidden in the page: a dropdown that only
+    shows compatible profiles is a convenience, and a request that arrives
+    anyway — from a stale page, or from anything that is not the page — must
+    still be refused rather than quietly producing a report about a question
+    nobody could have meant to ask.
+    """
+    return kind in applies_to(profile)
+
+
 def get(identifier):
     """A profile by id, or a path to a JSON one. Raises ValueError if neither."""
     if identifier and (identifier.endswith(".json") or
@@ -625,12 +676,13 @@ def with_universal(profile):
     profile = copy.deepcopy(profile)
     taken = {rule["id"] for rule in profile.get("rules", [])}
     profile["rules"] = list(profile.get("rules", [])) + [
-        copy.deepcopy(rule) for rule in UNIVERSAL if rule["id"] not in taken]
+        dict(copy.deepcopy(rule), universal=True)
+        for rule in UNIVERSAL if rule["id"] not in taken]
     # A target that states a cross-file rule of its own replaces the universal
     # one for that metric, rather than being checked twice at two thresholds.
     stated = {rule["metric"] for rule in profile.get("set_rules", [])}
     profile["set_rules"] = list(profile.get("set_rules", [])) + [
-        copy.deepcopy(rule) for rule in UNIVERSAL_SET
+        dict(copy.deepcopy(rule), universal=True) for rule in UNIVERSAL_SET
         if rule["metric"] not in stated]
     profile.setdefault("options", {})
     return profile
