@@ -11,6 +11,7 @@ TOOL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL))
 
 import intake  # noqa: E402
+import probe  # noqa: E402
 import platform_support  # noqa: E402
 
 FFMPEG = platform_support.find_ffmpeg()
@@ -25,30 +26,34 @@ def item(name, kind, path=None):
 
 
 class AStillIsNotAProgramme(unittest.TestCase):
-    """The same claim the cover-art rule makes, from the other direction."""
+    """The same claim the cover-art rule makes, from the other direction.
+
+    The rule lives in probe because a check refusing a caption profile and
+    intake sorting a folder have to agree about what a video is.
+    """
 
     def facts(self, frames=None, duration=None):
         return {"video": {"nb_frames": frames, "codec": "png"},
                 "container": {"duration_s": duration}}
 
     def test_no_timeline_at_all_is_a_still(self):
-        self.assertTrue(intake._is_still(self.facts()))
+        self.assertTrue(probe.is_still(self.facts()))
 
     def test_one_frame_and_no_duration_is_a_still(self):
-        self.assertTrue(intake._is_still(self.facts(frames=1)))
+        self.assertTrue(probe.is_still(self.facts(frames=1)))
 
     def test_a_duration_makes_it_a_programme(self):
-        self.assertFalse(intake._is_still(self.facts(duration=186.8)))
+        self.assertFalse(probe.is_still(self.facts(duration=186.8)))
 
     def test_many_frames_make_it_a_programme(self):
-        self.assertFalse(intake._is_still(self.facts(frames=11208)))
+        self.assertFalse(probe.is_still(self.facts(frames=11208)))
 
     def test_the_invented_frame_rate_is_not_consulted(self):
         # ffprobe reports 25 fps for a PNG, on a file with no second to hold
         # 25 frames. Nothing here may believe it.
         still = {"video": {"avg_frame_rate": 25.0, "nb_frames": None},
                  "container": {"duration_s": None}}
-        self.assertTrue(intake._is_still(still))
+        self.assertTrue(probe.is_still(still))
 
 
 class SidecarsBelongToTheirMedia(unittest.TestCase):

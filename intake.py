@@ -122,9 +122,8 @@ def _identify(path, ffprobe):
         "Opened, but carries neither sound nor moving picture.")
 
 
-# The rule lives with the prober, so that what intake calls a video and what
-# a check refuses to run a caption profile against are the same judgement.
-_is_still = probe.is_still
+# probe.is_still holds the rule, so that what intake calls a video and what a
+# check refuses to run a caption profile against are one judgement.
 
 
 def _identify_caption(path, name):
