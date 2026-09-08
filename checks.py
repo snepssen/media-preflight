@@ -87,11 +87,43 @@ def _aspect_ratio(facts, m):
     return round(width / height, 4)
 
 
-def _interlaced(facts, m):
+def _declared_interlaced(facts):
+    """What the file claims about its own fields, or None if it says nothing."""
     order = _video(facts, "field_order")
-    if not order:
+    if not order or order == "unknown":
         return None
-    return order not in ("progressive", "unknown")
+    return order != "progressive"
+
+
+def _interlaced(facts, m):
+    """Interlaced if either the header says so or the picture shows it.
+
+    Either alone is a reason to deinterlace: a header claiming interlace makes
+    players deinterlace whatever is actually inside, and interlaced pictures in
+    a file flagged progressive are combed on every screen that trusts the flag.
+    Where the two disagree, `field_order_disagrees` reports the disagreement
+    itself, which is usually the more useful finding.
+    """
+    detected = m.get("interlace_detected")
+    declared = _declared_interlaced(facts)
+    if detected in ("tff", "bff"):
+        return True
+    if declared is not None:
+        return declared
+    if detected == "progressive":
+        return False
+    return None
+
+
+def _field_order_disagrees(facts, m):
+    """True when the header and the picture cannot both be right."""
+    detected = m.get("interlace_detected")
+    if detected not in ("tff", "bff", "progressive"):
+        return None
+    declared = _declared_interlaced(facts)
+    if declared is None:
+        return None
+    return declared != (detected in ("tff", "bff"))
 
 
 def _video_bitrate_kbps(facts, m):
@@ -151,6 +183,10 @@ METRICS = {
     "aspect_ratio": _aspect_ratio,
     "video_bitrate_kbps": _video_bitrate_kbps,
     "interlaced": _interlaced,
+    "interlace_declared": lambda f, m: _declared_interlaced(f),
+    "interlace_detected": lambda f, m: m.get("interlace_detected"),
+    "field_order_disagrees": _field_order_disagrees,
+    "telecine_ratio": lambda f, m: m.get("telecine_ratio"),
 
     # picture, measured
     "black_seconds": lambda f, m: m.get("black_seconds"),
@@ -220,6 +256,7 @@ DECLARED_METRICS = {
     "aspect_ratio",
     "caption_cue_count", "caption_format", "caption_missing_fonts",
     "caption_shortest_gap_s", "caption_past_end_s",
+    "interlace_declared", "interlace_detected",
 }
 
 

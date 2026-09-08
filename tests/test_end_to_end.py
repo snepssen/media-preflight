@@ -228,6 +228,58 @@ class PictureTests(unittest.TestCase):
             self.assertEqual(video.frame_rate_mode(joined, 4.0, FFPROBE), "vfr")
             self.assertEqual(video.frame_rate_mode(first, 2.0, FFPROBE), "cfr")
 
+    def test_a_telecined_file_flagged_progressive_is_caught(self):
+        """End to end, on a real file: the header says progressive, the
+        picture has repeated fields, and the check fails anyway."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "pulldown.mp4")
+            subprocess.run(
+                [FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i",
+                 f"testsrc2={self.SIZE}:rate=24:d=4",
+                 "-vf", "telecine=pattern=23", "-c:v", "libx264",
+                 "-pix_fmt", "yuv420p", path], check=True)
+
+            declared = subprocess.run(
+                [FFPROBE, "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=field_order", "-of",
+                 "default=nk=1:nw=1", path],
+                capture_output=True, text=True).stdout.strip()
+            self.assertEqual(declared, "progressive",
+                             "the header is what makes this worth measuring")
+
+            facts, m, result, _ = preflight.run(path, "youtube")
+            self.assertEqual(m["interlace_detected"], "tff")
+            self.assertGreater(m["telecine_ratio"], 0.1)
+            interlaced = next(f for f in result["findings"]
+                              if f["id"] == "interlaced")
+            self.assertEqual(interlaced["status"], "fail")
+            disagrees = next(f for f in result["findings"]
+                             if f["id"] == "field_order")
+            self.assertEqual(disagrees["status"], "warn")
+
+    def test_progressive_material_is_not_reported_as_interlaced(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = picture(os.path.join(folder, "smooth.mp4"),
+                           f"gradients={self.SIZE}:rate=25:d=3:speed=0.05")
+            _, m, result, _ = preflight.run(path, "youtube")
+            self.assertEqual(m["interlace_detected"], "progressive")
+            interlaced = next(f for f in result["findings"]
+                              if f["id"] == "interlaced")
+            self.assertEqual(interlaced["status"], "pass")
+
+    def test_a_hard_edged_test_pattern_does_not_become_a_false_failure(self):
+        """testsrc2 makes idet report two thirds of its frames as interlaced.
+        The dominance test is the only thing standing between that and a
+        wrong verdict on somebody's animation."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = picture(os.path.join(folder, "pattern.mp4"),
+                           f"testsrc2={self.SIZE}:rate=25:d=3")
+            _, m, result, _ = preflight.run(path, "youtube")
+            self.assertEqual(m["interlace_detected"], "inconclusive")
+            interlaced = next(f for f in result["findings"]
+                              if f["id"] == "interlaced")
+            self.assertEqual(interlaced["status"], "pass")
+
     def test_the_picture_pass_only_runs_when_a_rule_asks_for_it(self):
         with tempfile.TemporaryDirectory() as folder:
             path = picture(os.path.join(folder, "calm.mp4"),

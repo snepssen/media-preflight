@@ -47,6 +47,11 @@ class PreflightError(RuntimeError):
 VIDEO_METRICS = {
     "black_seconds", "longest_black_s", "leading_black_s", "trailing_black_s",
     "frozen_seconds", "longest_frozen_s", "flash_regions",
+    # Interlacing is measured rather than read off the header, so asking about
+    # it costs the picture pass. That is the point: the header is a claim, and
+    # on this question it is a claim that is often wrong.
+    "interlaced", "interlace_detected", "field_order_disagrees",
+    "telecine_ratio",
 }
 CAPTION_METRICS = {name for name in checks.METRICS if name.startswith("caption_")}
 

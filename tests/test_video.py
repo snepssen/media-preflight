@@ -143,3 +143,84 @@ class ChainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# idet's actual output on files whose truth is known, recorded verbatim. The
+# progressive case is the one that matters: a synthetic pattern with hard
+# vertical edges and fast motion, which idet reports as overwhelmingly
+# interlaced and which is not interlaced at all.
+IDET_PROGRESSIVE_FALSE_POSITIVE = """
+[Parsed_idet_0 @ 0x7f] Repeated Fields: Neither:     0 Top:     0 Bottom:     0
+[Parsed_idet_0 @ 0x7f] Multi frame detection: TFF:     0 BFF:     0 Progressive:     0 Undetermined:     0
+[Parsed_idet_0 @ 0x7f] Repeated Fields: Neither:    75 Top:     0 Bottom:     0
+[Parsed_idet_0 @ 0x7f] Multi frame detection: TFF:    42 BFF:    25 Progressive:     8 Undetermined:     0
+"""
+
+IDET_INTERLACED = """
+[Parsed_idet_0 @ 0x7f] Repeated Fields: Neither:    75 Top:     0 Bottom:     0
+[Parsed_idet_0 @ 0x7f] Multi frame detection: TFF:    75 BFF:     0 Progressive:     0 Undetermined:     0
+"""
+
+IDET_TELECINED = """
+[Parsed_idet_0 @ 0x7f] Repeated Fields: Neither:    72 Top:    24 Bottom:    24
+[Parsed_idet_0 @ 0x7f] Multi frame detection: TFF:   120 BFF:     0 Progressive:     0 Undetermined:     0
+"""
+
+IDET_PROGRESSIVE = """
+[Parsed_idet_0 @ 0x7f] Repeated Fields: Neither:    75 Top:     0 Bottom:     0
+[Parsed_idet_0 @ 0x7f] Multi frame detection: TFF:     0 BFF:     0 Progressive:    75 Undetermined:     0
+"""
+
+IDET_STATIC = """
+[Parsed_idet_0 @ 0x7f] Repeated Fields: Neither:    75 Top:     0 Bottom:     0
+[Parsed_idet_0 @ 0x7f] Multi frame detection: TFF:     0 BFF:     0 Progressive:     0 Undetermined:    75
+"""
+
+
+class InterlaceTests(unittest.TestCase):
+    OPTIONS = dict(video.DEFAULTS)
+
+    def _classify(self, text):
+        return video.classify_fields(video.parse_idet(text), self.OPTIONS)
+
+    def test_the_last_summary_is_the_one_that_counts(self):
+        """idet prints an all-zero block first, as an artefact of flushing."""
+        counts = video.parse_idet(IDET_PROGRESSIVE_FALSE_POSITIVE)
+        self.assertEqual(counts["tff"], 42)
+        self.assertEqual(counts["repeated_neither"], 75)
+
+    def test_mixed_field_orders_are_inconclusive_rather_than_interlaced(self):
+        """The failure mode that makes a naive threshold useless: 67 of 75
+        frames read as interlaced on material that is not."""
+        out = self._classify(IDET_PROGRESSIVE_FALSE_POSITIVE)
+        self.assertGreater(out["interlace_share"], 0.8, "it looks interlaced")
+        self.assertLess(out["field_dominance"], 0.8, "but it cannot pick a field")
+        self.assertEqual(out["interlace_detected"], "inconclusive")
+
+    def test_one_dominant_field_order_is_interlaced(self):
+        out = self._classify(IDET_INTERLACED)
+        self.assertEqual(out["interlace_detected"], "tff")
+        self.assertEqual(out["field_dominance"], 1.0)
+
+    def test_smooth_progressive_material_reads_as_progressive(self):
+        self.assertEqual(self._classify(IDET_PROGRESSIVE)["interlace_detected"],
+                         "progressive")
+
+    def test_a_static_shot_gives_no_evidence_rather_than_a_verdict(self):
+        out = self._classify(IDET_STATIC)
+        self.assertEqual(out["interlace_detected"], "unknown")
+        self.assertIsNone(out["interlace_share"])
+
+    def test_repeated_fields_are_reported_as_telecine(self):
+        out = self._classify(IDET_TELECINED)
+        self.assertAlmostEqual(out["telecine_ratio"], 0.4)
+        self.assertEqual(out["interlace_detected"], "tff")
+
+    def test_nothing_measured_claims_nothing(self):
+        out = self._classify("")
+        self.assertEqual(out["interlace_detected"], "unknown")
+        self.assertIsNone(out["telecine_ratio"])
+
+    def test_the_detector_is_in_the_chain_that_already_runs(self):
+        chain = video.build_filter_chain(dict(video.DEFAULTS))
+        self.assertIn("idet", chain, "no second decode for this")

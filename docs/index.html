@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>226</b> checks passing</span>
+    <span><b>242</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -133,7 +133,8 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
         <li>Room tone at head and tail, mid-file gaps, endings that stop mid-word</li>
         <li>Black frames and frozen frames, with the seconds they occupy</li>
         <li>Flashing passages worth a human look, screened at three transitions a second</li>
-        <li>Resolution, pixel format, interlacing, and constant versus variable frame rate</li>
+        <li>Resolution, pixel format, telecine, and constant versus variable frame rate</li>
+        <li>Interlacing measured from the picture, not read off a header that often lies</li>
         <li>Caption overlaps, reading speed, line length, cues timed past the last frame</li>
         <li>Subtitle fonts this machine does not have</li>
         <li>Codec, container, sample rate, channels, bitrate, and whether an MP3 is constant or variable</li>
@@ -341,6 +342,9 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
       <p><strong>loudnorm's own measurement</strong>, because it will not accept another filter's figures; it wants its own threshold and offset.</p>
       <h3 style="margin-top:26px">The picture has its own pass</h3>
       <p><span class="mono" style="font-size:14px">blackdetect → freezedetect → signalstats</span>, and it runs only when the target actually asks a question about the picture. Decoding a ninety-minute film to count black frames is minutes of somebody's time, and a podcast profile has no reason to spend them.</p>
+      <h3 style="margin-top:26px">Interlacing is measured, not believed</h3>
+      <p>Reading <span class="mono" style="font-size:14px">field_order</span> from the container and believing it passes a 3:2-pulldown file that declares itself progressive — which is most telecined material there is. Running ffmpeg's <span class="mono" style="font-size:14px">idet</span> and believing <em>that</em> is worse: on progressive material with hard vertical edges and fast motion it calls the majority of frames interlaced.</p>
+      <p>What separates them is that real interlacing is overwhelmingly <em>one</em> field order and the false positives are mixed, because they are noise rather than field dominance. Both a share test and a dominance test have to pass; material that passes one and fails the other is reported as inconclusive, which is the truthful answer and not a verdict.</p>
       <h3 style="margin-top:26px">ffmpeg is probed, not trusted</h3>
       <p>Slim distribution builds omit <span class="mono" style="font-size:14px">ebur128</span>, and the failure otherwise surfaces halfway through an analysis as a filtergraph error that says nothing about why. The tool looks for the filter, not for a binary with the right name.</p>
     </div>

@@ -290,7 +290,20 @@ YOUTUBE = {
          "note": "YouTube's guide is explicit: interlaced content must be "
                  "deinterlaced before uploading. Left alone it is "
                  "deinterlaced on ingest anyway, by a filter you did not "
-                 "choose."},
+                 "choose. This is measured from the picture as well as read "
+                 "from the header, because the header is often wrong."},
+        {"id": "field_order", "metric": "field_order_disagrees",
+         "label": "Field order flag", "forbid": True, "severity": "warn",
+         "basis": "house",
+         "note": "The header and the picture disagree about interlacing. "
+                 "Whichever is wrong, something downstream will believe the "
+                 "header and comb or deinterlace accordingly."},
+        {"id": "telecine", "metric": "telecine_ratio",
+         "label": "Telecine", "max": 0.05, "severity": "warn",
+         "basis": "house",
+         "note": "Repeated fields: film shot at 24 frames pulled up to 30 "
+                 "and left that way. It judders, and it survives every "
+                 "re-encode that does not undo it."},
         {"id": "trailing_black", "metric": "trailing_black_s",
          "label": "Black at the end", "unit": "s", "max": 3.0,
          "severity": "warn", "basis": "house",
@@ -386,6 +399,13 @@ GENERIC_WEB = {
         {"id": "frozen", "metric": "longest_frozen_s",
          "label": "Frozen picture", "unit": "s", "max": 5.0,
          "severity": "warn"},
+        {"id": "field_order", "metric": "field_order_disagrees",
+         "label": "Field order flag", "forbid": True, "severity": "warn",
+         "note": "The header and the picture disagree about interlacing."},
+        {"id": "telecine", "metric": "telecine_ratio",
+         "label": "Telecine", "max": 0.05, "severity": "warn",
+         "note": "Repeated fields — 24-frame film pulled up to 30 and left "
+                 "that way."},
         {"id": "flashing", "metric": "flash_regions",
          "label": "Flashing risk", "max": 0.0, "severity": "warn",
          "note": "A screening heuristic, not a compliance test — it finds the "

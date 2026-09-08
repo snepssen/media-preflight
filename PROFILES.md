@@ -128,12 +128,21 @@ an ending is an edit, retiming a cue is an edit, and this tool does not edit.
 **Measured from the picture**
 
 `black_seconds`, `longest_black_s`, `leading_black_s`, `trailing_black_s`,
-`frozen_seconds`, `longest_frozen_s`, `flash_regions`
+`frozen_seconds`, `longest_frozen_s`, `flash_regions`, `interlaced`,
+`field_order_disagrees`, `telecine_ratio`
 
 **Declared by the picture**
 
 `video_codec`, `video_width`, `video_height`, `resolution`, `aspect_ratio`,
-`frame_rate`, `frame_rate_mode`, `pix_fmt`, `video_bitrate_kbps`, `interlaced`
+`frame_rate`, `frame_rate_mode`, `pix_fmt`, `video_bitrate_kbps`,
+`interlace_declared`, `interlace_detected`
+
+`interlaced`, `field_order_disagrees` and `telecine_ratio` are measured rather
+than declared, so naming any of them costs the picture pass. That is the point:
+the header's `field_order` is a claim, and telecined material routinely
+declares itself progressive. `interlaced` is true when either the header or the
+picture says so; `field_order_disagrees` reports the case where they cannot
+both be right.
 
 **Captions**
 
@@ -258,6 +267,10 @@ any metric it states itself, so nothing is checked twice at two thresholds.
 | `freeze_noise_db` | -60.0 | how different two frames must be to have moved |
 | `flash_luma_delta` | 20.0 | luminance change counted as a transition |
 | `flash_per_second` | 3 | transitions in a second that flag a region |
+| `interlace_share` | 0.5 | how many decided frames must look interlaced |
+| `field_dominance` | 0.8 | how one-sided the field order must be to count |
+| `interlace_evidence` | 0.25 | decided frames needed before claiming anything |
+| `telecine_ratio` | 0.05 | repeated fields before it reads as pulldown |
 
 The silence threshold matters more than it looks. "Room tone" is a claim about
 a level, and a target that asks for a quiet ending is asking for the room, not

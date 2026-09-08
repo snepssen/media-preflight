@@ -43,8 +43,11 @@ channels, channel imbalance, out-of-phase stereo that will cancel in mono.
 that stop while the programme is still at full level.
 
 **Picture** — black frames and frozen frames with the seconds they occupy,
-flashing passages worth a human look, resolution, pixel format, interlacing,
-and whether the frame rate is constant or variable.
+flashing passages worth a human look, resolution, pixel format, telecine, and
+whether the frame rate is constant or variable. Interlacing is *measured from
+the picture*, not read off the header, because the header is a claim and on
+this question it is often a false one — a telecined file will happily declare
+itself progressive.
 
 **Captions** — SubRip, WebVTT and Advanced SubStation, found as a sidecar
 beside the media, extracted from an embedded stream, or checked on their own.
@@ -229,6 +232,35 @@ references it, because almost everything that renders Markdown strips an
 inline `<svg>` and a picture that silently fails to appear is worse than one
 that is plainly a separate file.
 
+### Interlacing, measured rather than believed
+
+The obvious implementation reads `field_order` from the container and believes
+it. That passes a 3:2-pulldown file whose header says `progressive` and whose
+picture is full of repeated fields — which is most telecined material in the
+world.
+
+The obvious *second* implementation runs ffmpeg's `idet` and believes that
+instead. It is worse. On progressive material with hard vertical edges and fast
+motion — animation, screen recordings, test patterns — `idet` reports the
+majority of frames as interlaced. A synthetic pattern here reads 42 frames
+top-field-first and 25 bottom-field-first out of 75, and is not interlaced at
+all.
+
+What separates the two is that genuinely interlaced material is
+*overwhelmingly one field order*, and the false positives are mixed, because
+they are noise rather than field dominance. So two things must hold before this
+tool says a file is interlaced: enough of the decided frames look interlaced,
+**and** one field order clearly dominates. Material that passes the first test
+and fails the second is reported as inconclusive — which is the truthful answer
+and not a verdict.
+
+Where the header and the picture disagree, that disagreement is its own
+finding, because whichever of the two is wrong, something downstream will
+believe the header.
+
+None of this costs a decode: `idet` joins the filter chain the picture pass
+already runs.
+
 ## Checking a delivery, not a file
 
 Almost nothing anybody delivers is one file. An audiobook is thirty chapters
@@ -358,7 +390,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 226 checks, about fourteen seconds
+python3 -m unittest discover -s tests     # 242 checks, about fourteen seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

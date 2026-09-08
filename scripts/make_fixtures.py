@@ -245,6 +245,43 @@ def build_video(folder, ffmpeg):
     written.append(("video-variable-rate.mkv",
                     "Twenty-five frames a second for two seconds, then fifty. "
                     "Plays fine; ruins anything downstream that assumed one rate."))
+
+    # Genuinely interlaced, and honest about it in the header.
+    subprocess.run(
+        [ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+         f"testsrc2={size}:rate=50:d=3",
+         "-vf", "tinterlace=mode=interleave_top,setfield=tff",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-flags", "+ilme+ildct",
+         os.path.join(folder, "video-interlaced.mp4")],
+        check=True, **platform_support.no_console())
+    written.append(("video-interlaced.mp4",
+                    "Top-field-first interlaced, and flagged as such."))
+
+    # Telecined: 24-frame material pulled up to 30 with repeated fields, and a
+    # header that calls the result progressive. The header-trusting check this
+    # replaced passed this file.
+    subprocess.run(
+        [ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+         f"testsrc2={size}:rate=24:d=4", "-vf", "telecine=pattern=23",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p",
+         os.path.join(folder, "video-telecined.mp4")],
+        check=True, **platform_support.no_console())
+    written.append(("video-telecined.mp4",
+                    "Repeated fields from a 3:2 pulldown, in a file whose "
+                    "header says progressive — which is what makes reading "
+                    "the header alone insufficient."))
+
+    # Smooth progressive motion: the control. idet reads this correctly, and
+    # video-strobe.mp4 above is the case where it does not.
+    subprocess.run(
+        [ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+         f"gradients={size}:rate=25:d=3:speed=0.05",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p",
+         os.path.join(folder, "video-progressive.mp4")],
+        check=True, **platform_support.no_console())
+    written.append(("video-progressive.mp4",
+                    "Smooth progressive motion, for the interlace check to "
+                    "not find anything in."))
     return written
 
 

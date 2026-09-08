@@ -174,3 +174,45 @@ class WordingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InterlaceTests(unittest.TestCase):
+    """The header is a claim. On this question it is often a false one."""
+
+    def _facts(self, order):
+        return facts(video={"codec": "h264", "width": 1920, "height": 1080,
+                            "field_order": order, "duration_s": 60.0})
+
+    def test_a_file_flagged_progressive_with_interlaced_fields_is_caught(self):
+        """The case that made this worth measuring: a telecined file whose
+        header says progressive, which a header-trusting check passes."""
+        value = checks.METRICS["interlaced"](
+            self._facts("progressive"),
+            measurements(interlace_detected="tff"))
+        self.assertTrue(value)
+
+    def test_a_header_claiming_interlace_is_believed_even_so(self):
+        value = checks.METRICS["interlaced"](
+            self._facts("tt"), measurements(interlace_detected="progressive"))
+        self.assertTrue(value, "players deinterlace what the header claims")
+
+    def test_an_inconclusive_picture_falls_back_to_the_header(self):
+        value = checks.METRICS["interlaced"](
+            self._facts("progressive"),
+            measurements(interlace_detected="inconclusive"))
+        self.assertFalse(value)
+
+    def test_no_header_and_no_measurement_is_not_a_claim(self):
+        value = checks.METRICS["interlaced"](
+            self._facts("unknown"), measurements())
+        self.assertIsNone(value, "absence is a skip, not a pass")
+
+    def test_the_disagreement_is_reported_in_its_own_right(self):
+        disagrees = checks.METRICS["field_order_disagrees"]
+        self.assertTrue(disagrees(self._facts("progressive"),
+                                  measurements(interlace_detected="tff")))
+        self.assertFalse(disagrees(self._facts("tt"),
+                                   measurements(interlace_detected="bff")))
+        self.assertIsNone(disagrees(self._facts("progressive"),
+                                    measurements(interlace_detected="inconclusive")),
+                          "nothing to disagree with")

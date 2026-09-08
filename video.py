@@ -5,7 +5,7 @@ different streams, and combining them would mean two filters writing frame
 metadata to the same pipe with nothing keeping their blocks apart. One decode
 per stream is the rule; a second decode of the same stream needs a reason.
 
-    blackdetect -> freezedetect -> signalstats -> metadata(print)
+    blackdetect -> freezedetect -> idet -> signalstats -> metadata(print)
 
 blackdetect and freezedetect announce themselves on stderr, signalstats injects
 per-frame statistics that metadata prints to stdout. Both streams are read at
@@ -43,7 +43,22 @@ DEFAULTS = {
     "freeze_noise_db": -60.0,
     "flash_luma_delta": 20.0,       # 8-bit luma change counted as a transition
     "flash_per_second": 3,          # WCAG's general flash threshold
+    # Interlacing thresholds — see classify_fields for what they mean.
+    "interlace_share": 0.5,
+    "field_dominance": 0.8,
+    "interlace_evidence": 0.25,
+    "telecine_ratio": 0.05,
 }
+
+# idet's own summary, printed once the stream has been read. It prints an
+# all-zero block first — an artefact of how it flushes — so the *last* block is
+# the one that means anything.
+_IDET_MULTI = re.compile(
+    r"Multi frame detection:\s*TFF:\s*(\d+)\s*BFF:\s*(\d+)\s*"
+    r"Progressive:\s*(\d+)\s*Undetermined:\s*(\d+)")
+_IDET_REPEAT = re.compile(
+    r"Repeated Fields:\s*Neither:\s*(\d+)\s*Top:\s*(\d+)\s*"
+    r"Bottom:\s*(\d+)")
 
 _BLACK = re.compile(r"black_start:\s*([\d.]+)\s+black_end:\s*([\d.]+)")
 _BLACK_OPEN = re.compile(r"black_start:\s*([\d.]+)\s*$")
@@ -62,6 +77,7 @@ def build_filter_chain(options):
             options["black_pixel_threshold"]),
         "freezedetect=n=%gdB:d=%g" % (
             options["freeze_noise_db"], options["freeze_min_s"]),
+        "idet",
         "signalstats",
         "metadata=print:file=-",
     ])
@@ -111,6 +127,7 @@ def analyse(path, ffmpeg=None, duration_s=None, options=None, progress=None):
         "flashes": find_flashing(luma, settings, duration_s),
         "frames_measured": len(luma),
     }
+    measurements.update(classify_fields(parse_idet(stderr), settings))
     _derive(measurements, duration_s)
     return measurements
 
@@ -176,6 +193,78 @@ def parse_freeze(text, duration_s=None):
         out.append({"start": start, "end": end,
                     "duration": max(0.0, end - start)})
     return _position(out, duration_s)
+
+
+# --------------------------------------------------------------- interlacing
+
+def parse_idet(text):
+    """idet's counts, taken from the last summary block it printed."""
+    multi = _IDET_MULTI.findall(text)
+    repeat = _IDET_REPEAT.findall(text)
+    out = {"tff": 0, "bff": 0, "progressive": 0, "undetermined": 0,
+           "repeated_top": 0, "repeated_bottom": 0, "repeated_neither": 0}
+    if multi:
+        tff, bff, progressive, undetermined = (int(v) for v in multi[-1])
+        out.update({"tff": tff, "bff": bff, "progressive": progressive,
+                    "undetermined": undetermined})
+    if repeat:
+        neither, top, bottom = (int(v) for v in repeat[-1])
+        out.update({"repeated_neither": neither, "repeated_top": top,
+                    "repeated_bottom": bottom})
+    return out
+
+
+def classify_fields(counts, options):
+    """Decide what idet's counts actually say, which is less than it looks.
+
+    idet is a screening measurement with a known failure mode: on progressive
+    material with hard vertical edges and fast motion it reports a great many
+    frames as interlaced. What gives it away is that those detections are
+    *mixed* — top-field-first on one frame and bottom-field-first on the next —
+    because they are noise rather than field dominance. Genuinely interlaced
+    material is overwhelmingly one or the other.
+
+    So two things have to hold before this claims a file is interlaced: enough
+    of the decided frames look interlaced at all, and one field order clearly
+    dominates. Material that trips the first test and fails the second is
+    reported as inconclusive, which is the truthful answer and not a verdict.
+    """
+    tff, bff = counts["tff"], counts["bff"]
+    progressive, undetermined = counts["progressive"], counts["undetermined"]
+    decided = tff + bff + progressive
+    total = decided + undetermined
+
+    result = {
+        "idet": counts,
+        "interlace_share": None,
+        "field_dominance": None,
+        "interlace_detected": "unknown",
+        "telecine_ratio": None,
+    }
+    if not total:
+        return result
+
+    # A static shot gives idet nothing to measure and it says so by calling
+    # every frame undetermined. That is an absence of evidence, not evidence.
+    if decided / total < options["interlace_evidence"]:
+        return result
+
+    interlaced_frames = tff + bff
+    share = interlaced_frames / decided
+    dominance = (max(tff, bff) / interlaced_frames) if interlaced_frames else 0.0
+    result["interlace_share"] = round(share, 3)
+    result["field_dominance"] = round(dominance, 3)
+
+    repeated = counts["repeated_top"] + counts["repeated_bottom"]
+    result["telecine_ratio"] = round(repeated / total, 3)
+
+    if share < options["interlace_share"]:
+        result["interlace_detected"] = "progressive"
+    elif dominance >= options["field_dominance"]:
+        result["interlace_detected"] = "tff" if tff >= bff else "bff"
+    else:
+        result["interlace_detected"] = "inconclusive"
+    return result
 
 
 def _position(intervals, duration_s):

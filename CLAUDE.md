@@ -118,6 +118,22 @@ Captions cost no decode at all unless they are embedded, in which case one
   Demanding exactness would report most of the world's video as variable: a
   correct constant-rate file can end on a short frame, and NTSC rates drift by
   microseconds.
+- **Interlacing is measured, not read.** `field_order` in the header is a
+  claim, and telecined material routinely declares itself progressive.
+  `video.classify_fields` decides from `idet`, which is in the chain the
+  picture pass already runs — **but idet alone is not enough**: on progressive
+  material with hard vertical edges and fast motion it reports most frames as
+  interlaced (a test pattern here reads TFF 42 / BFF 25 of 75). The
+  discriminator is that real interlacing is overwhelmingly *one* field order
+  and the false positives are mixed, so both a share test and a dominance test
+  must pass. Anything that passes one and fails the other is `inconclusive`,
+  which is a truthful answer and not a verdict. A static shot is `unknown`,
+  because idet calls every frame undetermined and absence of evidence is not
+  evidence.
+- **`interlaced` believes either source.** Header or picture saying interlaced
+  is enough, because either alone is a reason to deinterlace;
+  `field_order_disagrees` reports the contradiction separately, and is usually
+  the more useful finding.
 - **Flashing is screened, not tested.** Three large luminance transitions in a
   sliding second, which is where WCAG's general flash threshold sits. No
   spatial analysis, no red-flash rule, no proportion-of-screen test. It finds
@@ -295,7 +311,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 226 checks, about fourteen seconds
+python3 -m unittest discover -s tests    # 242 checks, about fourteen seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -333,5 +349,8 @@ Three questions decide the rest:
 Nothing in the original three-week plan. Candidates, in rough order of how
 often they would earn their place:
 
-- **Interlacing** — verified from the picture rather than trusted from the
-  header.
+- **Batch corrections** — `fix` works on one file; a delivery whose files are
+  three decibels apart wants one pass that brings them together.
+- **A caption view** — cues are measured and reported as a list; seeing them
+  against the loudness timeline would locate a reading-speed problem the way
+  the chart locates a loudness one.
