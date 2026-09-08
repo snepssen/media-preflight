@@ -11,3 +11,6 @@ fixtures/
 
 # Build output. ./build.sh remakes all of it from what is committed.
 build/
+
+# Release packaging. ./release.sh remakes all of it from what is committed.
+dist/

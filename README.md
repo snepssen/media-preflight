@@ -563,6 +563,23 @@ python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```
 
+## Making a release
+
+```bash
+./release.sh
+```
+
+Tests, builds, packages and verifies into `dist/`: the one-file `.pyz`, the
+macOS bundle, and a tarball and zip carrying a launcher and an `INSTALL.txt`
+each. Every archive is then unpacked somewhere else and run, because "it
+built" and "it works when somebody downloads it" are different claims and only
+the second is the one that matters.
+
+It stops before publishing and prints the `gh release create` command rather
+than running it. Putting a binary in front of the public is a decision, and a
+script that makes it silently will one day make it by accident.
+
+
 One of those checks reads `build.sh` and compares the modules it copies against
 the modules that exist. A bundle missing a file fails at runtime, on somebody
 else's machine, which is the worst place to find out.
