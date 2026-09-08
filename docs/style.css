@@ -154,6 +154,10 @@ ul.plain li.no::before{content:"✕";color:var(--fail)}
 .d-accent{stroke:var(--signal);stroke-width:1.5;fill:none}
 .d-out{fill:var(--muted);font:400 11px/1 "JetBrains Mono",monospace}
 
+.figure{margin:28px 0 0;padding:0}
+.figure svg{display:block;width:100%;border:1px solid var(--line);border-radius:8px}
+.figure figcaption{margin-top:9px;font-size:13.5px;color:var(--muted);max-width:var(--measure)}
+
 .contact{display:flex;flex-wrap:wrap;gap:14px;margin-top:22px}
 .contact a{
   display:inline-block;padding:11px 18px;border:1px solid var(--line);border-radius:4px;

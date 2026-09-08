@@ -336,6 +336,73 @@ class SubtitleFileTests(unittest.TestCase):
 
 
 @unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class ChapterAndChartTests(unittest.TestCase):
+    METADATA = (";FFMETADATA1\n"
+                "[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=12000\n"
+                "title=Quiet one\n"
+                "[CHAPTER]\nTIMEBASE=1/1000\nSTART=12000\nEND=24000\n"
+                "title=Loud one\n")
+
+    def _chaptered(self, folder):
+        metadata = os.path.join(folder, "chapters.txt")
+        Path(metadata).write_text(self.METADATA, encoding="utf-8")
+        path = os.path.join(folder, "book.m4a")
+        expression = (f"0.03*({SPEECH})*lt(t\\,12) + "
+                      f"0.4*({SPEECH})*gt(t\\,12)")
+        subprocess.run(
+            [FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i",
+             f"aevalsrc={expression}:d=24:s=44100", "-i", metadata,
+             "-map_metadata", "1", "-ac", "1", "-c:a", "aac", "-b:a", "128k",
+             path], check=True)
+        return path
+
+    def test_chapter_markers_are_read_and_measured_separately(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = self._chaptered(folder)
+            facts, m, result, profile = preflight.run(path, "spotify_podcast")
+            self.assertEqual(len(facts["chapters"]), 2)
+            envelope = report.envelope(facts, m, result, profile)
+            first, second = envelope["chapters"]
+            self.assertEqual(first["title"], "Quiet one")
+            self.assertLess(first["loudest_short_term"],
+                            second["loudest_short_term"] - 6,
+                            "the loud chapter must read as loud")
+
+    def test_the_report_carries_a_reduced_timeline_not_the_whole_one(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = generate(os.path.join(folder, "long.wav"),
+                            f"0.2*({SPEECH})", duration=30)
+            facts, m, result, profile = preflight.run(path, "ebu_r128")
+            envelope = report.envelope(facts, m, result, profile)
+            self.assertTrue(envelope["timeline"])
+            self.assertLessEqual(len(envelope["timeline"]),
+                                 len(m["timeline"]))
+            self.assertNotIn("timeline", envelope["measurements"])
+
+    def test_the_markdown_export_writes_a_chart_beside_itself(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = generate(os.path.join(folder, "a.wav"),
+                            f"0.2*({SPEECH})", duration=12)
+            out = os.path.join(folder, "report.md")
+            preflight.main(["check", path, "--target", "ebu_r128", "--quiet",
+                            "--markdown", out])
+            drawing = os.path.join(folder, "report.loudness.svg")
+            self.assertTrue(os.path.isfile(drawing))
+            body = Path(out).read_text(encoding="utf-8")
+            self.assertIn("![Loudness over time](report.loudness.svg)", body)
+            self.assertIn("<svg", Path(drawing).read_text(encoding="utf-8"))
+
+    def test_a_caption_file_has_no_chart_and_does_not_pretend_to(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "film.srt")
+            Path(path).write_text(CaptionTests.CLEAN, encoding="utf-8")
+            facts, m, result, profile = preflight.run(path, "subtitles")
+            envelope = report.envelope(facts, m, result, profile)
+            self.assertEqual(envelope["timeline"], [])
+            self.assertEqual(report.chart_svg(envelope), "")
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
 class ExitCodeTests(unittest.TestCase):
     def test_the_command_line_says_pass_or_fail_in_its_exit_code(self):
         with tempfile.TemporaryDirectory() as folder:

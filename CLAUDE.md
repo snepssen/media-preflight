@@ -124,6 +124,33 @@ Captions cost no decode at all unless they are embedded, in which case one
   passages to look at and cannot clear anything — and the rule's `note` says
   exactly that in every report it appears in.
 
+## Drawing what was measured
+
+`chart.py` reduces the one-second timeline and renders it three ways: SVG for
+the window and the client report, one line of block characters for the
+terminal, and the reduced points themselves in the JSON.
+
+- **Buckets keep the extremes, never the average.** Averaging hides a spike
+  next to a hole, which is the pair this tool exists to find. The SVG draws the
+  area between the bucket's lowest and highest value so a reduced chart is
+  honest about its own reduction.
+- **A band is only drawn in the unit the chart is in.** `chart.band_for`
+  returns a band for a LUFS rule and, for an RMS target like ACX, a *reason*
+  instead — which the chart prints. Shading a loudness chart with an RMS band
+  would be the same invention refused in `checks.LOCATABLE`.
+- **Exports are light, the window is auto.** An SVG behind an `<img>` resolves
+  `prefers-color-scheme` against the reader's operating system, not the
+  document around it, so a themed chart lands dark inside a light report.
+  `report.chart_svg(theme=...)` is the switch; only the window, which inlines
+  the drawing, asks for `auto`.
+- **Markdown references the chart, never inlines it.** Inline `<svg>` is
+  stripped by most Markdown renderers, GitHub included.
+- **Chapters skip their first three seconds.** Short-term loudness looks three
+  seconds back, so the opening of a quiet chapter still carries the loud one
+  before it — and making a quiet chapter look loud would break exactly the
+  comparison the table exists for. A chapter too short for a clean window keeps
+  everything rather than reporting nothing.
+
 ## Traps
 
 - **JSON has no infinity.** Digital silence measures as `-inf` and `json.dumps`
@@ -159,6 +186,8 @@ Captions cost no decode at all unless they are embedded, in which case one
   past the end of the picture.
 - **Odd frame dimensions break x264.** 4:2:0 chroma cannot represent an odd
   number of lines; a 240x135 test fixture fails to encode. Keep fixtures even.
+- **`facts["chapters"]` is a list, not a count.** It used to be `len(...)`;
+  anything constructing facts by hand needs `[]`, not `0`.
 
 ## The numbers in profiles.py
 
@@ -173,7 +202,7 @@ one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 134 checks, about eight seconds
+python3 -m unittest discover -s tests    # 165 checks, about ten seconds
 python3 scripts/make_fixtures.py         # regenerate the test media
 python3 app.py                           # the window
 python3 preflight.py check f.wav -t acx  # the command line
@@ -207,7 +236,16 @@ Three questions decide the rest:
 ## Not yet built
 
 Nothing in the original three-week plan. Candidates, in rough order of how
-often they would earn their place: interlacing field-order verification rather
-than trusting the header, a loudness-over-time chart in the window, per-chapter
-reporting for audiobooks, and batch checking of a folder against one target
-with a single summary.
+often they would earn their place:
+
+- **Batch checking** — a folder against one target with a single summary, and
+  the cross-file rules a per-file profile cannot express. ACX requires channel
+  count and sample rate to be *consistent across a title*, not merely valid per
+  file, and that is currently inexpressible.
+- **Packaging** — double-clickable builds for the three platforms. `build.sh`
+  in Gateway Forge is the template for the Mac side.
+- **Verifying the thresholds** — every published profile against its actual
+  source document. The numbers were set from knowledge and stamped
+  `checked: 2026-09`; nobody has read the specifications against them.
+- **Interlacing** — verified from the picture rather than trusted from the
+  header.

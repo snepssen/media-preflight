@@ -20,7 +20,7 @@ def facts(**overrides):
                   "bit_rate": 192000.0, "bits_per_sample": 0,
                   "duration_s": 60.0},
         "audio_streams": [], "video": None, "video_streams": [],
-        "cover_art": False, "streams": [], "chapters": 0,
+        "cover_art": False, "streams": [], "chapters": [],
         "subtitle_streams": [],
     }
     base.update(overrides)

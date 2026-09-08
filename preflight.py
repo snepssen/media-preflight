@@ -154,7 +154,7 @@ def _run_caption_file(path, profile):
         "container": {"format_name": track.get("format", ""),
                       "format_long_name": "", "duration_s": None,
                       "bit_rate": None, "tags": {}},
-        "chapters": 0, "streams": [], "audio": None, "audio_streams": [],
+        "chapters": [], "streams": [], "audio": None, "audio_streams": [],
         "video": None, "video_streams": [], "cover_art": False,
         "subtitle_streams": [],
     }
@@ -351,7 +351,24 @@ def _write_outputs(args, envelope):
     if getattr(args, "json", None):
         _write(args.json, report.data(envelope))
     if getattr(args, "markdown", None):
-        _write(args.markdown, report.markdown(envelope))
+        _write(args.markdown, report.markdown(envelope,
+                                              _write_chart(args.markdown,
+                                                           envelope)))
+
+
+def _write_chart(markdown_path, envelope):
+    """Write the loudness chart beside the report that references it.
+
+    A sibling file rather than an inline ``<svg>``, because almost everything
+    that renders Markdown strips inline SVG, and a picture that silently does
+    not appear is worse than one that is plainly a separate file.
+    """
+    drawing = report.chart_svg(envelope)
+    if not drawing:
+        return None
+    stem = os.path.splitext(markdown_path)[0]
+    _write(stem + ".loudness.svg", drawing)
+    return os.path.basename(stem) + ".loudness.svg"
 
 
 def _write(path, text):

@@ -156,6 +156,19 @@ cheap whole-file measurement says a peak problem can exist at all: a file whose
 loudest sample is below the clipping threshold has no clipped samples, and that
 is arithmetic rather than an estimate.
 
+## What gets drawn
+
+The report draws loudness over time, and shades the band the target asks for —
+but only when the target states that band in the same unit the chart is drawn
+in. A rule on `integrated_lufs` or `short_term_excursions` gives a shaded band;
+a target that states its requirement as an RMS level gets no band and a line
+saying why, because shading a LUFS chart with an RMS figure would be the same
+invention this tool refuses everywhere else.
+
+Every interval a finding carries is marked under the chart, along with
+silences, black, frozen and flashing runs, and clipped windows. Nothing extra
+is needed in a profile to get this: it follows from the rules that failed.
+
 ## Measurement options
 
 `options` changes how the file is measured, not what is required of it.

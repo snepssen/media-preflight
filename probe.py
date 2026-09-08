@@ -101,7 +101,7 @@ def normalise(raw, path):
             "bit_rate": _number(fmt.get("bit_rate")),
             "tags": _lower_tags(fmt.get("tags")),
         },
-        "chapters": len(raw.get("chapters", []) or []),
+        "chapters": [_chapter(c) for c in (raw.get("chapters") or [])],
         "streams": streams,
         "audio": audio[0] if audio else None,
         "audio_streams": audio,
@@ -118,6 +118,17 @@ def normalise(raw, path):
             facts["audio"]["bit_rate"] = facts["container"]["bit_rate"]
             facts["audio"]["bit_rate_from_container"] = True
     return facts
+
+
+def _chapter(raw):
+    """A chapter marker, with the title if the file bothered to give it one."""
+    tags = _lower_tags(raw.get("tags"))
+    return {
+        "id": raw.get("id"),
+        "start_s": _number(raw.get("start_time"), 0.0),
+        "end_s": _number(raw.get("end_time")),
+        "title": tags.get("title") or "",
+    }
 
 
 def _lower_tags(tags):

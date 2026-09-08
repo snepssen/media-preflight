@@ -58,6 +58,41 @@ Every failure that can be tied to a moment carries one. Failures that are
 whole-file measurements say so rather than pointing at a second that means
 nothing.
 
+## The shape, not just the list
+
+A list of timestamps tells you to look at 18:07. It does not tell you that
+18:07 is one of nine identical spikes and the real problem is a compressor
+doing something odd. So the report draws the loudness too — in the window, in
+the terminal, and as a chart written beside the client-facing report:
+
+```
+  loudness -12 to -27 LUFS, target -24 to -22
+  ▇███▇▆▁▇███▇▆▁▇████▆▁▆████▆▄▆████▆▅▃████▇▅▃▇████▅▂▇████▅▃▇
+   ✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕✕ ✕✕✕✕✕  ✕✕✕✕✕
+  00:00                                                01:30
+```
+
+The chart is bucketed — no display has 36,000 pixels for a ten-hour audiobook
+— and each bucket keeps its **loudest and quietest** value rather than an
+average. Averaging is precisely the operation that hides a spike next to a
+hole, and spikes next to holes are what this tool is for; the drawn band
+between the two shows how much the reduction is hiding.
+
+A target band is shaded only when the target states its requirement in the
+same unit the chart is drawn in. ACX asks for an RMS level, which is not LUFS,
+so on that target no band appears and the chart says why.
+
+In the window, hovering a finding lights only the marks that finding put on the
+chart, so "at 18:07" and the shape at 18:07 are visibly the same fact.
+
+**Chapters.** A file with chapter markers gets a per-chapter table, and the one
+that is eighteen decibels louder than its neighbours is impossible to miss.
+It reports the loudest short-term loudness in each chapter, not integrated
+loudness: integrated is gated over a whole programme and cannot be re-derived
+per chapter from per-second values. The first three seconds of each chapter are
+excluded, because a short-term reading looks three seconds back and would
+otherwise report the previous chapter's level as this one's.
+
 ## Targets
 
 | id | what it is | thresholds |
@@ -123,7 +158,11 @@ caption file given on its own is checked on its own, with no media required.
 `check` exits 0 when the file passes, 1 when it fails, and 2 when the tool
 itself could not run — so it drops into a build script without parsing
 anything. `--strict` makes warnings count as failures. `--json` and
-`--markdown` write the machine-readable report and the client-facing one.
+`--markdown` write the machine-readable report and the client-facing one;
+`--markdown report.md` also writes `report.loudness.svg` beside it and
+references it, because almost everything that renders Markdown strips an
+inline `<svg>` and a picture that silently fails to appear is worse than one
+that is plainly a separate file.
 
 ## What costs a decode
 
@@ -200,7 +239,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 134 checks, about eight seconds
+python3 -m unittest discover -s tests     # 165 checks, about ten seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ```
 
@@ -224,6 +263,7 @@ with an install line when ffmpeg is absent.
 | `analysis.py` | what the audio *contains* — one decode, every measurement |
 | `video.py` | what the picture contains — black, frozen, flashing, frame rate |
 | `captions.py` | SubRip, WebVTT and ASS, parsed and measured |
+| `chart.py` | the loudness picture — reduced, then drawn as SVG or as one terminal line |
 | `checks.py` | the rule engine: measurements plus a target, in, findings out |
 | `profiles.py` | the delivery targets, as data |
 | `corrections.py` | planning, previewing, applying and verifying a fix |

@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime
 import json
 
+import chart
 import checks
 
 NAME = "Media Preflight"
@@ -74,14 +75,19 @@ def envelope(facts, measurements, result, profile, corrections=None):
         "findings": result["findings"],
         "measurements": _measurement_summary(measurements),
         "corrections": corrections or [],
+        "chapters": chart.chapters(facts.get("chapters"),
+                                   measurements.get("timeline")),
+        "band": chart.band_for(profile),
+        "timeline": chart.reduce(measurements.get("timeline")),
+        "events": chart.events(measurements, result["findings"]),
     }
 
 
 def _measurement_summary(m):
     """The measured numbers, without the second-by-second timeline.
 
-    The timeline is thousands of rows and nothing downstream reads it; the
-    findings already carry the intervals that matter.
+    The full timeline is thousands of rows. A reduced one lives at the top of
+    the envelope, next to the things that draw it; this block is the scalars.
     """
     keep = ("integrated_lufs", "loudness_range_lu", "true_peak_dbfs",
             "peak_dbfs", "rms_dbfs", "rms_peak_dbfs", "rms_trough_dbfs",
@@ -127,6 +133,22 @@ def jsonable(value):
 
 def data(report):
     return json.dumps(jsonable(report), indent=2) + "\n"
+
+
+def chart_svg(report, theme="light"):
+    """The loudness chart for a finished report, or '' when there is none.
+
+    Exports default to light: an SVG loaded through an ``<img>`` resolves
+    prefers-color-scheme against the reader's operating system rather than the
+    document it sits in, so a themed chart lands dark inside a light report on
+    anybody whose laptop is in dark mode. Only a page that inlines the drawing
+    and controls its own background asks for 'auto'.
+    """
+    return chart.svg(report.get("timeline"), report.get("band"),
+                     report.get("events"), report.get("chapters"),
+                     duration=report["file"].get("duration_s"),
+                     title=f"Loudness over time — {report['file'].get('name')}",
+                     theme=theme)
 
 
 # --------------------------------------------------------------------- text
@@ -175,6 +197,16 @@ def text(report, width=68, show_passes=True):
         lines.append(f"· {len(skipped)} not checked — nothing in this file to "
                      f"measure them against: {names}{more}")
 
+    picture = chart.strip(report.get("timeline"), report.get("band"),
+                          report.get("events"))
+    if picture:
+        lines.append("")
+        lines.extend(picture)
+
+    if report.get("chapters"):
+        lines.append("")
+        lines.extend(_chapter_lines(report["chapters"], width))
+
     stamps = _all_timestamps(report)
     if stamps:
         lines.append("")
@@ -195,6 +227,34 @@ def text(report, width=68, show_passes=True):
                      + (f" (read {target['checked']})"
                         if target.get("checked") else ""))
     return "\n".join(lines) + "\n"
+
+
+def _chapter_lines(chapters, width):
+    """Loudest short-term per chapter — the column that finds the odd one out."""
+    lines = ["Chapters, by loudest short-term loudness:"]
+    known = sorted(c["loudest_short_term"] for c in chapters
+                   if c["loudest_short_term"] is not None)
+    # Only point at a chapter that actually stands out. Marking the loudest of
+    # a set that agrees within a decibel would be pointing at nothing.
+    outlier = None
+    if len(known) > 2:
+        middle = known[len(known) // 2]
+        if known[-1] - middle >= 1.0:
+            outlier = known[-1]
+    for chapter in chapters:
+        value = chapter["loudest_short_term"]
+        shown = "—" if value is None else f"{value:.1f} LUFS"
+        title = chapter["title"][:32]
+        mark = ("  ←" if outlier is not None and value is not None
+                and value >= outlier - 0.05 else "")
+        left = f"  {checks.timecode(chapter['start_s'])}  {title}"
+        lines.append(left + " " * max(2, width - len(left) - len(shown)
+                                      - len(mark)) + shown + mark)
+    lines.append("  Short-term, not integrated: integrated loudness is gated "
+                 "over a whole")
+    lines.append("  programme and cannot be re-derived per chapter from "
+                 "per-second values.")
+    return lines
 
 
 def _stream_line(file_info):
@@ -280,8 +340,14 @@ def _wrap(sentence, width, indent):
 
 # ----------------------------------------------------------------- markdown
 
-def markdown(report):
-    """The version that gets sent to somebody who did not run it."""
+def markdown(report, chart_name=None):
+    """The version that gets sent to somebody who did not run it.
+
+    ``chart_name`` is the filename of a sibling SVG the caller has written.
+    The chart is referenced rather than inlined because an inline ``<svg>`` is
+    stripped by most things that render Markdown, and a broken picture is
+    worse than a link to a working one.
+    """
     file_info = report["file"]
     target = report["target"]
     out = [f"# Preflight report — {file_info['name']}", ""]
@@ -292,6 +358,14 @@ def markdown(report):
     out.append(f"- File: `{file_info['name']}` — {_stream_line(file_info)}")
     out.append(f"- Tool: {NAME} {VERSION}")
     out.append("")
+
+    if chart_name:
+        out.append(f"![Loudness over time]({chart_name})")
+        out.append("")
+        band = report.get("band") or {}
+        if band.get("absent"):
+            out.append(f"*No target band is drawn: {band['absent']}*")
+            out.append("")
 
     out.append("## Results")
     out.append("")
@@ -315,6 +389,24 @@ def markdown(report):
             more = ("" if len(finding["intervals"]) <= 20
                     else f" (+{len(finding['intervals']) - 20} more)")
             out.append(f"- **{finding['label']}** — {spans}{more}")
+        out.append("")
+
+    if report.get("chapters"):
+        out.append("## Chapters")
+        out.append("")
+        out.append("| # | Chapter | Starts | Loudest short-term |")
+        out.append("|---|---|---|---|")
+        for chapter in report["chapters"]:
+            value = chapter["loudest_short_term"]
+            out.append("| {} | {} | {} | {} |".format(
+                chapter["number"], chapter["title"] or "—",
+                checks.timecode(chapter["start_s"]),
+                "—" if value is None else f"{value:.1f} LUFS"))
+        out.append("")
+        out.append("Short-term rather than integrated: integrated loudness is "
+                   "gated over a whole programme and cannot be re-derived per "
+                   "chapter from per-second values. Measuring it properly "
+                   "would mean one decode per chapter.")
         out.append("")
 
     notes = [f for f in report["findings"]

@@ -84,6 +84,14 @@
   .where b { font-weight: 600; color: var(--ink); }
   .detail { grid-column: 2 / -1; color: var(--quiet); font-size: 12.5px;
             font-style: italic; }
+  .chart { margin: 0 0 16px; padding: 0; }
+  .chart svg { display: block; width: 100%; border: 1px solid var(--line);
+               border-radius: 8px; }
+  .chart figcaption { margin-top: 7px; font-size: 12.5px; color: var(--quiet); }
+  .chart rect[data-event] { transition: fill-opacity .15s; cursor: default; }
+  .chart.dimmed rect[data-event] { fill-opacity: .12; }
+  .chart rect[data-event].lit { fill-opacity: .95; }
+  .finding.linked:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
   .stamps { margin-top: 14px; font-size: 13px; }
   .stamps b { font-weight: 600; }
   pre { background: var(--code); border: 1px solid var(--line); border-radius: 7px;
@@ -132,6 +140,10 @@
     <p class="verdict" id="verdict"></p>
     <p class="counts" id="counts"></p>
     <p class="chosen" id="fileLine" style="margin:-8px 0 14px"></p>
+    <figure class="chart hidden" id="chartBox">
+      <div id="chart"></div>
+      <figcaption id="chartNote"></figcaption>
+    </figure>
     <div id="findings"></div>
     <p class="stamps hidden" id="stamps"></p>
     <div class="row">
@@ -266,7 +278,7 @@ function renderReport(envelope) {
         ? `<div class="where">measured across the whole file — no single moment to point at</div>` : "");
     const note = (f.note && (f.status === "fail" || f.status === "warn"))
       ? `<div class="detail">${esc(f.note)}</div>` : "";
-    return `<div class="finding">
+    return `<div class="finding" data-label="${esc(f.label)}">
       <span class="mark ${f.status}">${MARK[f.status]}</span>
       <span>${esc(f.label)}: ${esc(f.actual)}</span>
       <span class="required">${f.required ? "Required: " + esc(f.required) : ""}</span>
@@ -287,6 +299,8 @@ function renderReport(envelope) {
       (stamps.length > 12 ? `, and ${stamps.length - 12} more` : "")
     : "";
 
+  drawChart(envelope);
+
   const t = envelope.target;
   $("sourceNote").textContent = t.source
     ? `Thresholds from: ${t.source}${t.checked ? " (read " + t.checked + ")" : ""}`
@@ -295,6 +309,35 @@ function renderReport(envelope) {
   $("reportPanel").classList.remove("hidden");
   $("planPanel").classList.add("hidden");
   $("exported").textContent = "";
+}
+
+// Hovering a finding lights only the marks that finding put on the chart, so
+// "at 18:07" and the shape at 18:07 are visibly the same fact.
+function drawChart(envelope) {
+  const box = $("chartBox");
+  if (!envelope.chart) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  $("chart").innerHTML = envelope.chart;
+  const band = envelope.band || {};
+  $("chartNote").textContent = band.absent
+    ? `Loudness over time. No target band is drawn: ${band.absent}`
+    : "Loudness over time. The shaded band is what this target asks for; the "
+      + "lighter area is the range each column covers.";
+
+  const marks = [...$("chart").querySelectorAll("rect[data-event]")];
+  document.querySelectorAll(".finding[data-label]").forEach((row) => {
+    const label = row.dataset.label;
+    if (!marks.some((m) => m.dataset.label === label)) return;
+    row.classList.add("linked");
+    row.addEventListener("mouseenter", () => {
+      $("chart").parentElement.classList.add("dimmed");
+      marks.forEach((m) => m.classList.toggle("lit", m.dataset.label === label));
+    });
+    row.addEventListener("mouseleave", () => {
+      $("chart").parentElement.classList.remove("dimmed");
+      marks.forEach((m) => m.classList.remove("lit"));
+    });
+  });
 }
 
 async function poll(jobId, onDone) {

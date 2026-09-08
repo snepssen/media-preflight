@@ -136,7 +136,49 @@ def build(folder=DEFAULT_DIR):
 
     written += build_video(folder, ffmpeg)
     written += build_captions(folder)
+    written += build_chaptered(folder, ffmpeg)
     return folder, written
+
+
+# ------------------------------------------------------------------ chapters
+
+CHAPTER_METADATA = """;FFMETADATA1
+[CHAPTER]
+TIMEBASE=1/1000
+START=0
+END=20000
+title=Opening, quiet
+[CHAPTER]
+TIMEBASE=1/1000
+START=20000
+END=40000
+title=The loud one
+[CHAPTER]
+TIMEBASE=1/1000
+START=40000
+END=60000
+title=Back to normal
+"""
+
+
+def build_chaptered(folder, ffmpeg):
+    """One chapter markedly louder than its neighbours, which is the fault the
+    per-chapter table exists to find."""
+    path = os.path.join(folder, "chaptered-uneven.m4a")
+    metadata = os.path.join(folder, ".chapters.txt")
+    with open(metadata, "w", encoding="utf-8") as handle:
+        handle.write(CHAPTER_METADATA)
+    expression = (f"0.05*({SPEECH})*lt(t\\,20) + 0.4*({SPEECH})"
+                  f"*between(t\\,20\\,40) + 0.05*({SPEECH})*gt(t\\,40)")
+    subprocess.run([ffmpeg, "-y", "-v", "error",
+                    "-f", "lavfi", "-i", f"aevalsrc={expression}:d=60:s=44100",
+                    "-i", metadata, "-map_metadata", "1",
+                    "-ac", "1", "-c:a", "aac", "-b:a", "128k", path],
+                   check=True, **platform_support.no_console())
+    os.remove(metadata)
+    return [(os.path.basename(path),
+             "Three chapters, the middle one about eighteen decibels louder "
+             "than the two around it.")]
 
 
 # --------------------------------------------------------------------- video

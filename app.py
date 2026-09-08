@@ -144,6 +144,7 @@ def check_job(path, target):
         update(stage="comparing against the target", phase="target",
                progress=0.97)
         envelope = report.envelope(facts, measurements, result, profile)
+        envelope["chart"] = report.chart_svg(envelope, theme="auto")
         _remember(path, target, {"facts": facts, "measurements": measurements,
                                  "result": result, "profile": profile,
                                  "envelope": envelope})
@@ -215,6 +216,7 @@ def fix_job(path, target, overwrite=False):
         after_envelope = report.envelope(
             after[0], after[1], after[2], cached["profile"],
             corrections=[{"description": s["description"]} for s in prepared])
+        after_envelope["chart"] = report.chart_svg(after_envelope, theme="auto")
 
         for _ in range(2):
             if after[2]["verdict"] != "fail":
@@ -233,6 +235,8 @@ def fix_job(path, target, overwrite=False):
                 after[0], after[1], after[2], cached["profile"],
                 corrections=[{"description": s["description"]}
                              for s in prepared])
+            after_envelope["chart"] = report.chart_svg(after_envelope,
+                                                       theme="auto")
 
         _remember(written, target, {
             "facts": after[0], "measurements": after[1], "result": after[2],
@@ -375,13 +379,23 @@ class Handler(BaseHTTPRequestHandler):
         if stem.endswith(".preflight"):
             stem = stem[:-len(".preflight")]
         kind = body.get("kind", "markdown")
+        written = []
         if kind == "json":
             out, text = stem + ".preflight.json", report.data(cached["envelope"])
         else:
-            out, text = stem + ".preflight.md", report.markdown(cached["envelope"])
+            out = stem + ".preflight.md"
+            drawing = report.chart_svg(cached["envelope"])
+            name = None
+            if drawing:
+                name = os.path.basename(stem) + ".preflight.loudness.svg"
+                with open(os.path.join(os.path.dirname(out), name), "w",
+                          encoding="utf-8") as handle:
+                    handle.write(drawing)
+                written.append(name)
+            text = report.markdown(cached["envelope"], name)
         with open(out, "w", encoding="utf-8") as handle:
             handle.write(text)
-        return {"written": out}
+        return {"written": out, "alongside": written}
 
     def _state(self):
         ffmpeg = platform_support.find_ffmpeg()
