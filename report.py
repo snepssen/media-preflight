@@ -21,9 +21,9 @@ NAME = "Media Preflight"
 VERSION = "0.1.0"
 SCHEMA = 1
 
-MARK = {"pass": "✓", "fail": "✕", "warn": "⚠", "skip": "·"}
+MARK = {"pass": "✓", "fail": "✕", "warn": "⚠", "skip": "·", "info": "i"}
 WORD = {"pass": "passes", "fail": "fails", "warn": "passes with a warning",
-        "skip": "not checked"}
+        "skip": "not checked", "info": "worth knowing"}
 
 VERDICT_LINE = {
     "pass": "Ready to deliver.",
@@ -175,8 +175,9 @@ def text(report, width=68, show_passes=True):
                  f"{counts['pass']} passed, {counts['skip']} not checked.")
     lines.append("")
 
-    order = {"fail": 0, "warn": 1, "pass": 2, "skip": 3}
-    findings = sorted(report["findings"], key=lambda f: order[f["status"]])
+    order = {"fail": 0, "warn": 1, "info": 2, "pass": 3, "skip": 4}
+    findings = sorted(report["findings"],
+                      key=lambda f: order.get(f["status"], 5))
     for finding in findings:
         if finding["status"] == "skip":
             continue
@@ -371,8 +372,9 @@ def markdown(report, chart_name=None):
     out.append("")
     out.append("| | Check | Measured | Required |")
     out.append("|---|---|---|---|")
-    order = {"fail": 0, "warn": 1, "pass": 2, "skip": 3}
-    for finding in sorted(report["findings"], key=lambda f: order[f["status"]]):
+    order = {"fail": 0, "warn": 1, "info": 2, "pass": 3, "skip": 4}
+    for finding in sorted(report["findings"],
+                          key=lambda f: order.get(f["status"], 5)):
         out.append("| {} | {} | {} | {} |".format(
             MARK[finding["status"]], finding["label"],
             finding["actual"], finding["required"] or "—"))
@@ -442,4 +444,246 @@ def markdown(report, chart_name=None):
                    "thresholds are widely reported figures, offered as a "
                    "sanity check rather than as a statement of what the "
                    "platform does today.")
+    return "\n".join(out) + "\n"
+
+
+# ------------------------------------------------------------------- the set
+
+def set_envelope(result):
+    """One structure for a whole delivery, shaped like the single-file one."""
+    profile = result["profile"]
+    measurements = result["set_measurements"]
+    return {
+        "schema": SCHEMA,
+        "tool": {"name": NAME, "version": VERSION},
+        "generated": datetime.datetime.now(
+            datetime.timezone.utc).replace(microsecond=0).isoformat(),
+        "target": {k: profile.get(k) for k in
+                   ("id", "label", "summary", "source", "checked",
+                    "confidence")},
+        "verdict": result["verdict"],
+        "set": {
+            "verdict": result["set_result"]["verdict"],
+            "counts": result["set_result"]["counts"],
+            "findings": result["set_result"]["findings"],
+        },
+        "measurements": _set_summary(measurements),
+        "band": chart.band_for(profile),
+        # Which loudness the files are compared in — LUFS for a target written
+        # in LUFS, RMS for one written in RMS. Every renderer reads it from
+        # here rather than guessing.
+        "loudness_metric": (measurements.get("loudness") or {}).get("metric"),
+        "loudness_unit": (measurements.get("loudness") or {}).get("unit"),
+        "files": [_file_summary(entry) for entry in result["files"]],
+        "unreadable": result["unreadable"],
+    }
+
+
+def _set_summary(measurements):
+    """The delivery's own numbers, without the per-file bulk repeated twice."""
+    keep = ("file_count", "failing_files", "warning_files",
+            "total_duration_s", "longest_file_s", "groups")
+    out = {k: _plain(measurements[k]) for k in keep if k in measurements}
+    for name in ("loudness", "peak"):
+        block = dict(measurements.get(name) or {})
+        block.pop("per_file", None)
+        out[name] = block
+    for key, value in measurements.items():
+        if key.endswith("_distinct") or key.endswith("_odd"):
+            out[key] = value
+    return out
+
+
+def _file_summary(entry):
+    """What a delivery report needs about one of its files.
+
+    The whole per-file envelope would be accurate and unreadable — thirty of
+    them is a megabyte of JSON nobody scrolls through. This is the verdict, the
+    numbers somebody compares between files, and the checks that did not pass.
+    """
+    envelope = entry["envelope"]
+    findings = [f for f in envelope["findings"]
+                if f["status"] in ("fail", "warn")]
+    return {
+        "name": entry["name"],
+        "path": entry["path"],
+        "verdict": envelope["verdict"],
+        "counts": envelope["counts"],
+        "duration_s": envelope["file"].get("duration_s"),
+        "audio": envelope["file"].get("audio"),
+        "measurements": {k: envelope["measurements"].get(k) for k in
+                         ("integrated_lufs", "rms_dbfs", "true_peak_dbfs",
+                          "peak_dbfs")},
+        "problems": [{"id": f["id"], "label": f["label"], "status": f["status"],
+                      "actual": f["actual"], "required": f["required"],
+                      "timestamps": f["timestamps"]} for f in findings],
+    }
+
+
+def set_chart_svg(result, theme="light"):
+    """One bar per file against the target band, or '' when there is nothing."""
+    return chart.set_svg((result["set_measurements"].get("loudness") or {}),
+                         chart.band_for(result["profile"]), theme=theme,
+                         title="Loudness across the delivery")
+
+
+def set_text(envelope, width=68, show_passes=False):
+    """The delivery report, for a terminal."""
+    lines = []
+    target = envelope["target"]
+    counts = envelope["set"]["counts"]
+    files = envelope["files"]
+
+    lines.append(f"{len(files)} files — {target.get('label', target.get('id'))}")
+    if envelope["unreadable"]:
+        lines.append(f"{len(envelope['unreadable'])} could not be read")
+    lines.append("")
+
+    verdict = envelope["verdict"]
+    failing = sum(1 for f in files if f["verdict"] == "fail")
+    warning = sum(1 for f in files if f["verdict"] == "warn")
+    lines.append(f"{MARK[verdict]} {VERDICT_LINE[verdict]}")
+    own = []
+    if counts["fail"]:
+        own.append(f"{counts['fail']} failure" + ("" if counts["fail"] == 1
+                                                  else "s"))
+    if counts["warn"]:
+        own.append(f"{counts['warn']} warning" + ("" if counts["warn"] == 1
+                                                  else "s"))
+    tail = (" and ".join(own) + " of its own." if own
+            else "nothing wrong of its own.")
+    lines.append(f"  {failing} of {len(files)} files fail, {warning} warn; "
+                 f"the delivery itself has {tail}")
+    lines.append("")
+
+    lines.append("Across the delivery")
+    order = {"fail": 0, "warn": 1, "info": 2, "pass": 3, "skip": 4}
+    shown = 0
+    for finding in sorted(envelope["set"]["findings"],
+                          key=lambda f: order.get(f["status"], 5)):
+        if finding["status"] in ("pass", "skip") and not show_passes:
+            continue
+        shown += 1
+        lines.append("  " + _finding_line(finding, width - 2))
+        if finding["files"]:
+            named = ", ".join(finding["files"][:5])
+            more = ("" if len(finding["files"]) <= 5
+                    else f", +{len(finding['files']) - 5} more")
+            lines.append(f"      {named}{more}")
+    if not shown:
+        lines.append("  ✓ Nothing wrong with the delivery as a whole.")
+    lines.append("")
+
+    lines.append("Files")
+    for entry in files:
+        lines.append("  " + _file_line(entry, width - 2,
+                                       envelope.get("loudness_metric"),
+                                       envelope.get("loudness_unit")))
+    for entry in envelope["unreadable"]:
+        lines.append(f"  ✕ {entry['name']}: {entry['error']}")
+
+    notes = [f for f in envelope["set"]["findings"]
+             if f["note"] and f["status"] in ("fail", "warn")]
+    if notes:
+        lines.append("")
+        for finding in notes:
+            lines.append(f"{finding['label']}: {_wrap(finding['note'], width, 2)}")
+
+    if target.get("source"):
+        lines.append("")
+        lines.append(f"Thresholds from: {target['source']}"
+                     + (f" (read {target['checked']})"
+                        if target.get("checked") else ""))
+    return "\n".join(lines) + "\n"
+
+
+def _file_line(entry, width, metric=None, unit=None):
+    """A file per line: what it is, and either its level or what is wrong."""
+    mark = MARK[entry["verdict"]]
+    duration = checks.timecode(entry["duration_s"])
+    left = f"{mark} {entry['name']}"
+    problems = [p["label"] for p in entry["problems"]
+                if p["status"] == "fail"] or \
+               [p["label"] for p in entry["problems"]]
+    if problems:
+        right = ", ".join(problems[:2])
+        if len(problems) > 2:
+            right += f", +{len(problems) - 2}"
+    else:
+        right = _loudness_of(entry, metric, unit)
+    right = f"{duration}  {right}".strip()
+    pad = max(2, width - len(left) - len(right))
+    return left + " " * pad + right
+
+
+def _loudness_of(entry, metric=None, unit=None):
+    """A file's level, in the quantity the target states rather than whichever
+    one happens to have been measured."""
+    order = ([metric] if metric else []) + ["integrated_lufs", "rms_dbfs"]
+    units = {"integrated_lufs": "LUFS", "rms_dbfs": "dBFS"}
+    for name in order:
+        value = entry["measurements"].get(name)
+        if isinstance(value, (int, float)):
+            return f"{value:.1f} {unit if name == metric and unit else units.get(name, '')}".strip()
+    return ""
+
+
+def set_markdown(envelope, chart_name=None):
+    """The delivery report somebody sends on."""
+    target = envelope["target"]
+    files = envelope["files"]
+    out = [f"# Delivery report — {len(files)} files", ""]
+    out.append(f"**{VERDICT_LINE[envelope['verdict']]}**")
+    out.append("")
+    out.append(f"- Target: {target.get('label')}")
+    out.append(f"- Checked: {envelope['generated']}")
+    out.append(f"- Tool: {NAME} {VERSION}")
+    out.append("")
+
+    if chart_name:
+        out.append(f"![Loudness across the delivery]({chart_name})")
+        out.append("")
+
+    out.append("## Across the delivery")
+    out.append("")
+    out.append("| | Check | Measured | Required | Files |")
+    out.append("|---|---|---|---|---|")
+    order = {"fail": 0, "warn": 1, "info": 2, "pass": 3, "skip": 4}
+    for finding in sorted(envelope["set"]["findings"],
+                          key=lambda f: order.get(f["status"], 5)):
+        named = ", ".join(finding["files"][:6]) or "—"
+        out.append("| {} | {} | {} | {} | {} |".format(
+            MARK.get(finding["status"], "·"), finding["label"],
+            finding["actual"], finding["required"] or "—", named))
+    out.append("")
+
+    out.append("## Files")
+    out.append("")
+    out.append("| | File | Length | Loudness | Problems |")
+    out.append("|---|---|---|---|---|")
+    for entry in files:
+        shown = _loudness_of(entry, envelope.get("loudness_metric"),
+                             envelope.get("loudness_unit")) or "—"
+        problems = "; ".join(f"{p['label']} ({p['actual']})"
+                             for p in entry["problems"]) or "—"
+        out.append("| {} | `{}` | {} | {} | {} |".format(
+            MARK[entry["verdict"]], entry["name"],
+            checks.timecode(entry["duration_s"]), shown, problems))
+    out.append("")
+
+    if envelope["unreadable"]:
+        out.append("## Could not be read")
+        out.append("")
+        for entry in envelope["unreadable"]:
+            out.append(f"- `{entry['name']}` — {entry['error']}")
+        out.append("")
+
+    notes = [f for f in envelope["set"]["findings"]
+             if f["note"] and f["status"] in ("fail", "warn")]
+    if notes:
+        out.append("## Notes")
+        out.append("")
+        for finding in notes:
+            out.append(f"- **{finding['label']}**: {finding['note']}")
+        out.append("")
     return "\n".join(out) + "\n"

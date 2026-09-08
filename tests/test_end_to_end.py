@@ -15,6 +15,7 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOL))
 
+import batch  # noqa: E402
 import captions  # noqa: E402
 import checks  # noqa: E402
 import corrections  # noqa: E402
@@ -400,6 +401,86 @@ class ChapterAndChartTests(unittest.TestCase):
             envelope = report.envelope(facts, m, result, profile)
             self.assertEqual(envelope["timeline"], [])
             self.assertEqual(report.chart_svg(envelope), "")
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class DeliveryTests(unittest.TestCase):
+    """Real files, and the faults that only exist between them."""
+
+    ROOM = "0.00018*(1-2*random(2))"
+
+    def _chapter(self, folder, name, amplitude, channels=1):
+        expression = (f"{self.ROOM} + {amplitude}*({SPEECH})"
+                      f"*between(t\\,0.75\\,8)")
+        source = expression if channels == 1 else f"{expression}|{expression}"
+        path = os.path.join(folder, name)
+        subprocess.run(
+            [FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i",
+             f"aevalsrc={source}:d=11:s=44100", "-c:a", "libmp3lame",
+             "-b:a", "192k", "-abr", "0", "-ar", "44100", path], check=True)
+        return path
+
+    def test_a_title_of_valid_files_can_still_be_rejected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for name in ("chapter-01.mp3", "chapter-02.mp3"):
+                self._chapter(folder, name, 0.392)
+            self._chapter(folder, "chapter-09.mp3", 0.392, channels=2)
+            result = batch.run([folder], "acx", FFMPEG, FFPROBE)
+
+            self.assertEqual(len(result["files"]), 3)
+            self.assertEqual(result["set_result"]["verdict"], "fail")
+            channels = next(f for f in result["set_result"]["findings"]
+                            if f["id"] == "channels")
+            self.assertEqual(channels["files"], ["chapter-09.mp3"])
+
+    def test_the_corrected_copies_of_a_folder_are_not_checked_next_time(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.392)
+            Path(os.path.join(folder,
+                              "chapter-01.preflight.mp3")).write_bytes(b"x")
+            found = batch.collect([folder])
+            self.assertEqual([os.path.basename(p) for p in found],
+                             ["chapter-01.mp3"])
+
+    def test_a_file_that_cannot_be_read_is_reported_not_fatal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.392)
+            Path(os.path.join(folder, "broken.wav")).write_bytes(b"not audio")
+            result = batch.run([folder], "acx", FFMPEG, FFPROBE)
+            self.assertEqual(len(result["files"]), 1)
+            self.assertEqual(len(result["unreadable"]), 1)
+            self.assertEqual(result["unreadable"][0]["name"], "broken.wav")
+            self.assertEqual(result["verdict"], "fail")
+
+    def test_nothing_readable_at_all_is_an_error_with_the_reasons(self):
+        with tempfile.TemporaryDirectory() as folder:
+            Path(os.path.join(folder, "broken.wav")).write_bytes(b"nope")
+            with self.assertRaises(batch.BatchError) as caught:
+                batch.run([folder], "acx", FFMPEG, FFPROBE)
+            self.assertIn("broken.wav", str(caught.exception))
+
+    def test_the_delivery_report_and_its_chart_are_written(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.392)
+            self._chapter(folder, "chapter-02.mp3", 0.621)
+            out = os.path.join(folder, "delivery.md")
+            code = preflight.main(["batch", folder, "--target", "acx",
+                                   "--quiet", "--markdown", out])
+            self.assertIn(code, (0, 1))
+            body = Path(out).read_text(encoding="utf-8")
+            self.assertIn("## Files", body)
+            self.assertIn("chapter-01.mp3", body)
+            drawing = os.path.join(folder, "delivery.loudness.svg")
+            self.assertTrue(os.path.isfile(drawing))
+
+    def test_the_command_line_exit_code_reports_the_delivery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.392)
+            self._chapter(folder, "chapter-09.mp3", 0.392, channels=2)
+            self.assertEqual(
+                preflight.main(["batch", folder, "--target", "acx",
+                                "--quiet"]), 1,
+                "a title whose files disagree must fail the exit code")
 
 
 @unittest.skipUnless(FFMPEG and FFPROBE, REASON)

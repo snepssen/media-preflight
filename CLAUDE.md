@@ -124,6 +124,33 @@ Captions cost no decode at all unless they are embedded, in which case one
   passages to look at and cannot clear anything — and the rule's `note` says
   exactly that in every report it appears in.
 
+## Checking a set
+
+`batch.py` runs the per-file check over many files and then measures the
+delivery itself. The point is the requirements a per-file rule cannot express:
+ACX asks that every file in a title share a channel count and a sample rate, so
+a title where one chapter is stereo passes every individual check and is
+rejected on submission.
+
+- **`set_rules` sit beside `rules` in a profile**, same shape, checked by
+  `checks.evaluate_set` against `batch.measure_set` output. Set findings name
+  offending **files** where per-file findings name timestamps.
+- **`*_distinct` findings name the minority.** `batch.odd_ones_out` returns the
+  files outside the largest group — and, when two groups tie, everybody, rather
+  than picking a side arbitrarily.
+- **Spread findings name outliers, not extremes.** `batch.outliers` returns
+  files further from the median than half the spread; when nobody qualifies
+  (a smooth ramp) it falls back to both ends. Naming the quietest of four
+  agreeing chapters as a fault would be wrong: it is the reference.
+- **Loudness is compared in the unit the target states** — the same rule as
+  `chart.band_for` and `checks.LOCATABLE`.
+- **`OUTPUT_MARKER` keeps the tool's own output out of its input.** A folder
+  checked twice would otherwise start checking its corrected copies.
+- **Natural sort.** `Chapter 10` after `Chapter 2`, or a delivery report is
+  something somebody has to re-sort in their head.
+- **One unreadable file is reported, not fatal.** Only a delivery where
+  *nothing* could be read raises.
+
 ## Drawing what was measured
 
 `chart.py` reduces the one-second timeline and renders it three ways: SVG for
@@ -188,6 +215,15 @@ terminal, and the reduced points themselves in the JSON.
   number of lines; a 240x135 test fixture fails to encode. Keep fixtures even.
 - **`facts["chapters"]` is a list, not a count.** It used to be `len(...)`;
   anything constructing facts by hand needs `[]`, not `0`.
+- **`info` is a valid severity.** A profile may state it, so every renderer
+  needs it in its `MARK` and sort-order tables; `report` used to raise a
+  `KeyError` on one.
+- **ffmpeg's mono-to-stereo upmix attenuates.** A fixture built with `-ac 2`
+  from one expression comes out three decibels quieter than its mono siblings,
+  which silently ruins a loudness comparison. Generate `expr|expr` instead.
+- **The app cache is keyed on size and mtime**, so it must refuse directories:
+  `os.stat` succeeds on a folder and would cache a delivery under a key that
+  never invalidates.
 
 ## The numbers in profiles.py
 
@@ -202,7 +238,8 @@ one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 165 checks, about ten seconds
+python3 -m unittest discover -s tests    # 196 checks, about twelve seconds
+python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
 python3 app.py                           # the window
 python3 preflight.py check f.wav -t acx  # the command line
@@ -238,10 +275,6 @@ Three questions decide the rest:
 Nothing in the original three-week plan. Candidates, in rough order of how
 often they would earn their place:
 
-- **Batch checking** — a folder against one target with a single summary, and
-  the cross-file rules a per-file profile cannot express. ACX requires channel
-  count and sample rate to be *consistent across a title*, not merely valid per
-  file, and that is currently inexpressible.
 - **Packaging** — double-clickable builds for the three platforms. `build.sh`
   in Gateway Forge is the template for the Mac side.
 - **Verifying the thresholds** — every published profile against its actual

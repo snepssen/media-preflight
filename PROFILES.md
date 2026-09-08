@@ -169,6 +169,59 @@ Every interval a finding carries is marked under the chart, along with
 silences, black, frozen and flashing runs, and clipped windows. Nothing extra
 is needed in a profile to get this: it follows from the rules that failed.
 
+## Cross-file rules
+
+A profile may carry `set_rules` alongside `rules`. They have the same shape and
+are checked by `preflight.py batch` against the delivery rather than against
+any file in it — which is the only way to express a requirement like ACX's,
+that every file in a title share a channel count.
+
+```json
+"set_rules": [
+  {
+    "id": "channels",
+    "metric": "set_channels_distinct",
+    "label": "Channel count across the title",
+    "max": 1.0,
+    "severity": "fail",
+    "note": "Mono or stereo is your choice; ACX asks that every file in a title make the same one."
+  },
+  {
+    "id": "loudness",
+    "metric": "set_loudness_spread_db",
+    "label": "Loudness spread across the title",
+    "unit": "dB",
+    "max": 3.0,
+    "severity": "warn"
+  }
+]
+```
+
+**Set metrics**
+
+`set_file_count`, `set_failing_files`, `set_channels_distinct`,
+`set_sample_rate_distinct`, `set_codec_distinct`, `set_container_distinct`,
+`set_bitrate_mode_distinct`, `set_bit_depth_distinct`,
+`set_loudness_spread_db`, `set_peak_spread_db`, `set_total_duration_min`,
+`set_longest_file_min`
+
+A `*_distinct` rule counts how many different values the delivery holds, and
+its finding names the files in the minority — the odd ones out. When two groups
+are the same size there is no odd one out, only a disagreement, so every file
+is named rather than a side being picked arbitrarily.
+
+A spread rule names the files furthest from the middle of the set rather than
+the loudest and the quietest, because when four chapters agree and a fifth is
+four decibels up the quietest of the four is the reference, not the fault.
+
+`set_loudness_spread_db` is measured in whichever loudness the profile's own
+rules state — LUFS for a target written in LUFS, RMS for one written in RMS.
+A target that states neither gets no comparison and a line saying so.
+
+Every profile also inherits universal set rules — consistent channel count and
+sample rate, and a six-decibel loudness spread — which a target replaces for
+any metric it states itself, so nothing is checked twice at two thresholds.
+
 ## Measurement options
 
 `options` changes how the file is measured, not what is required of it.

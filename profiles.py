@@ -82,6 +82,29 @@ ACX = {
         {"id": "channels", "metric": "channels", "label": "Channels",
          "one_of": [1, 2], "severity": "fail", "fix": "encode"},
     ],
+    "set_rules": [
+        {"id": "channels", "metric": "set_channels_distinct",
+         "label": "Channel count across the title", "max": 1.0,
+         "severity": "fail",
+         "note": "Mono or stereo is your choice; ACX asks that every file in a "
+                 "title make the same one. A title where one chapter is stereo "
+                 "passes every per-file check and is rejected on submission."},
+        {"id": "sample_rate", "metric": "set_sample_rate_distinct",
+         "label": "Sample rate across the title", "max": 1.0,
+         "severity": "fail"},
+        {"id": "codec", "metric": "set_codec_distinct",
+         "label": "Codec across the title", "max": 1.0, "severity": "fail"},
+        {"id": "bitrate_mode", "metric": "set_bitrate_mode_distinct",
+         "label": "Bitrate mode across the title", "max": 1.0,
+         "severity": "warn"},
+        {"id": "loudness", "metric": "set_loudness_spread_db",
+         "label": "Loudness spread across the title", "unit": "dB",
+         "max": 3.0, "severity": "warn",
+         "note": "ACX asks for consistency between files without stating a "
+                 "number; three decibels is this tool's own threshold. A "
+                 "listener who adjusts the volume between chapters has been "
+                 "given a reason to."},
+    ],
 }
 
 
@@ -144,6 +167,17 @@ SPOTIFY_PODCAST = {
          "label": "Longest gap", "unit": "s", "max": 8.0, "severity": "warn",
          "note": "A long gap mid-episode is usually a dropped edit rather "
                  "than a pause."},
+    ],
+    "set_rules": [
+        {"id": "loudness", "metric": "set_loudness_spread_db",
+         "label": "Loudness across the season", "unit": "dB", "max": 3.0,
+         "severity": "warn",
+         "note": "Episodes are played back to back in an app that normalises "
+                 "each one; a wide spread between them is audible on the "
+                 "handover."},
+        {"id": "channels", "metric": "set_channels_distinct",
+         "label": "Channel count across the season", "max": 1.0,
+         "severity": "warn"},
     ],
 }
 
@@ -386,6 +420,24 @@ SUBTITLES = {
 }
 
 
+# Cross-file rules every delivery gets. Like the per-file universal set these
+# are faults rather than requirements, so they warn — but a delivery whose
+# files disagree about something this basic is nearly always a mistake, and it
+# is the kind of mistake nobody notices until an ingest queue does.
+UNIVERSAL_SET = [
+    {"id": "set_channels", "metric": "set_channels_distinct",
+     "label": "Channel count across the set", "max": 1.0, "severity": "warn",
+     "note": "Some files are mono and some are stereo."},
+    {"id": "set_sample_rate", "metric": "set_sample_rate_distinct",
+     "label": "Sample rate across the set", "max": 1.0, "severity": "warn"},
+    {"id": "set_loudness", "metric": "set_loudness_spread_db",
+     "label": "Loudness spread across the set", "unit": "dB", "max": 6.0,
+     "severity": "warn",
+     "note": "Six decibels is where a listener starts reaching for the "
+             "volume control between one file and the next."},
+]
+
+
 BUILT_IN = [ACX, EBU_R128, SPOTIFY_PODCAST, YOUTUBE, SOCIAL_VERTICAL,
             GENERIC_WEB, SUBTITLES]
 
@@ -429,6 +481,12 @@ def with_universal(profile):
     taken = {rule["id"] for rule in profile.get("rules", [])}
     profile["rules"] = list(profile.get("rules", [])) + [
         copy.deepcopy(rule) for rule in UNIVERSAL if rule["id"] not in taken]
+    # A target that states a cross-file rule of its own replaces the universal
+    # one for that metric, rather than being checked twice at two thresholds.
+    stated = {rule["metric"] for rule in profile.get("set_rules", [])}
+    profile["set_rules"] = list(profile.get("set_rules", [])) + [
+        copy.deepcopy(rule) for rule in UNIVERSAL_SET
+        if rule["metric"] not in stated]
     profile.setdefault("options", {})
     return profile
 
@@ -449,7 +507,10 @@ def validate(data):
             raise ValueError(f"A profile needs a '{field}' field.")
     if not isinstance(data["rules"], list) or not data["rules"]:
         raise ValueError("A profile's 'rules' must be a non-empty list.")
-    for index, rule in enumerate(data["rules"]):
+    if not isinstance(data.get("set_rules", []), list):
+        raise ValueError("A profile's 'set_rules' must be a list.")
+    for index, rule in enumerate(list(data["rules"])
+                                 + list(data.get("set_rules") or [])):
         if not isinstance(rule, dict):
             raise ValueError(f"Rule {index} is not an object.")
         for field in ("id", "metric", "label"):
@@ -473,9 +534,14 @@ def validate(data):
 def save(profile, path):
     """Write a profile out as JSON, universal rules stripped back off."""
     universal = {rule["id"] for rule in UNIVERSAL}
+    universal_set = {rule["id"] for rule in UNIVERSAL_SET}
     out = copy.deepcopy(profile)
     out["rules"] = [r for r in out.get("rules", [])
                     if r["id"] not in universal or r.get("customised")]
+    out["set_rules"] = [r for r in out.get("set_rules", [])
+                        if r["id"] not in universal_set or r.get("customised")]
+    if not out["set_rules"]:
+        del out["set_rules"]
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(out, handle, indent=2)
         handle.write("\n")

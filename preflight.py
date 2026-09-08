@@ -2,11 +2,15 @@
 """Media Preflight — will this file be accepted, and can it be fixed safely?
 
     python3 preflight.py check  finished.mp3 --target acx
+    python3 preflight.py batch   chapters/    --target acx
     python3 preflight.py fix    finished.mp3 --target acx --dry-run
     python3 preflight.py fix    finished.mp3 --target acx
     python3 preflight.py targets
 
-`check` measures and reports. `fix` writes a corrected copy beside the source
+`check` measures and reports one file; `batch` does the same for a delivery and
+then checks the properties the set has and no single file does — every file
+sharing a sample rate, say, which is a thing ACX requires and a per-file rule
+cannot express. `fix` writes a corrected copy beside the source
 and then measures *that*, so what it tells you about the new file is a
 measurement rather than an intention. Nothing writes over the original, ever.
 
@@ -22,6 +26,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import analysis
+import batch
 import captions
 import checks
 import corrections
@@ -280,6 +285,41 @@ def command_fix(args):
     return _exit_code(after, args.strict)
 
 
+def command_batch(args):
+    """Check a folder, or a list of files, as one delivery."""
+    result = batch.run(args.files, args.target, recursive=args.recursive,
+                       progress=None, on_file=_file_progress(args))
+    envelope = report.set_envelope(result)
+
+    if args.json:
+        _write(args.json, report.data(envelope))
+    if args.markdown:
+        name = None
+        drawing = report.set_chart_svg(result)
+        if drawing:
+            stem = os.path.splitext(args.markdown)[0]
+            _write(stem + ".loudness.svg", drawing)
+            name = os.path.basename(stem) + ".loudness.svg"
+        _write(args.markdown, report.set_markdown(envelope, name))
+    if not args.quiet:
+        sys.stdout.write(report.set_text(envelope,
+                                         show_passes=args.show_passes))
+    return _exit_code(envelope, args.strict)
+
+
+def _file_progress(args):
+    """One line per file, so a folder of thirty does not look like a hang."""
+    if args.quiet or not sys.stderr.isatty():
+        return None
+
+    def show(index, total, name):
+        sys.stderr.write(f"\r  {index + 1}/{total}  {name[:44]:<46}")
+        sys.stderr.flush()
+        if index + 1 == total:
+            sys.stderr.write("\r" + " " * 56 + "\r")
+    return show
+
+
 def command_targets(args):
     for profile in profiles.all_profiles():
         flag = " (informal)" if profile.get("confidence") == "informal" else ""
@@ -433,6 +473,27 @@ def build_parser():
                           "first corrected copy lands off target")
     fix.set_defaults(handler=command_fix)
 
+    batch_command = subparsers.add_parser(
+        "batch", help="check a folder, or several files, as one delivery")
+    batch_command.add_argument("files", nargs="+",
+                               help="files and/or folders to check")
+    batch_command.add_argument("--target", "-t", default="web",
+                               help="target profile id, or a path to a JSON "
+                                    "profile")
+    batch_command.add_argument("--recursive", "-r", action="store_true",
+                               help="descend into sub-folders")
+    batch_command.add_argument("--json", help="write the machine-readable "
+                                              "delivery report here")
+    batch_command.add_argument("--markdown",
+                               help="write the client-facing report here")
+    batch_command.add_argument("--quiet", "-q", action="store_true")
+    batch_command.add_argument("--show-passes", action="store_true",
+                               help="list the delivery checks that passed too")
+    batch_command.add_argument("--strict", action="store_true",
+                               help="treat warnings as failures in the exit "
+                                    "code")
+    batch_command.set_defaults(handler=command_batch)
+
     targets = subparsers.add_parser("targets", help="list delivery targets")
     targets.set_defaults(handler=command_targets)
 
@@ -445,7 +506,8 @@ def main(argv=None):
         return args.handler(args)
     except (PreflightError, platform_support.ToolsMissing, probe.ProbeError,
             analysis.AnalysisError, video.VideoError, captions.CaptionError,
-            corrections.CorrectionError, ValueError) as error:
+            corrections.CorrectionError, batch.BatchError,
+            ValueError) as error:
         sys.stderr.write(f"{error}\n")
         return 2
     except KeyboardInterrupt:

@@ -155,6 +155,7 @@ ul.plain li.no::before{content:"✕";color:var(--fail)}
 .d-out{fill:var(--muted);font:400 11px/1 "JetBrains Mono",monospace}
 
 .figure{margin:28px 0 0;padding:0}
+.report{white-space:pre}
 .figure svg{display:block;width:100%;border:1px solid var(--line);border-radius:8px}
 .figure figcaption{margin-top:9px;font-size:13.5px;color:var(--muted);max-width:var(--measure)}
 

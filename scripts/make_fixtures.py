@@ -137,6 +137,7 @@ def build(folder=DEFAULT_DIR):
     written += build_video(folder, ffmpeg)
     written += build_captions(folder)
     written += build_chaptered(folder, ffmpeg)
+    written += build_title(folder, ffmpeg)
     return folder, written
 
 
@@ -245,6 +246,51 @@ def build_video(folder, ffmpeg):
                     "Twenty-five frames a second for two seconds, then fifty. "
                     "Plays fine; ruins anything downstream that assumed one rate."))
     return written
+
+
+# ------------------------------------------------------------------- a title
+
+# One delivery, with the two faults that only exist across a set: a chapter in
+# stereo where the rest are mono, and a chapter recorded several decibels
+# hotter than its neighbours. Every one of these files passes a per-file check
+# for channel count on its own.
+# Amplitudes chosen so that every chapter passes ACX *on its own* — RMS inside
+# the window, peak under the ceiling, room tone at both ends. The only faults
+# left are the two that exist across the set and nowhere in it.
+TITLE_CHAPTERS = [
+    ("chapter-01.mp3", 0.392, 1),
+    ("chapter-02.mp3", 0.392, 1),
+    ("chapter-03.mp3", 0.621, 1),     # four decibels above its neighbours
+    ("chapter-09.mp3", 0.392, 2),     # the stereo one
+    ("chapter-10.mp3", 0.392, 1),     # sorts before 09 unless sorted naturally
+]
+
+
+def build_title(folder, ffmpeg):
+    title = os.path.join(folder, "title")
+    os.makedirs(title, exist_ok=True)
+    for name, amplitude, channels in TITLE_CHAPTERS:
+        # Room tone under everything, speech between 0.75 s and 11 s: three
+        # quarters of a second of tone at the head and three at the tail, which
+        # is what ACX asks for.
+        expression = (f"{_room_tone()} + {amplitude}*({SPEECH})"
+                      f"*between(t\\,0.75\\,11)")
+        # Two channels are generated as two expressions rather than upmixed
+        # from one: ffmpeg's mono-to-stereo matrix attenuates, which would make
+        # the stereo chapter three decibels quieter and confuse the very
+        # comparison this fixture exists to demonstrate.
+        source = expression if channels == 1 else f"{expression}|{expression}"
+        subprocess.run(
+            [ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+             f"aevalsrc={source}:d=14:s=44100",
+             "-c:a", "libmp3lame", "-b:a", "192k",
+             "-abr", "0", "-ar", "44100", os.path.join(title, name)],
+            check=True, **platform_support.no_console())
+    return [("title/",
+             f"{len(TITLE_CHAPTERS)} chapters that each pass ACX on their own, "
+             f"carrying the two faults only a set can have: one is stereo "
+             f"where the rest are mono, and one is four decibels louder than "
+             f"its neighbours.")]
 
 
 # ------------------------------------------------------------------ captions

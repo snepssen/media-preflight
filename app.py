@@ -30,6 +30,7 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import batch
 import corrections
 import platform_support
 import preflight
@@ -55,6 +56,8 @@ def _key(path, target):
     try:
         stat = os.stat(path)
     except OSError:
+        return None
+    if not os.path.isfile(path):
         return None
     return (os.path.abspath(path), target, stat.st_size, int(stat.st_mtime))
 
@@ -148,6 +151,28 @@ def check_job(path, target):
         _remember(path, target, {"facts": facts, "measurements": measurements,
                                  "result": result, "profile": profile,
                                  "envelope": envelope})
+        return envelope
+    return start_job(work)
+
+
+def batch_job(paths, target, recursive=False):
+    """Check a whole delivery, remembering each file so a click is instant."""
+    def work(update):
+        def on_file(index, total, name):
+            update(phase="audio", progress=index / max(1, total),
+                   stage=f"{name} — {index + 1} of {total}")
+
+        result = batch.run(paths, target, recursive=recursive,
+                           on_file=on_file)
+        update(phase="target", stage="comparing the delivery", progress=0.98)
+        envelope = report.set_envelope(result)
+        envelope["kind"] = "delivery"
+        envelope["chart"] = report.set_chart_svg(result, theme="auto")
+        for entry in result["files"]:
+            _remember(entry["path"], target, {
+                "facts": entry["facts"], "measurements": entry["measurements"],
+                "result": entry["result"], "profile": result["profile"],
+                "envelope": entry["envelope"]})
         return envelope
     return start_job(work)
 
@@ -330,6 +355,23 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/pick":
                 return self._json({"path": platform_support.pick_file()})
 
+            if url.path == "/api/pick_folder":
+                return self._json({"path": platform_support.pick_folder(
+                    "Choose a folder of files to check")})
+
+            if url.path == "/api/batch":
+                paths = body.get("paths") or [body.get("path", "")]
+                paths = [os.path.expanduser(p.strip()) for p in paths
+                         if p and p.strip()]
+                if not paths:
+                    raise ValueError("No folder was given.")
+                for path in paths:
+                    if not os.path.exists(path):
+                        raise ValueError(f"No such file or folder: {path}")
+                return self._json({"job": batch_job(
+                    paths, body.get("target", "web"),
+                    bool(body.get("recursive")))})
+
             if url.path == "/api/check":
                 path = self._require_file(body)
                 return self._json({"job": check_job(path, body.get("target",
@@ -353,7 +395,8 @@ class Handler(BaseHTTPRequestHandler):
                     body.get("path", ""))})
         except (preflight.PreflightError, probe.ProbeError,
                 corrections.CorrectionError, platform_support.ToolsMissing,
-                platform_support.PickerUnavailable, ValueError) as error:
+                platform_support.PickerUnavailable, batch.BatchError,
+                ValueError) as error:
             return self._error(str(error))
 
         return self._error("No such route.", 404)

@@ -92,6 +92,25 @@
   .chart.dimmed rect[data-event] { fill-opacity: .12; }
   .chart rect[data-event].lit { fill-opacity: .95; }
   .finding.linked:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .subhead-sm { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+                color: var(--quiet); margin: 20px 0 6px; font-weight: 600; }
+  .filerow { display: grid; grid-template-columns: 18px 1fr auto auto; gap: 10px;
+             padding: 7px 0; border-top: 1px solid var(--line);
+             align-items: baseline; cursor: pointer; }
+  .filerow:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .filerow .dur { color: var(--quiet); font-size: 12.5px; }
+  .filerow .why { color: var(--quiet); font-size: 12.5px; text-align: right; }
+  .filerow .name { font-family: ui-monospace, Menlo, Consolas, monospace;
+                   font-size: 13px; }
+  .back { color: var(--accent); cursor: pointer; font-size: 13px; margin: 0 0 10px; }
+  .setfinding { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px;
+                padding: 7px 0; border-top: 1px solid var(--line);
+                align-items: baseline; }
+  .setfinding:first-of-type { border-top: none; }
+  .setfinding .who { grid-column: 2 / -1; color: var(--quiet); font-size: 12.5px;
+                     font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .setfinding .why { grid-column: 2 / -1; color: var(--quiet); font-size: 12.5px;
+                     font-style: italic; }
   .stamps { margin-top: 14px; font-size: 13px; }
   .stamps b { font-weight: 600; }
   pre { background: var(--code); border: 1px solid var(--line); border-radius: 7px;
@@ -125,6 +144,7 @@
       <label for="target">Target</label>
       <select id="target"></select>
       <button class="primary" id="run">Run</button>
+      <button id="runFolder" title="Check a folder as one delivery">Check a folder…</button>
     </div>
     <p class="note" id="targetNote"></p>
     <p class="error hidden" id="toolError"></p>
@@ -136,7 +156,22 @@
     <p class="note" id="stage"></p>
   </section>
 
+  <section class="panel hidden" id="deliveryPanel">
+    <p class="verdict" id="setVerdict"></p>
+    <p class="counts" id="setCounts"></p>
+    <figure class="chart hidden" id="setChartBox">
+      <div id="setChart"></div>
+      <figcaption id="setChartNote"></figcaption>
+    </figure>
+    <h3 class="subhead-sm">Across the delivery</h3>
+    <div id="setFindings"></div>
+    <h3 class="subhead-sm">Files</h3>
+    <div id="setFiles"></div>
+    <p class="meta" id="setSource"></p>
+  </section>
+
   <section class="panel hidden" id="reportPanel">
+    <p class="back hidden" id="backToDelivery">← back to the delivery</p>
     <p class="verdict" id="verdict"></p>
     <p class="counts" id="counts"></p>
     <p class="chosen" id="fileLine" style="margin:-8px 0 14px"></p>
@@ -248,15 +283,18 @@ function describeFile(file) {
   return bits.join("  ·  ");
 }
 
-const MARK = { pass: "✓", fail: "✕", warn: "⚠", skip: "·" };
+const MARK = { pass: "✓", fail: "✕", warn: "⚠", skip: "·", info: "i" };
+const VERDICT_WORD = {
+  pass: "Ready to deliver.",
+  warn: "Deliverable, with things worth looking at.",
+  fail: "Not ready — the failures below would be rejected.",
+};
 const ORDER = { fail: 0, warn: 1, pass: 2, skip: 3 };
 
 function renderReport(envelope) {
   current = envelope;
-  const verdictWord = { pass: "Ready to deliver.",
-    warn: "Deliverable, with things worth looking at.",
-    fail: "Not ready — the failures below would be rejected." }[envelope.verdict];
-  $("verdict").textContent = `${MARK[envelope.verdict]} ${verdictWord}`;
+  $("verdict").textContent =
+    `${MARK[envelope.verdict]} ${VERDICT_WORD[envelope.verdict]}`;
   $("verdict").className = "verdict " + envelope.verdict;
   const c = envelope.counts;
   $("counts").textContent =
@@ -413,13 +451,149 @@ $("drop").addEventListener("drop", (e) => {
     : $("dropHint").textContent;
 });
 
+let delivery = null;
+
+function renderDelivery(envelope) {
+  delivery = envelope;
+  $("deliveryPanel").classList.remove("hidden");
+  $("reportPanel").classList.add("hidden");
+  $("planPanel").classList.add("hidden");
+
+  const v = envelope.verdict;
+  $("setVerdict").textContent = `${MARK[v]} ${VERDICT_WORD[v]}`;
+  $("setVerdict").className = "verdict " + v;
+  const failing = envelope.files.filter((f) => f.verdict === "fail").length;
+  const warning = envelope.files.filter((f) => f.verdict === "warn").length;
+  const own = envelope.set.counts;
+  const parts = [];
+  if (own.fail) parts.push(`${own.fail} failing`);
+  if (own.warn) parts.push(`${own.warn} warning`);
+  const tail = parts.length
+    ? `${parts.join(" and ")} check${own.fail + own.warn === 1 ? "" : "s"} of its own`
+    : "nothing wrong of its own";
+  $("setCounts").textContent =
+    `${envelope.files.length} files — ${failing} fail, ${warning} warn; `
+    + `the delivery itself has ${tail}.`;
+
+  $("setChartBox").classList.toggle("hidden", !envelope.chart);
+  if (envelope.chart) {
+    $("setChart").innerHTML = envelope.chart;
+    const band = envelope.band || {};
+    $("setChartNote").textContent = band.absent
+      ? `One mark per file, compared in ${envelope.loudness_unit || "dB"}. `
+        + `No target band is drawn: ${band.absent}`
+      : "One mark per file. The shaded band is what the target asks for; a "
+        + "mark outside it is a file to look at.";
+  }
+
+  const order = { fail: 0, warn: 1, info: 2, pass: 3, skip: 4 };
+  $("setFindings").innerHTML = [...envelope.set.findings]
+    .sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5))
+    .filter((f) => f.status !== "skip")
+    .map((f) => `<div class="setfinding">
+      <span class="mark ${f.status}">${MARK[f.status]}</span>
+      <span>${esc(f.label)}: ${esc(f.actual)}</span>
+      <span class="required">${f.required ? "Required: " + esc(f.required) : ""}</span>
+      ${f.files && f.files.length
+        ? `<div class="who">${esc(f.files.slice(0, 8).join(", "))}${
+            f.files.length > 8 ? `, +${f.files.length - 8} more` : ""}</div>` : ""}
+      ${f.note && (f.status === "fail" || f.status === "warn")
+        ? `<div class="why">${esc(f.note)}</div>` : ""}
+    </div>`).join("") || '<p class="note">Nothing wrong with the delivery as a whole.</p>';
+
+  $("setFiles").innerHTML = envelope.files.map((f, index) => {
+    const problems = f.problems.filter((p) => p.status === "fail");
+    const why = (problems.length ? problems : f.problems)
+      .slice(0, 2).map((p) => p.label).join(", ")
+      || loudnessOf(f, envelope);
+    return `<div class="filerow" data-index="${index}">
+      <span class="mark ${f.verdict}">${MARK[f.verdict]}</span>
+      <span class="name">${esc(f.name)}</span>
+      <span class="dur">${timecode(f.duration_s)}</span>
+      <span class="why">${esc(why)}</span>
+    </div>`;
+  }).join("") + (envelope.unreadable || []).map((f) =>
+    `<div class="filerow"><span class="mark fail">✕</span>
+      <span class="name">${esc(f.name)}</span><span class="dur"></span>
+      <span class="why">${esc(f.error)}</span></div>`).join("");
+
+  $("setFiles").querySelectorAll(".filerow[data-index]").forEach((row) => {
+    row.addEventListener("click", () => openFile(
+      envelope.files[Number(row.dataset.index)]));
+  });
+
+  const t = envelope.target;
+  $("setSource").textContent = t.source
+    ? `Thresholds from: ${t.source}${t.checked ? " (read " + t.checked + ")" : ""}`
+    : "";
+}
+
+function loudnessOf(file, envelope) {
+  const order = [envelope.loudness_metric, "integrated_lufs", "rms_dbfs"];
+  const units = { integrated_lufs: "LUFS", rms_dbfs: "dBFS" };
+  for (const name of order) {
+    const value = name && file.measurements[name];
+    if (typeof value === "number") {
+      return `${value.toFixed(1)} ${envelope.loudness_unit || units[name] || ""}`.trim();
+    }
+  }
+  return "";
+}
+
+// A row in the delivery opens that file's own report. The server already holds
+// the measurement, so this is a lookup rather than a second decode.
+async function openFile(file) {
+  $("path").value = file.path;
+  busy(true);
+  try {
+    const { job } = await api("/check", { path: file.path,
+                                          target: $("target").value });
+    poll(job, (envelope) => {
+      busy(false);
+      renderReport(envelope);
+      $("deliveryPanel").classList.add("hidden");
+      $("backToDelivery").classList.remove("hidden");
+      $("reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  } catch (error) { busy(false); fail(error.message); }
+}
+
+$("backToDelivery").addEventListener("click", () => {
+  if (!delivery) return;
+  $("reportPanel").classList.add("hidden");
+  $("backToDelivery").classList.add("hidden");
+  $("deliveryPanel").classList.remove("hidden");
+});
+
+$("runFolder").addEventListener("click", async () => {
+  let folder = $("path").value.trim();
+  try {
+    if (!folder) {
+      const picked = await api("/pick_folder", {});
+      folder = picked.path;
+      if (!folder) return;
+      $("path").value = folder;
+    }
+    busy(true);
+    const { job } = await api("/batch", { path: folder,
+                                          target: $("target").value });
+    poll(job, (envelope) => { busy(false); renderDelivery(envelope); });
+  } catch (error) { busy(false); fail(error.message); }
+});
+
 $("run").addEventListener("click", async () => {
   const path = $("path").value.trim();
   if (!path) return fail("Choose a file first.");
   busy(true);
   try {
     const { job } = await api("/check", { path, target: $("target").value });
-    poll(job, (envelope) => { busy(false); renderReport(envelope); });
+    poll(job, (envelope) => {
+      busy(false);
+      delivery = null;
+      $("backToDelivery").classList.add("hidden");
+      $("deliveryPanel").classList.add("hidden");
+      renderReport(envelope);
+    });
   } catch (error) { busy(false); fail(error.message); }
 });
 

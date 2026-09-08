@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>165</b> checks passing</span>
+    <span><b>196</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -50,6 +50,7 @@
     <a class="mark" href="#top">Media Preflight</a>
     <ul>
       <li><a href="#report">The report</a></li>
+      <li><a href="#delivery">Deliveries</a></li>
       <li><a href="#targets">Targets</a></li>
       <li><a href="#fix">Corrections</a></li>
       <li><a href="#how">How</a></li>
@@ -149,6 +150,48 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
       <p>A finding carries a timestamp only when the timeline holds <em>the same quantity the rule is about</em>.</p>
       <p>Short-term loudness can locate an integrated-loudness failure, because both are loudness. It cannot locate an RMS failure: RMS and LUFS are different measurements, and pointing at a moment measured in one while quoting a threshold in the other would be an invention.</p>
       <p>So those findings say <span class="mono" style="font-size:14px">measured across the whole file</span> instead of offering a number that looks precise and means nothing.</p>
+    </div>
+  </div>
+</section>
+
+<section id="delivery">
+  <p class="eyebrow">A folder, not a file</p>
+  <h2>Some faults belong to the set</h2>
+  <p class="lede">An audiobook is thirty chapters and ACX accepts or rejects the title. Some of what it asks for is a property of the delivery and of no file in it.</p>
+
+  <div class="report" role="img" aria-label="A delivery report for five audiobook chapters: every file passes, the title does not.">
+<span class="r-head">5 files — Audiobook — ACX</span>
+
+<span class="r-fail">✕ Not ready — the failures below would be rejected.</span>
+<span class="r-dim">  0 of 5 files fail, 0 warn; the delivery itself has 1 failure and 1 warning of its own.</span>
+
+<span class="r-head">Across the delivery</span>
+<span class="r-fail">  ✕ Channel count across the title: 2 different: 1, 2  Required: ≤ 1</span>
+<span class="r-dim">      chapter-09.mp3</span>
+<span class="r-warn">  ⚠ Loudness spread across the title: 4 dB          Required: ≤ 3 dB</span>
+<span class="r-dim">      chapter-03.mp3</span>
+
+<span class="r-head">Files</span>
+<span class="r-pass">  ✓ chapter-01.mp3                             00:14  -22.5 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-02.mp3                             00:14  -22.5 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-03.mp3                             00:14  -18.5 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-09.mp3                             00:14  -22.5 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-10.mp3                             00:14  -22.5 dBFS RMS</span>
+  </div>
+  <p class="caption">Every file passes. The title does not — one chapter is stereo where the rest are mono, which a rule written against one file cannot see. A per-file check would clear all thirty chapters of a real title and let it be rejected on submission.</p>
+
+  <div class="two" style="margin-top:38px">
+    <div>
+      <h3>It names the file to fix</h3>
+      <p>Not the two extremes. When four chapters agree and a fifth is four decibels up, the quietest of the four is not at fault — it is the reference. Files further from the middle of the set than half its spread are named; when that describes nobody, as in a smooth ramp, both ends are.</p>
+      <h3 style="margin-top:26px">Chapter 2 before chapter 10</h3>
+      <p>A delivery is ordered. A report that lists chapter 10 second is one somebody has to re-sort in their head before they can read it.</p>
+    </div>
+    <div>
+      <h3>Its own output stays out</h3>
+      <p>A folder checked twice would otherwise start checking the corrected copies it wrote the first time, and a corrected copy of a corrected copy is nobody's delivery.</p>
+      <h3 style="margin-top:26px">One bad file is not fatal</h3>
+      <p>A file that cannot be read is reported and the rest are checked. One broken file in thirty should not cost you the other twenty-nine.</p>
     </div>
   </div>
 </section>
@@ -310,6 +353,7 @@ python3 app.py
 
 <span class="c"># the command line</span>
 python3 preflight.py check finished.mp3 --target acx
+python3 preflight.py batch chapters/    --target acx
 python3 preflight.py fix   finished.mp3 --target acx --dry-run
 python3 preflight.py fix   finished.mp3 --target acx</pre>
 

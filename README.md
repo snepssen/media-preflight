@@ -146,6 +146,7 @@ leaves the machine.
 python3 preflight.py check finished.mp3 --target acx
 python3 preflight.py check episode.mp4  --target youtube
 python3 preflight.py check film.srt     --target subtitles
+python3 preflight.py batch chapters/    --target acx
 python3 preflight.py fix   finished.mp3 --target acx --dry-run
 python3 preflight.py fix   finished.mp3 --target acx
 python3 preflight.py targets
@@ -163,6 +164,60 @@ anything. `--strict` makes warnings count as failures. `--json` and
 references it, because almost everything that renders Markdown strips an
 inline `<svg>` and a picture that silently fails to appear is worse than one
 that is plainly a separate file.
+
+## Checking a delivery, not a file
+
+Almost nothing anybody delivers is one file. An audiobook is thirty chapters
+and ACX accepts or rejects the *title*; a podcast season is a folder.
+
+```sh
+python3 preflight.py batch chapters/ --target acx
+```
+
+Some requirements are properties of the set and of no member of it. ACX asks
+that every file in a title share a channel count and a sample rate — and a rule
+written against one file cannot say that. A title where chapter nine is stereo
+and everything else is mono passes thirty individual checks and is rejected on
+submission:
+
+```
+5 files — Audiobook — ACX
+
+✕ Not ready — the failures below would be rejected.
+  0 of 5 files fail, 0 warn; the delivery itself has 1 failure and 1 warning of its own.
+
+Across the delivery
+  ✕ Channel count across the title: 2 different: 1, 2  Required: ≤ 1
+      chapter-09.mp3
+  ⚠ Loudness spread across the title: 4 dB          Required: ≤ 3 dB
+      chapter-03.mp3
+
+Files
+  ✓ chapter-01.mp3                             00:14  -22.5 dBFS RMS
+  ✓ chapter-02.mp3                             00:14  -22.5 dBFS RMS
+  ✓ chapter-03.mp3                             00:14  -18.5 dBFS RMS
+  ✓ chapter-09.mp3                             00:14  -22.5 dBFS RMS
+  ✓ chapter-10.mp3                             00:14  -22.5 dBFS RMS
+```
+
+Every file passes. The delivery does not.
+
+Three details that decide whether the report is worth reading:
+
+**It names the file to fix, not the two extremes.** When four chapters agree
+and a fifth is four decibels up, the quietest of the four is not at fault — it
+is the reference. Files further from the middle of the set than half its spread
+are named; when that describes nobody, as in a smooth ramp, both ends are.
+
+**Chapter 2 comes before chapter 10.** A delivery is ordered, and a report that
+lists chapter 10 second is one somebody has to re-sort in their head.
+
+**The tool's own output is never swept back in.** A folder checked twice would
+otherwise start checking its own corrected copies.
+
+Files it cannot read are reported rather than fatal — one broken file in thirty
+should not cost you the other twenty-nine — and the window has the same view,
+where clicking a row opens that file's own report.
 
 ## What costs a decode
 
@@ -239,7 +294,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 165 checks, about ten seconds
+python3 -m unittest discover -s tests     # 196 checks, about twelve seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ```
 
@@ -264,6 +319,7 @@ with an install line when ffmpeg is absent.
 | `video.py` | what the picture contains — black, frozen, flashing, frame rate |
 | `captions.py` | SubRip, WebVTT and ASS, parsed and measured |
 | `chart.py` | the loudness picture — reduced, then drawn as SVG or as one terminal line |
+| `batch.py` | a whole delivery: discovery, ordering, and the properties of the set |
 | `checks.py` | the rule engine: measurements plus a target, in, findings out |
 | `profiles.py` | the delivery targets, as data |
 | `corrections.py` | planning, previewing, applying and verifying a fix |

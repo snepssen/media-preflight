@@ -446,3 +446,96 @@ def _time_ticks(duration, count=5):
 def _escape(text):
     return (str(text).replace("&", "&amp;").replace("<", "&lt;")
             .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+# ------------------------------------------------------- the set, as a picture
+
+SET_HEIGHT_PER_FILE = 15
+SET_MIN_HEIGHT = 90
+
+
+def set_svg(spread, band=None, theme="light", limit=60,
+            title="Loudness across the delivery"):
+    """One bar per file, against the target band.
+
+    This is the picture that makes a thirty-chapter title legible: the chapter
+    recorded three decibels hotter than the rest is a bar that sticks out, and
+    no amount of reading down a column of numbers does that as fast.
+    """
+    values = (spread or {}).get("per_file") or []
+    if len(values) < 2:
+        return ""
+    clipped = values[:limit]
+
+    rows = len(clipped)
+    height = max(SET_MIN_HEIGHT,
+                 PAD_TOP + PAD_BOTTOM + rows * SET_HEIGHT_PER_FILE)
+    label_width = 132
+    plot_w = WIDTH - label_width - PAD_RIGHT - 30
+
+    numbers = [entry["value"] for entry in clipped]
+    low, high = min(numbers), max(numbers)
+    if band and band.get("min") is not None:
+        low = min(low, band["min"])
+        high = max(high, band["max"] if band.get("max") is not None else high)
+    if high - low < 4:
+        middle = (high + low) / 2
+        low, high = middle - 2, middle + 2
+    pad = (high - low) * 0.1
+    low, high = low - pad, high + pad
+
+    def x(value):
+        return label_width + (value - low) / (high - low) * plot_w
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height}"'
+        f' width="100%" role="img" aria-label="{_escape(title)}">',
+        f"<style>{style_for(theme)}</style>",
+        f'<rect class="bg" x="0" y="0" width="{WIDTH}" height="{height}"/>',
+    ]
+
+    if band and band.get("min") is not None:
+        left = x(band["min"])
+        right = x(band["max"]) if band.get("max") is not None else x(high)
+        parts.append(f'<rect class="band" x="{left:.1f}" y="{PAD_TOP - 4}" '
+                     f'width="{max(1.0, right - left):.1f}" '
+                     f'height="{rows * SET_HEIGHT_PER_FILE + 8}"/>')
+
+    for index, entry in enumerate(clipped):
+        centre = PAD_TOP + index * SET_HEIGHT_PER_FILE + SET_HEIGHT_PER_FILE / 2
+        inside = _inside(entry["value"], band)
+        parts.append(
+            f'<text class="axis" x="{label_width - 8}" y="{centre + 3:.1f}" '
+            f'text-anchor="end">{_escape(_shorten(entry["name"]))}</text>')
+        parts.append(
+            f'<line class="grid" x1="{label_width}" y1="{centre:.1f}" '
+            f'x2="{label_width + plot_w}" y2="{centre:.1f}"/>')
+        parts.append(
+            f'<circle class="{"peak" if inside else "ev-warn"}" '
+            f'cx="{x(entry["value"]):.1f}" cy="{centre:.1f}" r="4" '
+            f'fill="{"none" if inside else "currentColor"}">'
+            f'<title>{_escape(entry["name"])} — {entry["value"]:g} '
+            f'{_escape((spread or {}).get("unit", "dB"))}</title></circle>')
+
+    for value in _ticks(low, high):
+        parts.append(f'<text class="axis" x="{x(value):.1f}" '
+                     f'y="{height - 10}" text-anchor="middle">{value:g}</text>')
+    if len(values) > limit:
+        parts.append(f'<text class="note" x="{label_width}" y="{height - 24}">'
+                     f'{len(values) - limit} more files not drawn</text>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def _inside(value, band):
+    if not band or band.get("min") is None:
+        return True
+    if value < band["min"]:
+        return False
+    return band.get("max") is None or value <= band["max"]
+
+
+def _shorten(name, width=22):
+    if len(name) <= width:
+        return name
+    return name[:width - 9] + "…" + name[-8:]

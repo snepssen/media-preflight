@@ -450,6 +450,132 @@ def _runs(timeline, key, minimum, maximum):
     return [r for r in runs if (r["end"] - r["start"]) >= 2]
 
 
+# ---------------------------------------------------------------- the set
+#
+# A delivery has properties no single file has. These metrics are written
+# against the whole set, and their findings name the offending *files* the way
+# a per-file finding names timestamps.
+
+def _distinct(name):
+    return lambda m: m.get(f"{name}_distinct")
+
+
+def _spread(name):
+    def read(m):
+        block = m.get(name) or {}
+        return block.get("spread")
+    return read
+
+
+SET_METRICS = {
+    "set_file_count": lambda m: m.get("file_count"),
+    "set_failing_files": lambda m: m.get("failing_files"),
+    "set_channels_distinct": _distinct("channels"),
+    "set_sample_rate_distinct": _distinct("sample_rate"),
+    "set_codec_distinct": _distinct("codec"),
+    "set_container_distinct": _distinct("container"),
+    "set_bitrate_mode_distinct": _distinct("bitrate_mode"),
+    "set_bit_depth_distinct": _distinct("bit_depth"),
+    "set_loudness_spread_db": _spread("loudness"),
+    "set_peak_spread_db": _spread("peak"),
+    "set_total_duration_min": lambda m: (
+        (m["total_duration_s"] / 60.0) if m.get("total_duration_s") else None),
+    "set_longest_file_min": lambda m: (
+        (m["longest_file_s"] / 60.0) if m.get("longest_file_s") else None),
+}
+
+# Which files a set finding should name.
+SET_OFFENDERS = {
+    "set_channels_distinct": "channels_odd",
+    "set_sample_rate_distinct": "sample_rate_odd",
+    "set_codec_distinct": "codec_odd",
+    "set_container_distinct": "container_odd",
+    "set_bitrate_mode_distinct": "bitrate_mode_odd",
+    "set_bit_depth_distinct": "bit_depth_odd",
+}
+
+
+def evaluate_set(set_measurements, profile):
+    """Run the profile's cross-file rules over a whole delivery."""
+    rules = profile.get("set_rules") or []
+    findings = [check_set(rule, set_measurements) for rule in rules]
+    statuses = {f["status"] for f in findings}
+    verdict = FAIL if FAIL in statuses else (WARN if WARN in statuses else PASS)
+    return {
+        "verdict": verdict,
+        "findings": findings,
+        "counts": {name: sum(1 for f in findings if f["status"] == name)
+                   for name in (FAIL, WARN, PASS, SKIP)},
+    }
+
+
+def check_set(rule, set_measurements):
+    """One cross-file rule against one delivery."""
+    getter = SET_METRICS.get(rule["metric"])
+    value = getter(set_measurements) if getter else None
+
+    finding = {
+        "id": rule["id"],
+        "label": rule["label"],
+        "metric": rule["metric"],
+        "unit": rule.get("unit", ""),
+        "severity": rule.get("severity", FAIL),
+        "note": rule.get("note", ""),
+        "value": value,
+        "actual": _set_actual(rule, value, set_measurements),
+        "required": describe(rule),
+        "status": SKIP,
+        "files": [],
+        "detail": "",
+    }
+    if getter is None:
+        finding["detail"] = (f"This build does not know the set metric "
+                             f"'{rule['metric']}'.")
+        return finding
+    if value is None:
+        finding["detail"] = ("Not measurable across these files, so not "
+                             "checked.")
+        return finding
+
+    status, detail = judge(rule, value)
+    finding["status"] = status
+    finding["detail"] = detail
+    if status in (FAIL, WARN):
+        finding["files"] = locate_set(rule, set_measurements)
+    return finding
+
+
+def _set_actual(rule, value, set_measurements):
+    """A count of distinct values means nothing on its own; say what they are."""
+    if value is None:
+        return "—"
+    key = SET_OFFENDERS.get(rule["metric"])
+    if key and isinstance(value, (int, float)) and value > 1:
+        name = key[:-4]
+        groups = (set_measurements.get("groups") or {}).get(name) or {}
+        shown = ", ".join(sorted(groups, key=lambda k: -len(groups[k]))[:4])
+        return f"{int(value)} different: {shown}"
+    return format_value(value, rule.get("unit", ""))
+
+
+def locate_set(rule, set_measurements):
+    """Which files are at fault, when that is answerable."""
+    key = SET_OFFENDERS.get(rule["metric"])
+    if key:
+        return list(set_measurements.get(key) or [])
+    if rule["metric"] == "set_loudness_spread_db":
+        block = set_measurements.get("loudness") or {}
+    elif rule["metric"] == "set_peak_spread_db":
+        block = set_measurements.get("peak") or {}
+    else:
+        return []
+    named = block.get("outliers")
+    if named:
+        return list(named)
+    ends = [block.get("loudest"), block.get("quietest")]
+    return [name for name in ends if name]
+
+
 # ------------------------------------------------------------------ wording
 
 def describe(rule):
