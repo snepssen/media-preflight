@@ -679,6 +679,53 @@ class Handler(BaseHTTPRequestHandler):
                     paths, body.get("target", "web"),
                     bool(body.get("overwrite")), _depth(body))})
 
+            if url.path == "/api/profiles":
+                return self._json({
+                    "profiles": [{
+                        "id": p["id"], "label": p["label"],
+                        "summary": p.get("summary", ""),
+                        "confidence": p.get("confidence", "informal"),
+                        "kinds": list(profiles.applies_to(p)),
+                        "mine": (p.get("origin") or "")
+                                 == profiles.user_profile_dir(),
+                    } for p in profiles.all_profiles()],
+                    "catalogue": profiles.metric_catalogue(),
+                    "problems": profiles.problems(),
+                    "folder": profiles.user_profile_dir(),
+                })
+
+            if url.path == "/api/targets_full":
+                # The whole profile, for the wizard's "start from". Universal
+                # rules travel marked so the draft can leave them out: they
+                # are inherited at load, and copies would quietly stop
+                # tracking the originals.
+                return self._json(report.jsonable(
+                    profiles.get(body.get("id", "web"))))
+
+            if url.path == "/api/profile_review":
+                draft = body.get("profile") or {}
+                try:
+                    profiles.validate(draft)
+                    invalid = None
+                except ValueError as error:
+                    invalid = str(error)
+                whole = profiles.with_universal(draft) if not invalid else draft
+                return self._json({
+                    "invalid": invalid,
+                    "contradictions": profiles.contradictions(draft),
+                    "summary": (profiles.summarise(whole)
+                                if not invalid else None),
+                })
+
+            if url.path == "/api/profile_save":
+                path = profiles.save_custom(body.get("profile") or {})
+                return self._json({"path": path,
+                                   "id": (body["profile"])["id"]})
+
+            if url.path == "/api/profile_delete":
+                return self._json({
+                    "path": profiles.delete_custom(body.get("id", ""))})
+
             if url.path == "/api/export":
                 return self._json(self._export(body))
 

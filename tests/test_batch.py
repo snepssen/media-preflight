@@ -182,7 +182,7 @@ class SetRuleTests(unittest.TestCase):
         self.assertEqual(len(metrics), len(set(metrics)))
 
     def test_every_profile_names_set_metrics_the_engine_knows(self):
-        for profile in profiles.all_profiles():
+        for profile in profiles.shipped():
             for rule in profile.get("set_rules", []):
                 self.assertIn(rule["metric"], checks.SET_METRICS,
                               f"{profile['id']}/{rule['id']}")

@@ -162,6 +162,32 @@
   .qtotal .big { font-size: 15px; }
   .qdelivery { font-size: 12.5px; color: var(--quiet); margin-top: 10px; }
   .qdelivery label { display: inline-flex; gap: 6px; align-items: center; }
+
+  .steps { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .steps span { font-size: 12px; color: var(--quiet); padding: 3px 9px;
+                border: 1px solid var(--line); border-radius: 20px; }
+  .steps span.on { color: var(--bg); background: var(--accent);
+                   border-color: var(--accent); }
+  .field { display: grid; grid-template-columns: 150px 1fr; gap: 10px;
+           align-items: center; margin-bottom: 10px; }
+  .field > label { color: var(--quiet); font-size: 13px; }
+  .field input, .field select, .field textarea { width: 100%; }
+  .rule { display: grid; grid-template-columns: 1fr 130px 90px 110px 24px;
+          gap: 8px; align-items: center; padding: 6px 0;
+          border-top: 1px solid var(--line); }
+  .rule .nm { font-size: 13px; min-width: 0; overflow: hidden;
+              text-overflow: ellipsis; white-space: nowrap; }
+  .rule input, .rule select { font-size: 12.5px; }
+  .rule .bounds { display: flex; gap: 4px; }
+  .rule .bounds input { width: 100%; }
+  .rule button { background: none; border: none; color: var(--fail);
+                 font-size: 15px; padding: 0; }
+  .wiz-sum h5 { margin: 14px 0 4px; font-size: 12px; letter-spacing: .07em;
+                text-transform: uppercase; color: var(--quiet); font-weight: 600; }
+  .wiz-sum div { font-size: 13px; padding: 3px 0; display: flex;
+                 justify-content: space-between; gap: 14px; }
+  .wiz-sum div span:last-child { color: var(--quiet); }
+  .clash { color: var(--fail); font-size: 13px; margin: 4px 0; }
 </style>
 
 <main>
@@ -192,6 +218,7 @@
       <button class="primary" id="run">Run</button>
       <button id="runFolder" title="Check a folder as one delivery">Check a folder…</button>
       <button id="sortFolder" title="Sort a folder into audio, video and captions">Sort a folder…</button>
+      <button id="newProfile" class="hidden" title="Write a delivery standard of your own">Production SOP…</button>
     </div>
     <p class="note" id="targetNote"></p>
     <div class="row hidden" id="pictureRow">
@@ -203,6 +230,69 @@
     </div>
     <p class="note hidden" id="pictureNote"></p>
     <p class="error hidden" id="toolError"></p>
+  </section>
+
+  <section class="panel hidden" id="wizardPanel">
+    <div class="steps">
+      <span data-step="1">1 · What it is</span>
+      <span data-step="2">2 · What it requires</span>
+      <span data-step="3">3 · Where it comes from</span>
+      <span data-step="4">4 · Review and save</span>
+    </div>
+
+    <div id="wizStep1">
+      <div class="field"><label for="wizLabel">Name</label>
+        <input id="wizLabel" placeholder="Aura album master" spellcheck="false"></div>
+      <div class="field"><label for="wizSummary">What it is for</label>
+        <input id="wizSummary" placeholder="House delivery standard for the Aura releases."></div>
+      <div class="field"><label for="wizFrom">Start from</label>
+        <select id="wizFrom"></select></div>
+      <p class="note">The file kind is not asked for — it follows from the
+        requirements you set. A profile with a rule about the picture is
+        offered for video; one with only sound rules is offered for sound
+        files and for a video's soundtrack.</p>
+    </div>
+
+    <div id="wizStep2" class="hidden">
+      <div id="wizRules"></div>
+      <div class="row" style="margin-top:14px">
+        <select id="wizAdd"></select>
+        <button id="wizAddBtn">Add this requirement</button>
+      </div>
+      <p class="note">Every profile also inherits the always-on checks —
+        clipping, silent channels, phase, overlapping captions — so those do
+        not need adding and are not listed here.</p>
+    </div>
+
+    <div id="wizStep3" class="hidden">
+      <div class="field"><label for="wizBasis">These thresholds are</label>
+        <select id="wizBasis">
+          <option value="house">a house standard — ours, and ours to change</option>
+          <option value="published">published by whoever receives the files</option>
+          <option value="observed">observed in practice, not published anywhere</option>
+        </select></div>
+      <div class="field"><label for="wizSource">Written down where</label>
+        <input id="wizSource" placeholder="Internal delivery SOP, rev 4"></div>
+      <div class="field"><label for="wizChecked">Last checked</label>
+        <input id="wizChecked" placeholder="2026-09"></div>
+      <p class="note">This travels with every finding the profile produces, so
+        anybody reading the report can see whether a number came from a
+        specification, from experience, or from your own house rules — and
+        how old it is.</p>
+    </div>
+
+    <div id="wizStep4" class="hidden">
+      <div id="wizClashes"></div>
+      <div class="wiz-sum" id="wizSummaryOut"></div>
+    </div>
+
+    <div class="qtotal">
+      <button id="wizBack">Back</button>
+      <button class="primary" id="wizNext">Next</button>
+      <button class="primary hidden" id="wizSave">Save this profile</button>
+      <button class="toggle" id="wizCancel">Cancel</button>
+      <span class="note" id="wizWhere"></span>
+    </div>
   </section>
 
   <section class="panel hidden" id="queuePanel">
@@ -646,11 +736,314 @@ function setMode(next) {
   $("modePro").classList.toggle("on", next === "pro");
   document.body.classList.toggle("pro", next === "pro");
   $("pictureRow").classList.toggle("hidden", next !== "pro" || !lastPicturePlan);
+  $("newProfile").classList.toggle("hidden", next !== "pro");
   if (queue) renderQueue();
 }
 
 $("modeGuided").addEventListener("click", () => setMode("guided"));
 $("modePro").addEventListener("click", () => setMode("pro"));
+
+// ------------------------------------------------------------ the wizard
+//
+// It writes a real portable JSON profile into the person's own config folder
+// and nothing else. No opaque application state: what comes out is a file
+// they can read, diff, mail to a client or check into a repository, and the
+// same file the CLI takes with --target.
+//
+// It never asks what kind of file the profile is for. That was a field once,
+// it was wrong on half the built-ins, and it is now read off the rules — so
+// asking would be reintroducing the bug with a friendlier face.
+
+let draft = null;
+let wizStep = 1;
+let catalogue = [];
+
+const NEEDS_TITLE = { audio: "Sound", picture: "Picture",
+                      captions: "Captions", any: "The file itself" };
+
+$("newProfile").addEventListener("click", openWizard);
+
+async function openWizard() {
+  try {
+    const data = await api("/profiles", {});
+    catalogue = data.catalogue;
+    $("wizWhere").textContent = "Saved into " + data.folder;
+    $("wizFrom").innerHTML = `<option value="">Nothing — start empty</option>`
+      + data.profiles.map((p) =>
+          `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join("");
+    draft = { id: "", label: "", summary: "", confidence: "house",
+              source: "", checked: "", rules: [], set_rules: [] };
+    wizStep = 1;
+    $("wizLabel").value = ""; $("wizSummary").value = "";
+    $("wizSource").value = ""; $("wizChecked").value = "";
+    showStep();
+    $("wizardPanel").classList.remove("hidden");
+    $("wizardPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) { fail(error.message); }
+}
+
+// Starting from a built-in copies its rules in as a draft. The universal ones
+// are left out: they are inherited at load, and carrying copies would mean an
+// SOP that silently stopped tracking them when they changed.
+$("wizFrom").addEventListener("change", async () => {
+  const from = $("wizFrom").value;
+  if (!from) { draft.rules = []; draft.set_rules = []; return; }
+  try {
+    const data = await api("/targets_full", { id: from });
+    draft.rules = data.rules.filter((r) => !r.universal)
+      .map((r) => ({ ...r }));
+    draft.set_rules = (data.set_rules || []).filter((r) => !r.universal)
+      .map((r) => ({ ...r }));
+  } catch (error) { fail(error.message); }
+});
+
+function showStep() {
+  for (let n = 1; n <= 4; n++) {
+    $("wizStep" + n).classList.toggle("hidden", n !== wizStep);
+    document.querySelector(`.steps span[data-step="${n}"]`)
+      .classList.toggle("on", n === wizStep);
+  }
+  $("wizBack").disabled = wizStep === 1;
+  $("wizNext").classList.toggle("hidden", wizStep === 4);
+  $("wizSave").classList.toggle("hidden", wizStep !== 4);
+  if (wizStep === 2) renderRules();
+  if (wizStep === 4) reviewDraft();
+}
+
+$("wizBack").addEventListener("click", () => { wizStep--; showStep(); });
+$("wizNext").addEventListener("click", () => {
+  if (wizStep === 1) {
+    draft.label = $("wizLabel").value.trim();
+    draft.summary = $("wizSummary").value.trim();
+    draft.id = slug(draft.label);
+    if (!draft.label) return fail("Give it a name first.");
+  }
+  if (wizStep === 3) {
+    draft.confidence = $("wizBasis").value;
+    draft.source = $("wizSource").value.trim();
+    draft.checked = $("wizChecked").value.trim();
+  }
+  wizStep++;
+  showStep();
+});
+$("wizCancel").addEventListener("click", () => {
+  $("wizardPanel").classList.add("hidden");
+  draft = null;
+});
+
+function slug(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "_")
+             .replace(/^_+|_+$/g, "") || "profile";
+}
+
+// ---- the rules
+
+function renderRules() {
+  const rows = draft.rules.concat(draft.set_rules);
+  $("wizRules").innerHTML = rows.length
+    ? rows.map((rule, i) => ruleRow(rule, i)).join("")
+    : `<p class="note">No requirements yet. Add one below, or go back and
+        start from a target that already has some.</p>`;
+
+  const taken = new Set(rows.map((r) => r.metric));
+  const groups = {};
+  for (const entry of catalogue) {
+    if (taken.has(entry.metric)) continue;
+    (groups[entry.set ? "across" : entry.needs] ||= []).push(entry);
+  }
+  $("wizAdd").innerHTML = Object.entries(groups).map(([key, entries]) =>
+    `<optgroup label="${esc(key === "across" ? "Across the delivery"
+                            : NEEDS_TITLE[key] || key)}">`
+    + entries.map((e) => `<option value="${esc(e.metric)}">${esc(e.label)}</option>`).join("")
+    + `</optgroup>`).join("");
+
+  wireRules();
+}
+
+function ruleRow(rule, index) {
+  const kind = boundKind(rule);
+  return `<div class="rule" data-rule="${index}">
+    <span class="nm">${esc(rule.label || rule.metric)}${
+      rule.unit ? ` <span class="qsub">${esc(rule.unit)}</span>` : ""}</span>
+    <select data-field="kind">
+      ${["at least", "at most", "between", "one of", "must be yes", "must be no"]
+        .map((k) => `<option${k === kind ? " selected" : ""}>${k}</option>`).join("")}
+    </select>
+    <span class="bounds">${boundInputs(rule, kind)}</span>
+    <select data-field="severity">
+      ${["fail", "warn", "info"].map((s) =>
+        `<option${s === (rule.severity || "fail") ? " selected" : ""}>${s}</option>`).join("")}
+    </select>
+    <button data-drop="${index}" title="Remove">×</button>
+  </div>`;
+}
+
+function boundKind(rule) {
+  if ("one_of" in rule) return "one of";
+  if (rule.require) return "must be yes";
+  if (rule.forbid) return "must be no";
+  if (rule.min !== undefined && rule.max !== undefined) return "between";
+  if (rule.max !== undefined) return "at most";
+  return "at least";
+}
+
+function boundInputs(rule, kind) {
+  const box = (field, value) =>
+    `<input data-field="${field}" value="${value === undefined ? "" : esc(String(value))}">`;
+  if (kind === "one of") return box("one_of", (rule.one_of || []).join(", "));
+  if (kind === "must be yes" || kind === "must be no") return "";
+  if (kind === "between") return box("min", rule.min) + box("max", rule.max);
+  if (kind === "at most") return box("max", rule.max);
+  return box("min", rule.min);
+}
+
+function ruleAt(index) {
+  return index < draft.rules.length
+    ? draft.rules[index] : draft.set_rules[index - draft.rules.length];
+}
+
+function wireRules() {
+  $("wizRules").querySelectorAll(".rule").forEach((row) => {
+    const rule = ruleAt(Number(row.dataset.rule));
+    row.querySelectorAll("[data-field]").forEach((input) => {
+      input.addEventListener("change", () => {
+        applyField(rule, input.dataset.field, input.value);
+        renderRules();
+      });
+    });
+  });
+  $("wizRules").querySelectorAll("button[data-drop]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.drop);
+      if (index < draft.rules.length) draft.rules.splice(index, 1);
+      else draft.set_rules.splice(index - draft.rules.length, 1);
+      renderRules();
+    });
+  });
+}
+
+function applyField(rule, field, value) {
+  if (field === "severity") { rule.severity = value; return; }
+  if (field === "kind") {
+    for (const key of ["min", "max", "one_of", "require", "forbid",
+                       "warn_min", "warn_max"]) delete rule[key];
+    becomesYours(rule);
+    if (value === "must be yes") rule.require = true;
+    else if (value === "must be no") rule.forbid = true;
+    else if (value === "one of") rule.one_of = [];
+    else if (value === "at most") rule.max = 0;
+    else if (value === "between") { rule.min = 0; rule.max = 0; }
+    else rule.min = 0;
+    return;
+  }
+  if (field === "one_of") {
+    rule.one_of = value.split(",").map((v) => v.trim()).filter(Boolean)
+      .map((v) => (isNaN(Number(v)) ? v : Number(v)));
+    return;
+  }
+  const number = Number(value);
+  if (value.trim() === "" || isNaN(number)) delete rule[field];
+  else rule[field] = number;
+  becomesYours(rule);
+  strandedWarnings(rule);
+}
+
+// A threshold you changed is yours, and the citation that came with the old
+// one is not about it any more.
+//
+// Copying EBU R128 and tightening the loudness to -15..-13 kept `basis:
+// published` and a note reading "R 128 sets -23.0 LUFS…" attached to a number
+// EBU never published. That is the exact failure this tool exists to prevent,
+// arriving through its own profile editor — every finding carries its basis
+// into the report, so a house threshold wearing a published badge is a lie
+// told in somebody's client-facing paperwork.
+//
+// So editing the number re-labels the rule as the draft's own and drops the
+// borrowed prose. Leave the number alone and the citation stays true and
+// stays put.
+function becomesYours(rule) {
+  if (rule.basis === draft.confidence && !rule.note) return;
+  rule.basis = draft.confidence;
+  delete rule.note;
+  delete rule.source;
+}
+
+// A warning band has to sit inside the failing one. Warn-above -22.5 with
+// fail-above -13 does not warn early, it warns about the entire pass band;
+// warn-below -23.5 with fail-below -15 never warns at all. Both are dead by
+// arithmetic rather than by preference, so both go when the band that
+// stranded them moves.
+function strandedWarnings(rule) {
+  const { min, max } = rule;
+  const outside = (value) =>
+    (min !== undefined && value < min) || (max !== undefined && value > max);
+  if (rule.warn_min !== undefined && outside(rule.warn_min)) delete rule.warn_min;
+  if (rule.warn_max !== undefined && outside(rule.warn_max)) delete rule.warn_max;
+}
+
+$("wizAddBtn").addEventListener("click", () => {
+  const metric = $("wizAdd").value;
+  const entry = catalogue.find((e) => e.metric === metric);
+  if (!entry) return;
+  const rule = { id: metric, metric, label: entry.label,
+                 severity: "fail", basis: draft.confidence };
+  if (entry.unit) rule.unit = entry.unit;
+  rule.min = 0;
+  (entry.set ? draft.set_rules : draft.rules).push(rule);
+  renderRules();
+});
+
+// ---- review
+
+async function reviewDraft() {
+  draft.rules.forEach((r) => (r.basis ||= draft.confidence));
+  try {
+    const out = await api("/profile_review", { profile: draft });
+    $("wizClashes").innerHTML = out.invalid
+      ? `<p class="clash">${esc(out.invalid)}</p>`
+      : out.contradictions.map((c) => `<p class="clash">${esc(c)}</p>`).join("");
+    $("wizSave").disabled = Boolean(out.invalid) || out.contradictions.length > 0;
+    $("wizSummaryOut").innerHTML = out.summary ? summaryHtml(out.summary) : "";
+  } catch (error) { fail(error.message); }
+}
+
+function summaryHtml(summary) {
+  const block = (title, rows) => rows.length
+    ? `<h5>${esc(title)}</h5>` + rows.map((r) =>
+        `<div><span>${esc(r.label)}</span><span>${esc(r.required)} · ${esc(r.severity)}</span></div>`
+      ).join("") : "";
+  return `<p class="note">Offered for ${esc(summary.kinds.join(" and "))} files.
+      ${summary.stated} requirement${summary.stated === 1 ? "" : "s"} of your own,
+      plus ${summary.inherited} always-on checks every profile carries.</p>`
+    + block("Sound", summary.sound)
+    + block("Picture", summary.picture)
+    + block("Captions", summary.captions)
+    + block("The file itself", summary.container)
+    + block("Across the delivery", summary.across_the_delivery);
+}
+
+$("wizSave").addEventListener("click", async () => {
+  try {
+    const out = await api("/profile_save", { profile: draft });
+    $("wizardPanel").classList.add("hidden");
+    draft = null;
+    if (queue) {
+      // A new SOP should appear in the dropdowns already on screen without
+      // re-sorting the folder behind them.
+      const fresh = await api("/profiles", {});
+      for (const kind of ["audio", "video", "captions"]) {
+        queue.profiles[kind] = fresh.profiles
+          .filter((p) => p.kinds.includes(kind))
+          .map((p) => ({ id: p.id, label: p.label, summary: p.summary,
+                         confidence: p.confidence }));
+      }
+      renderQueue();
+    }
+    await boot();
+    $("target").value = out.id;
+    describeTarget();
+  } catch (error) { fail(error.message); }
+});
 
 // ---------------------------------------------------------------- the queue
 

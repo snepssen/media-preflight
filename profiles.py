@@ -24,6 +24,7 @@ import json
 import os
 
 import checks
+import platform_support
 
 
 # ---------------------------------------------------------------- rule kinds
@@ -582,25 +583,82 @@ BUILT_IN = [ACX, EBU_R128, SPOTIFY_PODCAST, YOUTUBE, SOCIAL_VERTICAL,
             GENERIC_WEB, SUBTITLES]
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Two places, and the difference matters once this is installed rather than
+# run from a clone. `profiles/` beside the code carries the shipped example
+# and is read-only in practice: inside a .app bundle or a zipapp it is not
+# somebody's folder to write to, and anything put there is lost on the next
+# upgrade. A person's own SOPs go in their config directory, which survives
+# reinstallation and is theirs.
 PROFILE_DIR = os.path.join(HERE, "profiles")
 
 
-def all_profiles(include_custom=True):
-    """Built-in targets first, then anything dropped into profiles/."""
+def user_profile_dir():
+    return os.path.join(platform_support.config_dir(), "profiles")
+
+
+def _read_dir(folder, found, order):
+    if not os.path.isdir(folder):
+        return
+    for name in sorted(os.listdir(folder)):
+        if not name.endswith(".json"):
+            continue
+        try:
+            profile = load(os.path.join(folder, name))
+        except (OSError, ValueError):
+            # A profile nobody can parse must not take the whole list with
+            # it; `problems()` is where somebody is told which one and why.
+            continue
+        if profile["id"] not in found:
+            order.append(profile["id"])
+        profile["origin"] = folder
+        found[profile["id"]] = profile
+
+
+def shipped():
+    """Everything that travels with this tool: built-ins and the examples.
+
+    What a person has written for themselves is deliberately not here. Their
+    house SOPs are not this tool's to make claims about — the test suite
+    checks that every threshold *it* ships cites a source, and running that
+    over somebody's own profiles would fail their machine for a file that is
+    none of the suite's business.
+    """
     found = {p["id"]: with_universal(p) for p in BUILT_IN}
     order = [p["id"] for p in BUILT_IN]
-    if include_custom and os.path.isdir(PROFILE_DIR):
-        for name in sorted(os.listdir(PROFILE_DIR)):
+    _read_dir(PROFILE_DIR, found, order)
+    return [found[i] for i in order]
+
+
+def all_profiles(include_custom=True):
+    """Built-in targets, then the shipped examples, then a person's own."""
+    found = {p["id"]: with_universal(p) for p in BUILT_IN}
+    order = [p["id"] for p in BUILT_IN]
+    if include_custom:
+        _read_dir(PROFILE_DIR, found, order)
+        _read_dir(user_profile_dir(), found, order)
+    return [found[i] for i in order]
+
+
+def problems():
+    """Custom profiles that could not be read, and what is wrong with each.
+
+    all_profiles skips them so one bad file cannot empty the list. Skipping
+    quietly would leave somebody staring at a dropdown missing the SOP they
+    just wrote, so the reason is kept for the page to show.
+    """
+    out = []
+    for folder in (PROFILE_DIR, user_profile_dir()):
+        if not os.path.isdir(folder):
+            continue
+        for name in sorted(os.listdir(folder)):
             if not name.endswith(".json"):
                 continue
             try:
-                profile = load(os.path.join(PROFILE_DIR, name))
-            except (OSError, ValueError):
-                continue
-            if profile["id"] not in found:
-                order.append(profile["id"])
-            found[profile["id"]] = profile
-    return [found[i] for i in order]
+                load(os.path.join(folder, name))
+            except (OSError, ValueError) as error:
+                out.append({"name": name, "path": os.path.join(folder, name),
+                            "error": str(error)})
+    return out
 
 
 # What a profile is a target *for*, read off its rules rather than off a label.
@@ -688,6 +746,142 @@ def with_universal(profile):
     return profile
 
 
+# ------------------------------------------------- reviewing a profile
+#
+# Two questions somebody writing an SOP needs answered before they save it:
+# what does this actually enforce, and is any of it impossible? The first is
+# prose; the second is arithmetic, and the arithmetic is the one worth having
+# a machine do.
+
+
+def metric_catalogue():
+    """Every metric a rule can be written against, with a usable label.
+
+    There is no label registry — labels live on rules — so the built-in
+    profiles are read for the wording they already use, which keeps a custom
+    profile speaking the same language as the ones beside it. Anything no
+    built-in mentions falls back to its own name, tidied.
+    """
+    labels, units = {}, {}
+    for profile in BUILT_IN:
+        for rule in list(profile.get("rules", [])) + list(
+                profile.get("set_rules") or []) + list(UNIVERSAL) + list(
+                UNIVERSAL_SET):
+            labels.setdefault(rule["metric"], rule.get("label"))
+            if rule.get("unit"):
+                units.setdefault(rule["metric"], rule["unit"])
+
+    out = []
+    for metric in sorted(checks.METRICS):
+        out.append({
+            "metric": metric,
+            "label": labels.get(metric) or metric.replace("_", " ").capitalize(),
+            "unit": units.get(metric, ""),
+            "needs": checks.needs_of(metric),
+            "scope": checks.scope_of(metric),
+            "set": False,
+        })
+    for metric in sorted(checks.SET_METRICS):
+        out.append({
+            "metric": metric,
+            "label": labels.get(metric) or metric.replace("_", " ").capitalize(),
+            "unit": units.get(metric, ""), "needs": "any",
+            "scope": "file", "set": True,
+        })
+    return out
+
+
+def summarise(profile):
+    """What this profile enforces, in the order a person would read it.
+
+    Grouped by what each rule is a question about, using the same requirement
+    phrasing as the report's right-hand column — a profile that says one thing
+    on this page and another on the report would be worse than no summary.
+    """
+    groups = {"audio": [], "picture": [], "captions": [], "any": []}
+    for rule in profile.get("rules", []):
+        if rule.get("universal"):
+            continue
+        said = checks.describe(rule)
+        if not said:
+            continue
+        groups[checks.needs_of(rule["metric"])].append({
+            "label": rule.get("label", rule["metric"]),
+            "required": said,
+            "severity": rule.get("severity", "fail"),
+            "basis": rule.get("basis", "house"),
+        })
+    across = [{"label": r.get("label", r["metric"]),
+               "required": checks.describe(r),
+               "severity": r.get("severity", "fail"),
+               "basis": r.get("basis", "house")}
+              for r in profile.get("set_rules", []) if not r.get("universal")]
+    return {
+        "kinds": list(applies_to(profile)),
+        "sound": groups["audio"],
+        "picture": groups["picture"],
+        "captions": groups["captions"],
+        "container": groups["any"],
+        "across_the_delivery": across,
+        "stated": sum(len(v) for v in groups.values()) + len(across),
+        "inherited": sum(1 for r in profile.get("rules", [])
+                         if r.get("universal")),
+    }
+
+
+def contradictions(profile):
+    """Requirements that cannot all be met. Sentences, not error codes.
+
+    Only what is decidable from the numbers. A threshold being *wrong* is not
+    something this can know — that is what `basis` and `source` are for — but
+    a threshold that nothing could ever satisfy is arithmetic, and catching it
+    before the profile is saved beats catching it on a file somebody delivered.
+    """
+    said = []
+    for rule in profile.get("rules", []) + list(profile.get("set_rules") or []):
+        name = rule.get("label") or rule.get("id") or rule.get("metric")
+        low, high = rule.get("min"), rule.get("max")
+        if low is not None and high is not None and low > high:
+            said.append("%s asks for at least %g and at most %g, which nothing "
+                        "can be." % (name, low, high))
+        # A warning band has to sit inside the failing one. Outside it below,
+        # the warning never appears; outside it above, every value that passes
+        # warns. Neither is what anybody meant.
+        for field, warn in (("warn_min", rule.get("warn_min")),
+                            ("warn_max", rule.get("warn_max"))):
+            if warn is None:
+                continue
+            if low is not None and warn < low:
+                said.append("%s warns at %g, below the %g it already fails "
+                            "under, so the warning can never appear."
+                            % (name, warn, low))
+            if high is not None and warn > high:
+                said.append("%s warns at %g, above the %g it already fails "
+                            "over, so everything that passes would warn."
+                            % (name, warn, high))
+        if "one_of" in rule and not rule["one_of"]:
+            said.append("%s allows nothing at all." % name)
+        if rule.get("forbid") and rule.get("require"):
+            said.append("%s is required and forbidden at once." % name)
+
+    seen = {}
+    for rule in profile.get("rules", []):
+        seen.setdefault(rule["metric"], []).append(rule)
+    for metric, rules in seen.items():
+        if len(rules) < 2:
+            continue
+        lows = [r["min"] for r in rules if r.get("min") is not None]
+        highs = [r["max"] for r in rules if r.get("max") is not None]
+        if lows and highs and max(lows) > min(highs):
+            said.append("Two rules on %s cannot both hold: one needs at least "
+                        "%g, another at most %g." % (metric, max(lows),
+                                                     min(highs)))
+        allowed = [set(map(str, r["one_of"])) for r in rules if "one_of" in r]
+        if len(allowed) > 1 and not set.intersection(*allowed):
+            said.append("Two rules on %s allow no value in common." % metric)
+    return said
+
+
 def load(path):
     """Read a custom profile, checking it well enough to fail with a sentence."""
     with open(path, "r", encoding="utf-8") as handle:
@@ -732,6 +926,31 @@ def validate(data):
                 f"Rule '{rule['id']}' has basis '{basis}'; use published, "
                 "observed or house.")
     return True
+
+
+def save_custom(profile):
+    """Write somebody's own profile into their config directory.
+
+    Returns the path. The id becomes the filename, so saving the same profile
+    twice replaces it rather than accumulating copies — which is what editing
+    an SOP and saving it again is meant to do.
+    """
+    validate(profile)
+    folder = user_profile_dir()
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, profile["id"] + ".json")
+    save(profile, path)
+    return path
+
+
+def delete_custom(identifier):
+    """Remove one of a person's own profiles. Built-ins are not theirs to lose."""
+    path = os.path.join(user_profile_dir(), identifier + ".json")
+    if not os.path.isfile(path):
+        raise ValueError("There is no profile of your own called %r."
+                         % (identifier,))
+    os.remove(path)
+    return path
 
 
 def save(profile, path):

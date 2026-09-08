@@ -416,6 +416,43 @@ Estimates are given as a range. They are arithmetic over constants measured on
 one laptop, and "about 16 to 33 minutes" is honest in a way "1406 seconds" is
 not.
 
+## Writing a profile
+
+The wizard produces a portable JSON file in the person's config directory and
+nothing else — a file they can read, diff, mail to a client, or check into a
+repository, and the same file the CLI takes with `--target`. `PROFILE_DIR`
+beside the code carries the shipped example and stays read-only: inside a .app
+bundle or a zipapp it is not somebody's folder to write to, and anything put
+there is lost on the next upgrade. `MEDIA_PREFLIGHT_CONFIG` overrides the
+location.
+
+**It never asks what kind of file the profile is for.** That was a field, it
+was wrong on half the built-ins, and it is derived now — asking would
+reintroduce the bug with a friendlier face. The review step *shows* the kinds
+as a consequence of the rules chosen.
+
+**Editing a threshold re-labels the rule as yours.** Copying EBU R128 and
+tightening the loudness to -15..-13 kept `basis: published` and a note reading
+"R 128 sets -23.0 LUFS…" attached to a number EBU never published. Every
+finding carries its basis into the report, so a house threshold wearing a
+published badge is a lie told in somebody's client-facing paperwork — arriving
+through this tool's own editor. Change the number and the rule becomes the
+draft's own with the borrowed prose dropped; leave it alone and the citation
+stays true and stays put.
+
+`profiles.contradictions` catches what is impossible rather than what is
+wrong. A threshold being wrong is what `basis` and `source` are for; a
+threshold nothing could satisfy is arithmetic. It covers inverted bands,
+warning bands outside the failing band in either direction, rules on one
+metric that cannot both hold, and requirements that allow nothing. The
+warn-band case is not hypothetical — it is what tightening a copied EBU rule
+produces, and the save is refused until it is resolved.
+
+`profiles.shipped()` is built-ins plus the examples; `all_profiles()` adds a
+person's own. The test suite uses `shipped()`, because a developer with a
+house SOP saved should not watch the suite fail over a file that is none of
+its business.
+
 ## What a profile is for
 
 `profiles.applies_to` reads it off the rules. Profiles used to carry a `kind`

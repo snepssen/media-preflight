@@ -25,22 +25,27 @@ class ProfileTests(unittest.TestCase):
             profiles.validate(profile)
 
     def test_every_rule_names_a_metric_the_engine_can_answer(self):
-        for profile in profiles.all_profiles():
+        for profile in profiles.shipped():
             for rule in profile["rules"]:
                 self.assertIn(rule["metric"], checks.METRICS,
                               f"{profile['id']}/{rule['id']}")
 
     def test_every_named_fix_has_a_builder(self):
-        for profile in profiles.all_profiles():
+        for profile in profiles.shipped():
             for rule in profile["rules"]:
                 if rule.get("fix"):
                     self.assertIn(rule["fix"], profiles_fix_names(),
                                   f"{profile['id']}/{rule['id']}")
 
-    def test_every_profile_says_where_its_numbers_came_from(self):
-        for profile in profiles.all_profiles():
+    def test_every_built_in_says_where_its_numbers_came_from(self):
+        # Built-ins only. all_profiles also reads the person's own folder,
+        # and their house SOPs are not this suite's business — a developer
+        # with a custom profile saved would otherwise watch these tests fail
+        # for a file that is none of their concern.
+        for profile in profiles.BUILT_IN:
             self.assertTrue(profile.get("source"), profile["id"])
-            self.assertIn(profile.get("confidence"), ("published", "informal"))
+            self.assertIn(profile.get("confidence"),
+                          ("published", "informal", "house"))
 
     def test_universal_rules_are_added_but_never_shadow_the_target(self):
         acx = profiles.get("acx")
@@ -192,7 +197,7 @@ class ProvenanceTests(unittest.TestCase):
     """Where a number came from is part of what the number means."""
 
     def test_a_basis_is_one_of_the_three_that_mean_something(self):
-        for profile in profiles.all_profiles():
+        for profile in profiles.shipped():
             for rule in profile["rules"] + profile.get("set_rules", []):
                 basis = rule.get("basis")
                 if basis is not None:
@@ -286,7 +291,7 @@ class AuditedThresholdTests(unittest.TestCase):
                          ["aac", "opus"])
 
     def test_every_published_target_records_when_it_was_read(self):
-        for profile in profiles.all_profiles():
+        for profile in profiles.shipped():
             if profile.get("confidence") == "published":
                 self.assertRegex(profile.get("checked", ""), r"^\d{4}-\d{2}$",
                                  profile["id"])
@@ -370,7 +375,7 @@ class WhichFiltersATargetNeeds(unittest.TestCase):
                 set(video.ALL_FILTERS))
 
     def test_selective_is_never_more_than_full(self):
-        for profile in profiles.all_profiles():
+        for profile in profiles.shipped():
             self.assertLessEqual(
                 preflight.picture_filters(profile),
                 set(video.ALL_FILTERS))
@@ -482,3 +487,138 @@ class WhatEachProfileIsFor(unittest.TestCase):
     def test_a_caption_target_can_never_start_a_picture_pass(self):
         for profile in profiles.for_kind("captions"):
             self.assertEqual(preflight.picture_filters(profile), set())
+
+
+class ReviewingAProfileBeforeItIsSaved(unittest.TestCase):
+    """What is impossible is arithmetic, and worth catching before delivery."""
+
+    def rule(self, **fields):
+        base = {"id": "r", "metric": "integrated_lufs", "label": "Loudness"}
+        base.update(fields)
+        return {"id": "p", "label": "P", "rules": [base]}
+
+    def test_a_band_nothing_can_satisfy(self):
+        said = profiles.contradictions(self.rule(min=-13, max=-15))
+        self.assertTrue(any("nothing can be" in s for s in said))
+
+    def test_a_warning_below_the_failing_band_never_appears(self):
+        said = profiles.contradictions(self.rule(min=-15, max=-13,
+                                                 warn_min=-23.5))
+        self.assertTrue(any("never appear" in s for s in said))
+
+    def test_a_warning_above_the_failing_band_warns_about_everything(self):
+        # Copying EBU R128 and tightening the loudness leaves warn_max at
+        # -22.5 against a pass band of -15 to -13, so every passing value
+        # would also warn.
+        said = profiles.contradictions(self.rule(min=-15, max=-13,
+                                                 warn_max=-22.5))
+        self.assertTrue(said, "a stranded warning band must be reported")
+
+    def test_a_warning_inside_the_failing_band_is_fine(self):
+        self.assertEqual(
+            profiles.contradictions(self.rule(min=-24, max=-22,
+                                              warn_min=-23.5, warn_max=-22.5)),
+            [])
+
+    def test_two_rules_that_cannot_both_hold(self):
+        said = profiles.contradictions({"id": "p", "label": "P", "rules": [
+            {"id": "a", "metric": "sample_rate", "label": "A", "one_of": [44100]},
+            {"id": "b", "metric": "sample_rate", "label": "B", "one_of": [48000]}]})
+        self.assertTrue(any("no value in common" in s for s in said))
+
+    def test_a_rule_allowing_nothing(self):
+        said = profiles.contradictions({"id": "p", "label": "P", "rules": [
+            {"id": "a", "metric": "audio_codec", "label": "Codec", "one_of": []}]})
+        self.assertTrue(any("nothing at all" in s for s in said))
+
+    def test_the_built_in_targets_contradict_nothing(self):
+        for profile in profiles.BUILT_IN:
+            self.assertEqual(profiles.contradictions(
+                profiles.with_universal(profile)), [], profile["id"])
+
+
+class SummarisingAProfile(unittest.TestCase):
+    def test_it_separates_what_was_stated_from_what_is_inherited(self):
+        summary = profiles.summarise(profiles.get("ebu_r128"))
+        self.assertGreater(summary["inherited"], 0)
+        self.assertGreater(summary["stated"], 0)
+        labels = [r["label"] for r in summary["sound"]]
+        self.assertIn("Integrated loudness", labels)
+
+    def test_it_speaks_the_same_requirement_as_the_report(self):
+        summary = profiles.summarise(profiles.get("acx"))
+        peak = next(r for r in summary["sound"] if r["label"] == "Peak level")
+        rule = next(r for r in profiles.get("acx")["rules"]
+                    if r["id"] == "peak")
+        self.assertEqual(peak["required"], checks.describe(rule))
+
+    def test_the_kinds_come_from_the_rules(self):
+        self.assertEqual(profiles.summarise(profiles.get("youtube"))["kinds"],
+                         ["video"])
+
+
+class WhereAPersonsOwnProfilesLive(unittest.TestCase):
+    def test_not_inside_the_application(self):
+        # A .app bundle or a zipapp is not somebody's folder to write into,
+        # and anything put there is lost on the next upgrade.
+        self.assertNotIn(os.path.dirname(os.path.abspath(profiles.__file__)),
+                         profiles.user_profile_dir())
+
+    def test_the_catalogue_covers_every_metric_a_rule_can_use(self):
+        catalogue = {row["metric"] for row in profiles.metric_catalogue()}
+        self.assertEqual(set(checks.METRICS) - catalogue, set())
+        self.assertEqual(set(checks.SET_METRICS) - catalogue, set())
+
+    def test_every_catalogue_entry_has_something_to_call_it(self):
+        for row in profiles.metric_catalogue():
+            self.assertTrue(row["label"].strip(), row["metric"])
+
+
+class TheSuiteDoesNotReadSomebodysOwnProfiles(unittest.TestCase):
+    """A developer with a house SOP saved must not watch these tests fail."""
+
+    def test_a_custom_profile_cannot_break_the_shipped_checks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            previous = os.environ.get("MEDIA_PREFLIGHT_CONFIG")
+            os.environ["MEDIA_PREFLIGHT_CONFIG"] = folder
+            try:
+                mine = Path(folder, "profiles")
+                mine.mkdir()
+                # No source, no confidence — everything the shipped checks
+                # insist on, absent. It is theirs; it is allowed.
+                (mine / "house_sop.json").write_text(json.dumps({
+                    "id": "house_sop", "label": "Ours",
+                    "rules": [{"id": "l", "metric": "integrated_lufs",
+                               "label": "Loudness", "min": -15, "max": -13}]}))
+                self.assertIn("house_sop",
+                              [p["id"] for p in profiles.all_profiles()])
+                self.assertNotIn("house_sop",
+                                 [p["id"] for p in profiles.shipped()])
+                for profile in profiles.shipped():
+                    self.assertTrue(profile.get("source"), profile["id"])
+            finally:
+                if previous is None:
+                    del os.environ["MEDIA_PREFLIGHT_CONFIG"]
+                else:
+                    os.environ["MEDIA_PREFLIGHT_CONFIG"] = previous
+
+    def test_saving_and_removing_a_profile_of_ones_own(self):
+        with tempfile.TemporaryDirectory() as folder:
+            previous = os.environ.get("MEDIA_PREFLIGHT_CONFIG")
+            os.environ["MEDIA_PREFLIGHT_CONFIG"] = folder
+            try:
+                draft = {"id": "mine", "label": "Mine", "rules": [
+                    {"id": "l", "metric": "integrated_lufs",
+                     "label": "Loudness", "min": -15, "max": -13}]}
+                path = profiles.save_custom(draft)
+                self.assertTrue(os.path.isfile(path))
+                self.assertEqual(profiles.get("mine")["label"], "Mine")
+                profiles.delete_custom("mine")
+                self.assertFalse(os.path.isfile(path))
+                with self.assertRaises(ValueError):
+                    profiles.delete_custom("mine")
+            finally:
+                if previous is None:
+                    del os.environ["MEDIA_PREFLIGHT_CONFIG"]
+                else:
+                    os.environ["MEDIA_PREFLIGHT_CONFIG"] = previous

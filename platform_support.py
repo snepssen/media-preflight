@@ -232,7 +232,15 @@ def reveal(path):
 
 
 def config_dir(name="media-preflight"):
-    """Where a person's own settings live — custom profiles, remembered target."""
+    """Where a person's own settings live — custom profiles, remembered target.
+
+    MEDIA_PREFLIGHT_CONFIG overrides it, for a portable install that keeps its
+    settings beside itself and for anything that needs to point this
+    somewhere harmless.
+    """
+    override = os.environ.get("MEDIA_PREFLIGHT_CONFIG")
+    if override:
+        return override
     if IS_WINDOWS:
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
     elif IS_MACOS:
