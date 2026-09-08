@@ -407,3 +407,30 @@ class MeasurementsNobodyChecked(unittest.TestCase):
             "frozen_seconds": None, "flash_regions": None}))
         self.assertFalse(any("Frozen" in line for line in lines))
         self.assertFalse(any("Flashing" in line for line in lines))
+
+
+class ImpossibleFlagsAreRefusedOnce(unittest.TestCase):
+    """A mistake in the command is not a fault in the delivery."""
+
+    def args(self, target, picture="selective", width_divide=2):
+        import argparse
+        return argparse.Namespace(target=target, picture=picture,
+                                  width_divide=width_divide)
+
+    def test_reduced_width_with_the_field_checks_is_refused(self):
+        with self.assertRaises(ValueError) as caught:
+            preflight.check_picture_flags(self.args("youtube"))
+        self.assertIn("idet", str(caught.exception))
+
+    def test_it_is_allowed_where_no_rule_reads_the_fields(self):
+        preflight.check_picture_flags(self.args("social_vertical"))
+
+    def test_full_depth_always_reads_the_fields_so_always_refuses(self):
+        with self.assertRaises(ValueError):
+            preflight.check_picture_flags(
+                self.args("social_vertical", picture="full"))
+
+    def test_full_width_is_never_refused(self):
+        for target in ("youtube", "social_vertical", "ebu_r128"):
+            preflight.check_picture_flags(
+                self.args(target, width_divide=None))

@@ -556,7 +556,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 342 checks, about thirty seconds
+python3 -m unittest discover -s tests     # 346 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

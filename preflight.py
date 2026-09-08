@@ -266,6 +266,7 @@ def _add_clipping(path, facts, measurements, ffmpeg):
 # ----------------------------------------------------------------- commands
 
 def command_check(args):
+    check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
     facts, measurements, result, profile = run(
@@ -281,6 +282,7 @@ def command_check(args):
 
 
 def command_fix(args):
+    check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
     facts, measurements, result, profile = run(
@@ -364,6 +366,7 @@ def command_fix(args):
 
 def command_batch(args):
     """Check a folder, or a list of files, as one delivery."""
+    check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_delivery_notice(args))
     result = batch.run(args.files, args.target, recursive=args.recursive,
@@ -634,6 +637,22 @@ def _picture_flags(sub):
     sub.add_argument("--quarter-width", dest="width_divide",
                      action="store_const", const=4,
                      help="as --half-width, but a quarter")
+
+
+def check_picture_flags(args):
+    """Refuse an impossible combination once, before any file is opened.
+
+    Whether reduced width can be used is a property of the target and the
+    depth, not of the file, so it is knowable from the arguments alone. Left
+    to the per-file path it becomes the same sentence once per file under a
+    heading saying none of them could be measured — which blames the delivery
+    for a mistake in the command.
+    """
+    if not getattr(args, "width_divide", None):
+        return
+    profile = profiles.get(args.target) if not isinstance(args.target, dict) \
+        else args.target
+    video.width_divisor(picture_filters(profile, args.picture), args.width_divide)
 
 
 def _picture_notice(path, target, depth, ffprobe=None, facts=None):
