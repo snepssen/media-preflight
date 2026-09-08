@@ -249,6 +249,15 @@ terminal, and the reduced points themselves in the JSON.
   the drawing, asks for `auto`.
 - **Markdown references the chart, never inlines it.** Inline `<svg>` is
   stripped by most Markdown renderers, GitHub included.
+- **A corrected copy is drawn over its original.** `chart.svg(baseline=…)`
+  takes an earlier reduced timeline and draws it dashed behind. Both series
+  are plotted against whichever file is **longer**, and the y-range takes in
+  both — scaling them to a common width, or clipping the earlier one, would
+  hide exactly the change somebody is looking for.
+- **The missing-band note has a short form.** `band_for` returns `absent` (the
+  full sentence, for the report) and `short` (for the chart, which has about
+  a hundred characters of room before the text runs off the edge or lands on
+  the time axis).
 - **Chapters skip their first three seconds.** Short-term loudness looks three
   seconds back, so the opening of a quiet chapter still carries the loud one
   before it — and making a quiet chapter look loud would break exactly the
@@ -372,7 +381,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 301 checks, about thirty seconds
+python3 -m unittest discover -s tests    # 307 checks, about thirty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -407,9 +416,8 @@ Three questions decide the rest:
 
 ## Not yet built
 
-Nothing in the original three-week plan, and nothing named since. Candidates,
-in rough order of how often they would earn their place:
-
-- **Loudness of the corrected copy plotted against the original**, so a
-  correction can be seen as well as verified.
+Nothing in the original three-week plan, and nothing named since. The list of
+things this tool could deterministically catch and does not is, for the
+moment, empty. When something goes on it, the three questions under "Adding a
+check" are how to decide what shape it takes.
 

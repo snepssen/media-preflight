@@ -172,7 +172,9 @@ class SvgTests(unittest.TestCase):
     def test_the_reason_for_a_missing_band_is_drawn_on_the_chart(self):
         drawing = chart.svg(self.points, chart.band_for(profiles.get("acx")),
                             duration=5)
-        self.assertIn("No target band drawn", drawing)
+        self.assertIn("No target band", drawing)
+        self.assertIn("rms level", drawing,
+                      "it should say which measurement the target states")
 
     def test_a_flat_programme_is_not_drawn_as_a_line_on_the_edge(self):
         flat = chart.reduce(timeline([-23.0] * 20))
@@ -222,3 +224,52 @@ class CaptionTrackTests(unittest.TestCase):
         self.assertIn("captioned", drawing)
         self.assertNotIn('class="caption"',
                          chart.svg(points, duration=20))
+
+
+class BaselineTests(unittest.TestCase):
+    """A correction should be visible, not only listed."""
+
+    def _series(self, values, start=0):
+        return chart.reduce([{"t": start + i, "short_term": v, "momentary": v,
+                              "true_peak_dbfs": None, "phase": None}
+                             for i, v in enumerate(values)])
+
+    def test_the_earlier_reading_is_drawn_behind(self):
+        drawing = chart.svg(self._series([-20] * 20), duration=20,
+                            baseline=self._series([-28] * 20),
+                            baseline_duration=20)
+        self.assertIn('class="before"', drawing)
+        self.assertIn("dashed: before the correction", drawing)
+
+    def test_without_one_nothing_extra_is_drawn(self):
+        drawing = chart.svg(self._series([-20] * 20), duration=20)
+        self.assertNotIn('class="before"', drawing)
+
+    def test_both_are_plotted_against_the_longer_of_the_two(self):
+        """A trimmed ending should show as the baseline outlasting the
+        corrected file, which scaling them to a common width would hide."""
+        drawing = chart.svg(self._series([-20] * 20), duration=20,
+                            baseline=self._series([-28] * 40),
+                            baseline_duration=40)
+        self.assertIn("00:40", drawing)
+
+    def test_the_scale_takes_in_both_series(self):
+        """A correction that raised a file forty decibels must not push the
+        earlier reading off the bottom of the chart."""
+        import re
+        drawing = chart.svg(self._series([-8] * 20), duration=20,
+                            baseline=self._series([-50] * 20),
+                            baseline_duration=20)
+        points = re.search(r'class="before" points="([^"]+)"', drawing).group(1)
+        heights = [float(pair.split(",")[1]) for pair in points.split()]
+        floor = chart.HEIGHT - chart.PAD_BOTTOM
+        self.assertTrue(all(chart.PAD_TOP <= y <= floor for y in heights),
+                        f"the earlier reading fell outside the plot: {heights[:3]}")
+
+    def test_the_missing_band_note_fits_inside_the_chart(self):
+        import profiles
+        band = chart.band_for(profiles.get("acx"))
+        self.assertIn("short", band)
+        self.assertLess(len(band["short"]) * 6.3,
+                        chart.WIDTH - chart.PAD_LEFT - chart.PAD_RIGHT,
+                        "a note that runs off the edge is worse than a short one")

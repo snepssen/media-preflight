@@ -329,7 +329,8 @@ def fix_job(path, target, overwrite=False):
         after_envelope = report.envelope(
             after[0], after[1], after[2], cached["profile"],
             corrections=[{"description": s["description"]} for s in prepared])
-        after_envelope["chart"] = report.chart_svg(after_envelope, theme="auto")
+        after_envelope["chart"] = report.chart_svg(
+            after_envelope, theme="auto", baseline=cached["envelope"])
 
         for _ in range(2):
             if after[2]["verdict"] != "fail":
@@ -348,8 +349,8 @@ def fix_job(path, target, overwrite=False):
                 after[0], after[1], after[2], cached["profile"],
                 corrections=[{"description": s["description"]}
                              for s in prepared])
-            after_envelope["chart"] = report.chart_svg(after_envelope,
-                                                       theme="auto")
+            after_envelope["chart"] = report.chart_svg(
+                after_envelope, theme="auto", baseline=cached["envelope"])
 
         _remember(written, target, {
             "facts": after[0], "measurements": after[1], "result": after[2],

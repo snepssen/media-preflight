@@ -336,3 +336,16 @@ class FastStartTests(unittest.TestCase):
                     if r["id"] == "fast_start")
         self.assertEqual(rule["basis"], "published")
         self.assertTrue(rule["require"])
+
+
+class BeforeAndAfterTests(unittest.TestCase):
+    def test_the_chart_can_carry_an_earlier_report(self):
+        before = envelope("ebu_r128", integrated_lufs=-40.0, timeline=[
+            {"t": t, "short_term": -40.0, "momentary": -40.0,
+             "true_peak_dbfs": None, "phase": None} for t in range(30)])
+        after = envelope("ebu_r128", integrated_lufs=-23.0, timeline=[
+            {"t": t, "short_term": -23.0, "momentary": -23.0,
+             "true_peak_dbfs": None, "phase": None} for t in range(30)])
+        drawing = report.chart_svg(after, baseline=before)
+        self.assertIn('class="before"', drawing)
+        self.assertNotIn('class="before"', report.chart_svg(after))

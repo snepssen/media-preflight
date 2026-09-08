@@ -240,7 +240,8 @@ def command_fix(args):
     destination = args.output or corrections.output_path(
         args.file, steps, directory=args.directory)
 
-    sys.stdout.write(_preview(steps, planned["unfixable"], destination))
+    if not args.quiet:
+        sys.stdout.write(_preview(steps, planned["unfixable"], destination))
     ffmpeg, _ = platform_support.require_tools()
 
     if args.dry_run:
@@ -260,7 +261,8 @@ def command_fix(args):
     written, command, prepared = corrections.apply(
         args.file, steps, facts, destination=destination, ffmpeg=ffmpeg,
         overwrite=args.overwrite, directory=args.directory)
-    sys.stdout.write(f"\nWrote {written}\n")
+    if not args.quiet:
+        sys.stdout.write(f"\nWrote {written}\n")
 
     # The claim that the copy is fixed is a measurement, not a hope.
     after_facts, after_measurements, after_result, _ = run(
@@ -275,7 +277,8 @@ def command_fix(args):
             prepared, after_measurements, after_result, profile)
         if not adjusted:
             break
-        sys.stdout.write(f"  Rebuilding from the source: {why}.\n")
+        if not args.quiet:
+            sys.stdout.write(f"  Rebuilding from the source: {why}.\n")
         written, command, prepared = corrections.apply(
             args.file, adjusted, facts, destination=destination,
             ffmpeg=ffmpeg, overwrite=True, directory=args.directory)
@@ -285,15 +288,16 @@ def command_fix(args):
                             profile,
                             corrections=[{"description": s["description"]}
                                          for s in prepared])
-    sys.stdout.write("\n" + _verification(envelope, after))
-    sys.stdout.write("\n" + report.text(after,
-                                        show_passes=not args.failures_only))
+    if not args.quiet:
+        sys.stdout.write("\n" + _verification(envelope, after))
+        sys.stdout.write("\n" + report.text(
+            after, show_passes=not args.failures_only))
 
     if args.recipe:
         _write(args.recipe, report.data(corrections.recipe(
             args.file, written, prepared, command, after)))
         sys.stdout.write(f"Recipe written to {args.recipe}\n")
-    _write_outputs(args, after)
+    _write_outputs(args, after, baseline=envelope)
     return _exit_code(after, args.strict)
 
 
@@ -510,23 +514,24 @@ def _progress(args):
     return show
 
 
-def _write_outputs(args, envelope):
+def _write_outputs(args, envelope, baseline=None):
     if getattr(args, "json", None):
         _write(args.json, report.data(envelope))
     if getattr(args, "markdown", None):
-        _write(args.markdown, report.markdown(envelope,
-                                              _write_chart(args.markdown,
-                                                           envelope)))
+        _write(args.markdown,
+               report.markdown(envelope,
+                               _write_chart(args.markdown, envelope,
+                                            baseline)))
 
 
-def _write_chart(markdown_path, envelope):
+def _write_chart(markdown_path, envelope, baseline=None):
     """Write the loudness chart beside the report that references it.
 
     A sibling file rather than an inline ``<svg>``, because almost everything
     that renders Markdown strips inline SVG, and a picture that silently does
     not appear is worse than one that is plainly a separate file.
     """
-    drawing = report.chart_svg(envelope)
+    drawing = report.chart_svg(envelope, baseline=baseline)
     if not drawing:
         return None
     stem = os.path.splitext(markdown_path)[0]

@@ -446,6 +446,11 @@ planner does that arithmetic in advance and adds a limiter or a high-pass to
 the plan, where you can read it before anything runs — and says plainly that
 the source was fine and the gain is what would have broken it.
 
+**It shows you what changed.** The chart of a corrected copy carries the
+earlier reading dashed behind it, both plotted against whichever file is
+longer — so a trimmed ending shows as the old line outlasting the new one,
+and scaling them to a common width would hide the very thing worth seeing.
+
 **It measures the result rather than assuming it.** After the copy is written
 it is analysed again from nothing, and the report you get is that measurement:
 
@@ -505,7 +510,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 301 checks, about thirty seconds
+python3 -m unittest discover -s tests     # 307 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

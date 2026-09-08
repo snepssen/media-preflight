@@ -97,10 +97,15 @@ def band_for(profile):
     stated = [rule["label"] for rule in profile.get("rules", [])
               if rule["metric"] in ("rms_dbfs", "peak_dbfs")]
     if stated:
+        # Two forms: the full sentence for the report, and something short
+        # enough to sit under a chart without running off it.
         return {"absent": f"{profile.get('label', 'This target')} states its "
                           f"requirement as {stated[0].lower()}, which is not "
-                          f"the same measurement as the loudness drawn here."}
-    return {"absent": "This target sets no loudness band."}
+                          f"the same measurement as the loudness drawn here.",
+                "short": f"No target band: this one is stated in "
+                         f"{stated[0].lower()}, not LUFS."}
+    return {"absent": "This target sets no loudness band.",
+            "short": "No target band: this target sets none."}
 
 
 # -------------------------------------------------------------------- events
@@ -314,6 +319,9 @@ LIGHT_STYLE = """
              stroke-opacity: .6; }
   .note { fill: #5d646e; font: 10px ui-monospace, Menlo, Consolas, monospace; }
   .caption { fill: #1f5fbf; fill-opacity: .45; }
+  .before { stroke: #8a8f98; stroke-width: 1; fill: none; stroke-opacity: .75;
+            stroke-dasharray: 3 2; }
+  .key { fill: #5d646e; font: 10px ui-monospace, Menlo, Consolas, monospace; }
   .caption-bed { fill: #5d646e; fill-opacity: .13; }
 """
 
@@ -330,6 +338,8 @@ DARK_RULES = """
     .ev-quiet, .ev-picture { fill: #99a1ad; }
     .chapter { stroke: #99a1ad; }
     .caption { fill: #7aa7ff; fill-opacity: .55; }
+    .before { stroke: #99a1ad; }
+    .key { fill: #99a1ad; }
     .caption-bed { fill: #99a1ad; fill-opacity: .16; }
 """
 
@@ -343,8 +353,16 @@ def style_for(theme):
 
 
 def svg(points, band=None, event_list=None, chapter_list=None, duration=None,
-        title="Loudness over time", theme="light", caption_runs=None):
-    """A standalone SVG. Returns '' when there is nothing to draw."""
+        title="Loudness over time", theme="light", caption_runs=None,
+        baseline=None, baseline_duration=None):
+    """A standalone SVG. Returns '' when there is nothing to draw.
+
+    ``baseline`` is a second, earlier reading of the same programme — the file
+    as it was before a correction — drawn faintly behind. Both series are
+    plotted against whichever is longer, so a trimmed ending shows as the
+    baseline continuing past where the corrected file stops. Scaling them to a
+    common width would hide exactly the change somebody wants to see.
+    """
     if not points:
         return ""
     duration = duration or (points[-1]["t"] + 1)
@@ -352,6 +370,10 @@ def svg(points, band=None, event_list=None, chapter_list=None, duration=None,
     highs = [p["high"] for p in points if p["high"] is not None]
     if not highs:
         return ""
+    if baseline:
+        duration = max(duration, baseline_duration or (baseline[-1]["t"] + 1))
+        lows += [p["low"] for p in baseline if p["low"] is not None]
+        highs += [p["high"] for p in baseline if p["high"] is not None]
 
     top = max(highs)
     bottom = min(lows) if lows else top - 20
@@ -410,6 +432,14 @@ def svg(points, band=None, event_list=None, chapter_list=None, duration=None,
                      for p in points if p["high"] is not None)
     lower = " ".join(f"{x(p['t']):.1f},{y(p['low'] if p['low'] is not None else p['high']):.1f}"
                      for p in reversed(points) if p["high"] is not None)
+    if baseline:
+        was = " ".join(f"{x(p['t']):.1f},{y(p['high']):.1f}"
+                       for p in baseline if p["high"] is not None)
+        parts.append(f'<polyline class="before" points="{was}"/>')
+        parts.append(f'<text class="key" x="{WIDTH - PAD_RIGHT}" '
+                     f'y="{PAD_TOP + 2}" text-anchor="end">'
+                     f'dashed: before the correction</text>')
+
     parts.append(f'<polygon class="range" points="{upper} {lower}"/>')
     parts.append(f'<polyline class="peak" points="{upper}"/>')
 
@@ -456,9 +486,16 @@ def svg(points, band=None, event_list=None, chapter_list=None, duration=None,
                      f'y="{HEIGHT - 8}" text-anchor="end">{end}</text>')
 
     if band and band.get("absent"):
-        parts.append(f'<text class="note" x="{PAD_LEFT}" y="{HEIGHT - 24}">'
-                     f'{_escape("No target band drawn: " + band["absent"])}'
-                     f'</text>')
+        # The full reason is in the report; the drawing gets as much of it as
+        # fits between the axes, because a note that runs off the edge or sits
+        # on top of the time axis is worse than a short one.
+        # The text starts at PAD_LEFT, so the room it has is the plot width.
+        room = int(plot_w / 6.3)
+        said = band.get("short") or ("No target band drawn: " + band["absent"])
+        if len(said) > room:
+            said = said[:room - 1].rstrip(" ,.;") + "…"
+        parts.append(f'<text class="note" x="{PAD_LEFT}" '
+                     f'y="{PAD_TOP + plot_h + 30}">{_escape(said)}</text>')
 
     parts.append("</svg>")
     return "".join(parts)

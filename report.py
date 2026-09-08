@@ -144,8 +144,12 @@ def data(report):
     return json.dumps(jsonable(report), indent=2) + "\n"
 
 
-def chart_svg(report, theme="light"):
+def chart_svg(report, theme="light", baseline=None):
     """The loudness chart for a finished report, or '' when there is none.
+
+    ``baseline`` is an earlier report of the same file — the reading taken
+    before a correction — drawn faintly behind, so that what changed is
+    visible and not only listed.
 
     Exports default to light: an SVG loaded through an ``<img>`` resolves
     prefers-color-scheme against the reader's operating system rather than the
@@ -157,7 +161,10 @@ def chart_svg(report, theme="light"):
                      report.get("events"), report.get("chapters"),
                      duration=report["file"].get("duration_s"),
                      title=f"Loudness over time — {report['file'].get('name')}",
-                     theme=theme, caption_runs=report.get("caption_track"))
+                     theme=theme, caption_runs=report.get("caption_track"),
+                     baseline=(baseline or {}).get("timeline"),
+                     baseline_duration=(baseline or {}).get(
+                         "file", {}).get("duration_s"))
 
 
 # --------------------------------------------------------------------- text
