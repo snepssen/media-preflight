@@ -129,6 +129,24 @@ width reports progressive and half width reports that it cannot tell. An
 inconclusive answer is not a cheaper answer. Vertical scaling is never offered
 at all, because blending adjacent lines is exactly what `idet` compares.
 
+**Do not make the pass bail out early.** `idet` reports every frame as
+undetermined on static content — a lyric video, a slideshow, a locked-off
+talking head — so on that material the most expensive filter in the chain
+costs 27 s a minute and answers nothing. Sampling the opening and giving up
+when no verdict has appeared would roughly halve it. It has been considered
+and declined twice over.
+
+It would be wrong about the file: "no evidence yet" and "no evidence ever"
+are different claims, and a programme that opens on a static title card
+before cutting to interlaced footage reads as the first and is the second.
+
+It would also be wrong about itself, which matters just as much here. This
+tool states what a pass will cost before it starts, and somebody schedules an
+afternoon around that sentence. A pass that finishes early depending on
+content the estimate has not read yet turns a number you can plan around into
+a number that is sometimes smaller. Accurate beats fast; a promise about
+runtime is part of the product.
+
 Captions cost no decode at all unless they are embedded, in which case one
 `ffmpeg -f ass -` extraction reads them.
 
