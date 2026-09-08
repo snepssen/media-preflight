@@ -102,6 +102,14 @@ rather than a line you read:
 
 ![the caption track](docs/caption-example.svg)
 
+That is a real three-minute master with its word-level lyric subtitles beside
+it — 1,254 cues — and the gap at the end is the instrumental outro nobody
+captioned. Running the tool against material like this is also what found
+three faults in it that no synthetic fixture ever had: an ASS `Format` line
+this parser was not reading, an overlap check that called karaoke's two
+simultaneous lines a fault, and a drift figure computed from one per cent of
+the cues.
+
 ## The shape, not just the list
 
 A list of timestamps tells you to look at 18:07. It does not tell you that

@@ -154,10 +154,44 @@ ul.plain li.no::before{content:"✕";color:var(--fail)}
 .d-accent{stroke:var(--signal);stroke-width:1.5;fill:none}
 .d-out{fill:var(--muted);font:400 11px/1 "JetBrains Mono",monospace}
 
-.figure{margin:28px 0 0;padding:0}
+/* A faithful reproduction of the application window rather than a bitmap of
+   it: sharp at any size, legible to a screen reader, and it follows the
+   reader's own light or dark setting the way the real window does. */
+.window{margin:28px 0 0;padding:0}
+.window-panel{background:var(--surface);border:1px solid var(--line);
+              border-radius:10px;padding:20px}
+.window figcaption{margin-top:10px;font-size:13.5px;color:var(--muted);
+                   max-width:var(--measure)}
+.w-verdict{margin:0 0 3px;font-size:15px;font-weight:600;color:var(--fail);
+           font-family:"Space Grotesk",Inter,sans-serif}
+.w-counts{margin:0 0 6px;font-size:13px;color:var(--muted)}
+.w-file{margin:0 0 14px;font-family:"JetBrains Mono",monospace;font-size:12.5px;
+        color:var(--ink);word-break:break-word}
+.w-chart svg{display:block;width:100%;border:1px solid var(--line);
+             border-radius:8px}
+.w-cap{margin:7px 0 4px;font-size:12.5px;color:var(--muted);max-width:none}
+.w-row{display:grid;grid-template-columns:18px 1fr auto;gap:8px;padding:9px 0;
+       border-top:1px solid var(--line);align-items:baseline}
+.w-mark{font-weight:700}
+.w-mark.fail{color:var(--fail)} .w-mark.warn{color:var(--warn)}
+.w-mark.skip{color:var(--muted)}
+.w-what{font-size:15px}
+.w-need{color:var(--muted);font-size:13px;white-space:nowrap}
+.w-where{grid-column:2/-1;color:var(--muted);font-size:12.5px}
+.w-where b{color:var(--ink);font-weight:600}
+.w-note{grid-column:2/-1;color:var(--muted);font-size:12.5px;font-style:italic}
+.w-stamps{margin:14px 0 0;font-size:13px}
+.w-stamps b{font-weight:600}
+.w-buttons{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 0}
+.w-buttons span{border:1px solid var(--line);border-radius:7px;padding:7px 12px;
+                font-size:14px;color:var(--ink)}
+.w-source{margin:14px 0 0;font-size:12.5px;color:var(--muted);max-width:none}
+@media (max-width:700px){
+  .w-row{grid-template-columns:18px 1fr}
+  .w-need{grid-column:2/-1;white-space:normal}
+}
+
 .report{white-space:pre}
-.figure svg{display:block;width:100%;border:1px solid var(--line);border-radius:8px}
-.figure figcaption{margin-top:9px;font-size:13.5px;color:var(--muted);max-width:var(--measure)}
 
 .contact{display:flex;flex-wrap:wrap;gap:14px;margin-top:22px}
 .contact a{
