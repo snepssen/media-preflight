@@ -35,7 +35,8 @@ def measurements(**overrides):
                                                  "dc_offset": 0.0001,
                                                  "rms_dbfs": -20.5}],
         "channel_rms_spread_db": 0.0, "silent_channels": [],
-        "phase_min": None, "lead_silence_s": 0.7, "tail_silence_s": 2.0,
+        # ACX asks for one to five seconds of room tone at each end.
+        "phase_min": None, "lead_silence_s": 1.5, "tail_silence_s": 3.0,
         "mid_silences": [], "silences": [], "ends_abruptly": False,
         "clipping_seconds": 0.0, "duration_s": 60.0, "timeline": [],
         "settings": dict(),

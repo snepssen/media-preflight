@@ -73,6 +73,26 @@ Every rule needs `id`, `metric` and `label`, plus at least one requirement.
 printed under the finding when it fails or warns — use it for the sentence you
 would say out loud, not for a restatement of the number.
 
+`target` names the value a correction should aim at inside the band, when the
+middle is not it. ACX asks for one to five seconds of room tone; the middle is
+three, which is a sensible ending and an absurd opening, so the opening rule
+sets `"target": 1.5`.
+
+`basis` says where the threshold came from — **per rule, not per profile**,
+because within one target some numbers are published and some are not:
+
+| basis | means |
+| --- | --- |
+| `published` | quoted from the target's own specification |
+| `observed` | measured behaviour the target does not publish |
+| `house` | this tool's own threshold, a starting point |
+
+YouTube publishes its encoding settings and no loudness figure at all; the
+−14 LUFS everybody quotes is measured behaviour. A report that presented both
+as equally authoritative would be misleading about the more important one, so
+findings on `observed` and `house` rules say so in front of their note. A rule
+with no `basis` inherits the profile's `confidence`.
+
 `fix` names an operation the corrector knows how to plan. A rule with no `fix`
 is reported and left alone, which is the right answer for anything a machine
 should not decide on your behalf.

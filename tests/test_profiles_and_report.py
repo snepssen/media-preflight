@@ -184,3 +184,107 @@ class ProbeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProvenanceTests(unittest.TestCase):
+    """Where a number came from is part of what the number means."""
+
+    def test_a_basis_is_one_of_the_three_that_mean_something(self):
+        for profile in profiles.all_profiles():
+            for rule in profile["rules"] + profile.get("set_rules", []):
+                basis = rule.get("basis")
+                if basis is not None:
+                    self.assertIn(basis, ("published", "observed", "house"),
+                                  f"{profile['id']}/{rule['id']}")
+
+    def test_every_universal_rule_says_it_is_this_tools_own(self):
+        """They get attached to published profiles, where inheriting the
+        profile's confidence would claim a provenance they do not have."""
+        for rule in profiles.UNIVERSAL + profiles.UNIVERSAL_SET:
+            self.assertEqual(rule.get("basis"), "house", rule["id"])
+
+    def test_a_published_profile_marks_the_rules_that_are_not(self):
+        youtube = profiles.get("youtube")
+        loudness = next(r for r in youtube["rules"] if r["id"] == "integrated")
+        self.assertEqual(loudness["basis"], "observed",
+                         "YouTube publishes no loudness figure")
+        codec = next(r for r in youtube["rules"] if r["id"] == "codec")
+        self.assertEqual(codec["basis"], "published")
+
+    def test_an_unpublished_threshold_says_so_before_its_note(self):
+        profile = profiles.get("youtube")
+        f, m = facts(), measurements(integrated_lufs=-40.0)
+        result = checks.evaluate(f, m, profile)
+        text = report.text(report.envelope(f, m, result, profile))
+        self.assertIn("measured behaviour, not a published figure", text)
+
+    def test_the_validator_rejects_a_basis_it_does_not_understand(self):
+        with self.assertRaises(ValueError) as caught:
+            profiles.validate({"id": "x", "label": "X", "rules": [
+                {"id": "a", "metric": "rms_dbfs", "label": "A", "max": 1.0,
+                 "basis": "vibes"}]})
+        self.assertIn("basis", str(caught.exception))
+
+
+class AuditedThresholdTests(unittest.TestCase):
+    """The numbers, as read from the source documents in September 2026.
+
+    These are not testing arithmetic; they are pinning values somebody checked
+    against a specification, so that changing one is a deliberate act with a
+    failing test attached rather than a quiet edit.
+    """
+
+    def _rule(self, target, rule_id):
+        return next(r for r in profiles.get(target)["rules"]
+                    if r["id"] == rule_id)
+
+    def test_acx_room_tone_is_one_to_five_seconds_at_both_ends(self):
+        # "We recommend between 1 and 5 seconds of room tone at the beginning
+        # and end of each file." — help.acx.com. The 0.5-to-1-second opening
+        # repeated widely elsewhere appears on no ACX page.
+        for rule_id in ("head_room_tone", "tail_room_tone"):
+            rule = self._rule("acx", rule_id)
+            self.assertEqual((rule["min"], rule["max"]), (1.0, 5.0))
+            self.assertEqual(rule["severity"], "warn",
+                             "the page says 'recommend'")
+
+    def test_acx_levels_are_as_published(self):
+        self.assertEqual((self._rule("acx", "rms")["min"],
+                          self._rule("acx", "rms")["max"]), (-23.0, -18.0))
+        self.assertEqual(self._rule("acx", "peak")["max"], -3.0)
+        self.assertEqual(self._rule("acx", "noise_floor")["max"], -60.0)
+        self.assertEqual(self._rule("acx", "duration")["max"], 120.0)
+
+    def test_ebu_r128_keeps_both_of_its_tolerances(self):
+        rule = self._rule("ebu_r128", "integrated")
+        self.assertEqual((rule["warn_min"], rule["warn_max"]), (-23.5, -22.5),
+                         "the ±0.5 LU normal tolerance")
+        self.assertEqual((rule["min"], rule["max"]), (-24.0, -22.0),
+                         "the ±1.0 LU permitted for live programmes")
+        self.assertEqual(self._rule("ebu_r128", "true_peak")["max"], -1.0)
+
+    def test_spotify_warns_between_the_two_peak_figures(self):
+        rule = self._rule("spotify_podcast", "true_peak")
+        self.assertEqual(rule["max"], -1.0)
+        self.assertEqual(rule["warn_max"], -2.0,
+                         "-2 dBTP is asked for above -14 LUFS")
+
+    def test_spotify_does_not_claim_a_podcast_specification(self):
+        profile = profiles.get("spotify_podcast")
+        self.assertEqual(profile["confidence"], "informal")
+        self.assertIn("music", profile["source"])
+
+    def test_youtube_requires_deinterlacing_rather_than_suggesting_it(self):
+        rule = self._rule("youtube", "interlaced")
+        self.assertEqual(rule["severity"], "fail")
+        self.assertEqual(rule["basis"], "published")
+
+    def test_youtube_accepts_the_codecs_its_guide_names(self):
+        self.assertEqual(sorted(self._rule("youtube", "codec")["one_of"]),
+                         ["aac", "opus"])
+
+    def test_every_published_target_records_when_it_was_read(self):
+        for profile in profiles.all_profiles():
+            if profile.get("confidence") == "published":
+                self.assertRegex(profile.get("checked", ""), r"^\d{4}-\d{2}$",
+                                 profile["id"])

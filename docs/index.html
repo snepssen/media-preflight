@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>212</b> checks passing</span>
+    <span><b>226</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -206,7 +206,7 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
     <tbody>
       <tr><td><code>acx</code></td><td>Audiobook, ACX retail delivery</td><td><span class="tag published">published</span></td></tr>
       <tr><td><code>ebu_r128</code></td><td>Broadcast, EBU R 128</td><td><span class="tag published">published</span></td></tr>
-      <tr><td><code>spotify_podcast</code></td><td>Podcast delivery to Spotify</td><td><span class="tag published">published</span></td></tr>
+      <tr><td><code>spotify_podcast</code></td><td>Podcast delivery to Spotify</td><td><span class="tag informal">informal</span></td></tr>
       <tr><td><code>youtube</code></td><td>YouTube upload</td><td><span class="tag published">published</span></td></tr>
       <tr><td><code>social_vertical</code></td><td>Instagram / TikTok</td><td><span class="tag informal">informal</span></td></tr>
       <tr><td><code>web</code></td><td>Generic web video</td><td><span class="tag informal">informal</span></td></tr>
@@ -215,8 +215,12 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
   </table>
 
   <div class="note">
-    <p><strong>Three of these are marked informal because there is no published specification to point at.</strong> Two are platforms that document nothing, and the third is a set of subtitling conventions reasonable people disagree about — seventeen characters a second is comfortable for an adult viewer in English and far too fast for a children's programme. Their thresholds are offered as a sanity check you should adjust, not as a promise about what anybody requires today. This tool measures your file exactly and compares it against a number you can see and change. It is not, and cannot be, an oracle for somebody else's current ingest rules, and the moment it presents itself as one it is lying to you.</p>
+    <p><strong>Four of these are marked informal because there is no published specification to point at.</strong> Two are platforms that document nothing; the third is a set of subtitling conventions reasonable people disagree about — seventeen characters a second is comfortable for an adult viewer in English and far too fast for a children's programme; and the fourth is Spotify, whose −14 LUFS figure is published for <em>music playback normalisation</em> rather than as a podcast delivery requirement, which Spotify does not publish at all. Their thresholds are offered as a sanity check you should adjust, not as a promise about what anybody requires today. This tool measures your file exactly and compares it against a number you can see and change. It is not, and cannot be, an oracle for somebody else's current ingest rules, and the moment it presents itself as one it is lying to you.</p>
   </div>
+
+  <h3 style="margin-top:36px">Provenance sits on the rule, not the target</h3>
+  <p>Within one target some numbers are published and some are not. YouTube documents its encoding settings and states no loudness figure anywhere; the −14 LUFS everybody quotes is measured behaviour. Presenting both as equally authoritative would mislead about the more important one, so a finding on a threshold that is not from a specification says so before it says anything else — <span class="mono" style="font-size:14px">(measured behaviour, not a published figure.)</span> or <span class="mono" style="font-size:14px">(this tool's own threshold, not a rule of the target.)</span></p>
+  <p>Every published number here has been read against its source document, and the reading changed three of them. ACX's own page recommends one to five seconds of room tone at <em>both</em> ends — the half-second opening that appears in a great deal of guidance elsewhere is on no ACX page, so that check now warns at a corrected band rather than failing at an invented one. YouTube's guide is explicit that interlaced content must be deinterlaced before upload, so that check fails rather than warns. Spotify asks for true peak below −2 dBTP on masters louder than −14 LUFS, which is now the warning band inside the −1 dBTP limit. EBU R 128 was right as written.</p>
 
   <p style="margin-top:28px">Your own target is a JSON file, not a patch to the tool — a list of rules naming a metric, a band, and what to say when a file falls outside it. Point <span class="mono" style="font-size:14px">--target</span> at the path, or drop it in <span class="mono" style="font-size:14px">profiles/</span> and it joins the list in the window.</p>
   <p><a href="https://github.com/snepssen/media-preflight/blob/main/PROFILES.md">Writing a target →</a></p>

@@ -105,9 +105,37 @@ otherwise report the previous chapter's level as this one's.
 | `web` | Generic web video | **informal** |
 | `subtitles` | Caption readability, on its own | **informal** |
 
-Three of these are marked *informal* because there is no published
-specification to point at — two platforms that document nothing, and a set of
-subtitling conventions that reasonable people disagree about. Those thresholds are the widely reported figures, offered as a
+`spotify_podcast` is **informal** for the reason given below, despite its
+number being a published one.
+
+Four of these are marked *informal* because there is no published
+specification to point at: two platforms that document nothing, a set of
+subtitling conventions reasonable people disagree about, and Spotify — whose
+−14 LUFS figure is published for *music playback normalisation* and not as a
+podcast delivery requirement, which Spotify does not publish at all.
+
+Provenance is recorded per rule, not per profile, because within one target
+some numbers are published and some are not. YouTube documents its encoding
+settings and states no loudness figure anywhere; the −14 LUFS everybody quotes
+is measured behaviour. So a finding on a threshold that is not from a
+specification says so before it says anything else:
+
+```
+Integrated loudness: (measured behaviour, not a published figure.) YouTube's own
+  encoding guide states no loudness figure; -14 LUFS is what its
+  normalisation is measured to do.
+```
+
+Every published number in this tool has been read against its source document,
+and the reading changed three of them. ACX's own page says *"We recommend
+between 1 and 5 seconds of room tone at the beginning and end of each file"* —
+the 0.5-to-1-second opening that appears in a great deal of guidance elsewhere
+is on no ACX page, so the opening band is now 1 to 5 seconds and warns rather
+than failing, because the page says *recommend*. YouTube's guide is explicit
+that interlaced content must be deinterlaced before uploading, so that check
+now fails instead of warning. Spotify asks for true peak below −2 dBTP when a
+master is louder than −14 LUFS, which is now the warning band inside the −1
+dBTP limit. Those thresholds are the widely reported figures, offered as a
 sanity check you should adjust — not as a promise about what the platform does
 today. Every profile carries the source its numbers came from and the month
 they were read, and the report prints both.
@@ -330,7 +358,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 212 checks, about fourteen seconds
+python3 -m unittest discover -s tests     # 226 checks, about fourteen seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

@@ -36,16 +36,17 @@ class OrderTests(unittest.TestCase):
         self.assertEqual(ids[-1], "encode", "the encode is always last")
 
     def test_the_tail_trim_accounts_for_what_the_head_trim_removed(self):
-        head = {"start": 0.0, "end": 3.0, "duration": 3.0, "position": "head"}
+        head = {"start": 0.0, "end": 7.0, "duration": 7.0, "position": "head"}
         tail = {"start": 52.0, "end": 60.0, "duration": 8.0, "position": "tail"}
         _, _, _, _, plan = planned(
-            lead_silence_s=3.0, tail_silence_s=8.0, silences=[head, tail],
+            lead_silence_s=7.0, tail_silence_s=8.0, silences=[head, tail],
             duration_s=60.0)
         steps = {s["id"]: s for s in plan["steps"]}
-        # 3.0 - 0.75 = 2.25 comes off the front; the ending is then measured
-        # against 57.75 seconds, not 60.
-        self.assertIn("atrim=start=2.25", steps["trim_head"]["filters"])
-        self.assertIn("atrim=end=52.75", steps["trim_tail"]["filters"])
+        # ACX's band is one to five seconds; the head aims at 1.5, so
+        # 7.0 - 1.5 = 5.5 comes off the front, and the ending is then measured
+        # against 54.5 seconds rather than 60.
+        self.assertIn("atrim=start=5.5", steps["trim_head"]["filters"])
+        self.assertIn("atrim=end=49.5", steps["trim_tail"]["filters"])
 
 
 class GuardTests(unittest.TestCase):
@@ -86,6 +87,16 @@ class UnfixableTests(unittest.TestCase):
         self.assertEqual([u["id"] for u in plan["unfixable"]], ["noise_floor"])
         self.assertEqual(plan["steps"], [],
                          "nothing else was wrong, so nothing is proposed")
+
+    def test_a_rule_may_name_where_a_correction_should_aim(self):
+        """The middle of ACX's one-to-five-second band is three seconds, which
+        is a sensible ending and an absurd opening."""
+        head = next(r for r in profiles.get("acx")["rules"]
+                    if r["id"] == "head_room_tone")
+        self.assertEqual(corrections._target_band(head), 1.5)
+        tail = next(r for r in profiles.get("acx")["rules"]
+                    if r["id"] == "tail_room_tone")
+        self.assertEqual(corrections._target_band(tail), 3.0)
 
 
 class EncodeTests(unittest.TestCase):

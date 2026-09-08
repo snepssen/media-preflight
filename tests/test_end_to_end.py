@@ -150,11 +150,12 @@ class CorrectionTests(unittest.TestCase):
             source = self._quiet_audiobook(folder)
             facts, m, result, profile = preflight.run(source, "acx")
             plan = corrections.plan(facts, m, result, profile)
-            # This file has plenty of room tone, so the ends are trimmed rather
-            # than padded; a file with none gets the silence fallback and says
-            # so in its caveat.
+            # Its 2.4-second opening sits inside ACX's one-to-five-second
+            # band and is left alone; its eight-second ending does not, and is
+            # trimmed rather than padded because there is tone to spare.
             ids = [step["id"] for step in plan["steps"]]
-            self.assertIn("trim_head", ids)
+            self.assertNotIn("trim_head", ids)
+            self.assertNotIn("pad_head", ids)
             self.assertIn("trim_tail", ids)
 
 

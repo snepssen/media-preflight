@@ -111,6 +111,14 @@ def plan(facts, measurements, result, profile):
 # ------------------------------------------------------------------ builders
 
 def _target_band(rule):
+    """Where a correction should aim inside a rule's band.
+
+    The middle of the band, unless the rule names somewhere better: the middle
+    of ACX's one-to-five-second room tone is three seconds, which is a sensible
+    ending and an absurd opening.
+    """
+    if rule.get("target") is not None:
+        return rule["target"]
     low, high = rule.get("min"), rule.get("max")
     if low is not None and high is not None:
         return (low + high) / 2.0

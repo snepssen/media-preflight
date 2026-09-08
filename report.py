@@ -22,6 +22,14 @@ VERSION = "0.1.0"
 SCHEMA = 1
 
 MARK = {"pass": "✓", "fail": "✕", "warn": "⚠", "skip": "·", "info": "i"}
+
+# What a threshold rests on, said in front of the note rather than left for
+# somebody to assume. Only the two that are not a specification say anything:
+# a published figure needs no apology.
+BASIS = {
+    "observed": "(measured behaviour, not a published figure.)",
+    "house": "(this tool's own threshold, not a rule of the target.)",
+}
 WORD = {"pass": "passes", "fail": "fails", "warn": "passes with a warning",
         "skip": "not checked", "info": "worth knowing"}
 
@@ -216,11 +224,14 @@ def text(report, width=68, show_passes=True):
         lines.append(f"Problems occur at {shown}{more}")
 
     notes = [f for f in findings
-             if f["note"] and f["status"] in ("fail", "warn")]
+             if (f["note"] or BASIS.get(f.get("basis")))
+             and f["status"] in ("fail", "warn")]
     if notes:
         lines.append("")
         for finding in notes:
-            lines.append(f"{finding['label']}: {_wrap(finding['note'], width, 2)}")
+            said = " ".join(x for x in (BASIS.get(finding.get("basis")),
+                                        finding["note"]) if x)
+            lines.append(f"{finding['label']}: {_wrap(said, width, 2)}")
 
     if target.get("source"):
         lines.append("")
@@ -412,12 +423,15 @@ def markdown(report, chart_name=None):
         out.append("")
 
     notes = [f for f in report["findings"]
-             if f["note"] and f["status"] in ("fail", "warn")]
+             if (f["note"] or BASIS.get(f.get("basis")))
+             and f["status"] in ("fail", "warn")]
     if notes:
         out.append("## Notes")
         out.append("")
         for finding in notes:
-            out.append(f"- **{finding['label']}**: {finding['note']}")
+            said = " ".join(x for x in (BASIS.get(finding.get("basis")),
+                                        finding["note"]) if x)
+            out.append(f"- **{finding['label']}**: {said}")
         out.append("")
 
     if report.get("corrections"):

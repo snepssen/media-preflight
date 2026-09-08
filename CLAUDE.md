@@ -256,18 +256,46 @@ interrupt, so `/api/quit` shuts the server down and the page offers it.
 
 ## The numbers in profiles.py
 
-Every built-in target carries `source`, `checked` and `confidence`. Two are
-marked `informal` because the platforms publish no specification; those
-thresholds are widely reported figures, and both the report and the README say
-so. **When you change a threshold, change `checked` too.** This tool measures
-exactly and compares against a number you can see and edit; it is not an oracle
-for somebody else's current ingest rules, and the moment it presents itself as
-one it is lying.
+Every built-in target carries `source`, `checked` and `confidence`, and every
+rule may carry `basis` — `published`, `observed` or `house`. **Provenance is
+per rule, not per profile**, because within one target some numbers are
+published and some are not: YouTube documents its encoding settings and states
+no loudness figure anywhere, so its encoding rules are `published` and its
+−14 LUFS is `observed`. Findings on `observed` and `house` rules say so in
+front of their note.
+
+Every universal rule is `house`. They get attached to `published` profiles, and
+without an explicit basis they would inherit a provenance they do not have.
+
+**When you change a threshold, change `checked` too**, and read the source
+before you change it. All four published targets were audited against their own
+documents in September 2026 and three were wrong:
+
+- **ACX room tone.** The page says "We recommend between 1 and 5 seconds of
+  room tone at the beginning and end of each file". The 0.5–1 s opening that
+  most third-party guidance repeats is on no ACX page. Corrected to 1–5 at both
+  ends, `warn` rather than `fail` because the page says *recommend*, with the
+  opening aiming at 1.5 s via `target`.
+- **Spotify.** −14 LUFS is published for music playback normalisation. Spotify
+  publishes nothing for podcast delivery, and the profile claimed it did.
+  `confidence` is now `informal`, and −2 dBTP for masters louder than −14 LUFS
+  became the warning band inside the −1 dBTP limit.
+- **YouTube.** Its guide says interlaced content *must* be deinterlaced before
+  uploading, so that rule fails rather than warns; the audio codec list gained
+  Opus; the bitrate note now records that 128 is the mono figure and 384 the
+  stereo one, which a single rule cannot express.
+
+EBU R 128 was correct as written, including the ±0.5 LU normal tolerance and
+the ±1.0 LU permitted for live programmes.
+
+This tool measures exactly and compares against a number you can see and edit;
+it is not an oracle for somebody else's current ingest rules, and the moment it
+presents itself as one it is lying.
 
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 212 checks, about fourteen seconds
+python3 -m unittest discover -s tests    # 226 checks, about fourteen seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -305,8 +333,5 @@ Three questions decide the rest:
 Nothing in the original three-week plan. Candidates, in rough order of how
 often they would earn their place:
 
-- **Verifying the thresholds** — every published profile against its actual
-  source document. The numbers were set from knowledge and stamped
-  `checked: 2026-09`; nobody has read the specifications against them.
 - **Interlacing** — verified from the picture rather than trusted from the
   header.
