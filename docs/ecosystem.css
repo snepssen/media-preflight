@@ -211,13 +211,39 @@ body { overflow-x: clip; }
 }
 .ecosystem-card__index {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
+  /* Five cards in a constrained column give each about 170px, and these two
+     labels together need almost exactly that. Without a gap they butt
+     together and wrap inside themselves, which reads as broken rather than
+     as tight. With one they drop to two lines instead, which reads as a
+     stack. */
+  gap: 3px 12px;
   color: var(--card-accent);
-  font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 700 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing: .12em;
 }
-.ecosystem-card__index span:last-child { color: var(--muted, #999); }
+/* Neither label may shrink to make room for the other: a flex item shrinks
+   before it wraps, so without this the platform list squeezes itself onto two
+   cramped lines *inside* its own box while still touching the label beside
+   it. Refusing to shrink is what makes the row wrap instead. */
+.ecosystem-card__index span {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+.ecosystem-card__index span:first-child { white-space: nowrap; }
+/* The platform list is the long one — "macOS · Windows · Linux" wants 205px
+   of the 172px a five-column card leaves it, almost all of the excess being
+   tracking. It gets its own, tighter, so the index stays one line per card
+   instead of one card in five looking a different height from its
+   neighbours. */
+.ecosystem-card__index span:last-child {
+  color: var(--muted, #999);
+  text-align: right;
+  letter-spacing: .02em;
+  font-size: 10px;
+}
 .ecosystem-card__glyph {
   margin: auto 0 24px;
   color: var(--card-accent);

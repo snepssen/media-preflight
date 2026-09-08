@@ -1,5 +1,7 @@
 # Media Preflight
 
+**[The page →](https://snepssen.github.io/media-preflight/)** · screenshots, the measurements, and what each check actually reads.
+
 Drop in a finished audio or video file, pick where it is going, and get a
 plain-English pass/fail report with the exact timestamps of everything that is
 wrong — then, if you want, a corrected copy that is measured again from scratch
@@ -556,7 +558,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 346 checks, about thirty seconds
+python3 -m unittest discover -s tests     # 406 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```
