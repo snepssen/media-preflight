@@ -217,3 +217,94 @@ class LoudnormTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RemuxTests(unittest.TestCase):
+    """The one correction that costs the file nothing."""
+
+    def _plan_for(self, **facts_overrides):
+        profile = profiles.get("web")
+        f = facts(**facts_overrides)
+        m = measurements()
+        result = checks.evaluate(f, m, profile)
+        return f, m, corrections.plan(f, m, result, profile)
+
+    def _container(self, fast_start, **extra):
+        base = {"format_name": "mov,mp4,m4a", "duration_s": 60.0,
+                "bit_rate": 2000000.0, "tags": {}, "fast_start": fast_start}
+        base.update(extra)
+        return base
+
+    def test_a_container_fault_alone_needs_no_encode(self):
+        _, _, plan = self._plan_for(
+            container=self._container(False),
+            video_streams=[{"codec": "h264"}],
+            video={"codec": "h264", "duration_s": 60.0,
+                   "field_order": "progressive"},
+            path="/tmp/episode.mp4")
+        ids = [step["id"] for step in plan["steps"]]
+        self.assertIn("faststart", ids)
+        self.assertNotIn("encode", ids,
+                         "re-encoding to fix a container is throwing away "
+                         "quality for nothing")
+        self.assertTrue(corrections.is_remux(plan["steps"]))
+
+    def test_the_remux_copies_every_stream(self):
+        f, _, plan = self._plan_for(
+            container=self._container(False),
+            video_streams=[{"codec": "h264"}],
+            video={"codec": "h264", "duration_s": 60.0,
+                   "field_order": "progressive"},
+            path="/tmp/episode.mp4")
+        command = corrections.build_command("/tmp/a.mp4", "/tmp/b.mp4",
+                                            plan["steps"], f)
+        self.assertIn("-c", command)
+        self.assertEqual(command[command.index("-c") + 1], "copy")
+        self.assertEqual(command[command.index("-map") + 1], "0")
+        self.assertIn("+faststart", command)
+        self.assertNotIn("-af", command)
+
+    def test_a_remux_carries_no_lossy_caveat(self):
+        _, _, plan = self._plan_for(
+            container=self._container(False),
+            video_streams=[{"codec": "h264"}],
+            video={"codec": "h264", "duration_s": 60.0,
+                   "field_order": "progressive"},
+            path="/tmp/episode.mp4")
+        for step in plan["steps"]:
+            self.assertIsNone(step.get("caveat"), step["id"])
+
+    def test_alongside_a_real_correction_it_is_one_more_flag(self):
+        f = facts(container=self._container(False),
+                  video_streams=[{"codec": "h264"}],
+                  video={"codec": "h264", "duration_s": 60.0,
+                         "field_order": "progressive"},
+                  path="/tmp/episode.mp4")
+        m = measurements(integrated_lufs=-40.0)
+        profile = profiles.get("web")
+        plan = corrections.plan(f, m, checks.evaluate(f, m, profile), profile)
+        ids = [step["id"] for step in plan["steps"]]
+        self.assertIn("loudnorm", ids)
+        self.assertIn("encode", ids, "a filtered stream cannot be copied")
+        self.assertIn("faststart", ids)
+        self.assertFalse(corrections.is_remux(plan["steps"]))
+        # loudnorm's filters are empty until its own measurement pass has
+        # run against the real file, so what this checks is that the mux flag
+        # rides on the encode rather than replacing it.
+        loudnorm = next(s for s in plan["steps"] if s["id"] == "loudnorm")
+        self.assertTrue(loudnorm["needs_measurement"])
+        command = corrections.build_command("/tmp/a.mp4", "/tmp/b.mp4",
+                                            plan["steps"], f)
+        self.assertIn("+faststart", command)
+        self.assertIn("-c:a", command)
+        self.assertNotIn("copy", command[command.index("-c:a"):],
+                         "the audio is being re-encoded, not copied")
+
+    def test_a_file_already_in_order_is_left_alone(self):
+        _, _, plan = self._plan_for(
+            container=self._container(True),
+            video_streams=[{"codec": "h264"}],
+            video={"codec": "h264", "duration_s": 60.0,
+                   "field_order": "progressive"},
+            path="/tmp/episode.mp4")
+        self.assertNotIn("faststart", [s["id"] for s in plan["steps"]])

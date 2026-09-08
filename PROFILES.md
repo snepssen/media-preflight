@@ -105,6 +105,7 @@ should not decide on your behalf.
 | `remove_dc` | a gentle 15 Hz high-pass |
 | `room_tone_head`, `room_tone_tail` | trim or extend the quiet at one end |
 | `encode` | codec, bitrate, bitrate mode, sample rate, channel count |
+| `faststart` | move an MP4's index in front of its media — a remux, not an encode |
 
 There is deliberately no fix for a picture or caption fault. Trimming black off
 an ending is an edit, retiming a cue is an edit, and this tool does not edit.

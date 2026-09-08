@@ -21,6 +21,7 @@ import checks  # noqa: E402
 import corrections  # noqa: E402
 import platform_support  # noqa: E402
 import preflight  # noqa: E402
+import probe  # noqa: E402
 import profiles  # noqa: E402
 import report  # noqa: E402
 import video  # noqa: E402
@@ -523,6 +524,58 @@ class ChapterAndChartTests(unittest.TestCase):
             envelope = report.envelope(facts, m, result, profile)
             self.assertEqual(envelope["timeline"], [])
             self.assertEqual(report.chart_svg(envelope), "")
+
+
+@unittest.skipUnless(FFMPEG and FFPROBE, REASON)
+class RemuxTests(unittest.TestCase):
+    """Proving the claim: the corrected copy holds the same media."""
+
+    def _slow_mp4(self, folder):
+        path = os.path.join(folder, "slow.mp4")
+        subprocess.run(
+            [FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i",
+             "testsrc2=size=160x120:rate=25:d=2", "-c:v", "libx264",
+             "-pix_fmt", "yuv420p", path], check=True)
+        return path
+
+    def _stream_hash(self, path):
+        result = subprocess.run(
+            [FFMPEG, "-v", "error", "-i", path, "-map", "0:v",
+             "-f", "hash", "-hash", "sha256", "-"],
+            capture_output=True, text=True, check=True)
+        return result.stdout.strip()
+
+    def test_the_media_survives_the_remux_unchanged(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = self._slow_mp4(folder)
+            self.assertFalse(probe.fast_start(source, "mp4"),
+                             "ffmpeg writes moov last unless asked otherwise")
+            before = self._stream_hash(source)
+
+            facts, m, result, profile = preflight.run(source, "web")
+            plan = corrections.plan(facts, m, result, profile)
+            self.assertTrue(corrections.is_remux(plan["steps"]))
+            written, _, _ = corrections.apply(source, plan["steps"], facts,
+                                              ffmpeg=FFMPEG)
+
+            self.assertTrue(probe.fast_start(written, "mp4"))
+            self.assertEqual(self._stream_hash(written), before,
+                             "a remux must not touch a single frame")
+            self.assertEqual(os.path.getsize(written),
+                             os.path.getsize(source),
+                             "the same bytes, differently arranged")
+
+    def test_the_report_says_it_was_fixed_because_it_measures_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = self._slow_mp4(folder)
+            facts, m, result, profile = preflight.run(source, "web")
+            plan = corrections.plan(facts, m, result, profile)
+            written, _, _ = corrections.apply(source, plan["steps"], facts,
+                                              ffmpeg=FFMPEG)
+            _, _, after, _ = preflight.run(written, "web")
+            finding = next(f for f in after["findings"]
+                           if f["id"] == "fast_start")
+            self.assertEqual(finding["status"], "pass")
 
 
 @unittest.skipUnless(FFMPEG and FFPROBE, REASON)

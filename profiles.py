@@ -266,6 +266,7 @@ YOUTUBE = {
                  "of this check and not the recommendation."},
         {"id": "fast_start", "metric": "fast_start", "label": "Fast start",
          "require": True, "severity": "warn", "basis": "published",
+         "fix": "faststart",
          "note": "YouTube's guide asks for the moov atom at the front of the "
                  "file. Behind it, nothing can start playing until the whole "
                  "file has downloaded. ffmpeg writes it there with "
@@ -417,6 +418,7 @@ GENERIC_WEB = {
          "min": -24.0, "max": -9.0, "severity": "warn", "fix": "loudnorm"},
         {"id": "fast_start", "metric": "fast_start", "label": "Fast start",
          "require": True, "severity": "warn",
+         "fix": "faststart",
          "note": "The index sits behind the media, so nothing can start "
                  "playing until the whole file has downloaded. Rewrite it "
                  "with -movflags +faststart."},

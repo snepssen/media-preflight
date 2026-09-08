@@ -466,6 +466,26 @@ many attempts it takes, the number of lossy encodes stays at one.
 `--recipe out.json` writes what was done as JSON you can read, argue with, and
 repeat by hand.
 
+### The one correction that costs nothing
+
+Every other fix re-encodes, and the plan says so in a caveat. Moving an MP4's
+index in front of its media does not: nothing about the audio or the picture
+changes, only the order of the boxes in the container.
+
+```
+  1. Rewrite the file with its index in front of its media, so it can start
+     playing before it has finished downloading.
+
+Command that would run:
+  ffmpeg -i slow.mp4 -map 0 -c copy -map_metadata 0 -map_chapters 0 \
+      -movflags +faststart slow.preflight.mp4
+```
+
+Every stream copied through, no filter, no encoder — so the corrected copy
+holds the same media, and a test asserts exactly that by comparing a hash of
+the decoded video before and after. Where the plan holds other changes as
+well, the flag simply rides along on the encode that was already happening.
+
 ## What it will not do
 
 - Edit, record, or arrange anything
@@ -485,7 +505,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 294 checks, about thirty seconds
+python3 -m unittest discover -s tests     # 301 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

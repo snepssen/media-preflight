@@ -51,6 +51,15 @@ advance: a gain that would push peaks past the ceiling brings a limiter with
 it, a gain that would push DC over the line brings a high-pass, and both say
 in writing that the source was fine and the gain is what would have broken it.
 
+**A correction costs no more than it has to.** Every fix but one re-encodes,
+and says so in a caveat. Fast start is a `mux` step: where the plan holds
+nothing else, `build_command` emits `-map 0 -c copy` and only the container is
+rearranged, so the output holds exactly the media the input did — a test
+proves it by comparing a hash of the decoded video. The trap here is
+`_passthrough_encode`, which used to be added whenever there were *any* steps;
+it is now added only when something actually filters the audio, because
+re-encoding to fix a container throws away quality for nothing.
+
 **Success is measured, not assumed.** After a copy is written it is analysed
 again from nothing and the report is that measurement. When it lands off target
 the correction is recomputed and applied *to the original file again* — never
@@ -363,7 +372,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 294 checks, about thirty seconds
+python3 -m unittest discover -s tests    # 301 checks, about thirty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -403,5 +412,4 @@ in rough order of how often they would earn their place:
 
 - **Loudness of the corrected copy plotted against the original**, so a
   correction can be seen as well as verified.
-- **A `--fix` for fast start**, which is a remux rather than a re-encode and
-  so is lossless — the one correction on the list that costs the file nothing.
+

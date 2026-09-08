@@ -54,10 +54,10 @@ ENCODERS = {
 # changes how loud they are, and the encode is last because it is the only step
 # that decides what the file *is*.
 FIX_ORDER = ["room_tone_head", "room_tone_tail", "remove_dc",
-             "gain", "loudnorm", "limit_peak", "encode"]
+             "gain", "loudnorm", "limit_peak", "encode", "faststart"]
 
 STEP_ORDER = ["trim_head", "pad_head", "trim_tail", "pad_tail", "remove_dc",
-              "gain", "loudnorm", "limit_peak", "encode"]
+              "gain", "loudnorm", "limit_peak", "encode", "faststart"]
 
 
 def plan(facts, measurements, result, profile, overrides=None):
@@ -103,7 +103,10 @@ def plan(facts, measurements, result, profile, overrides=None):
     # A codec or bitrate change and a loudness change both need an encode; when
     # only loudness changed, the encode step still has to exist, because a
     # filtered stream cannot be copied.
-    if steps and not any(s["kind"] == "encode" for s in steps):
+    # A plan that only rearranges the container needs no encode at all, and
+    # giving it one would throw away quality to fix a fault that costs none.
+    touches_audio = any(step["kind"] in ("filter", "concat") for step in steps)
+    if touches_audio and not any(s["kind"] == "encode" for s in steps):
         steps.append(_passthrough_encode(facts, profile))
     elif not steps and (overrides or {}).get("force_encode"):
         # A delivery may need a file re-encoded for no reason the file itself
@@ -245,6 +248,27 @@ def _loudnorm(facts, measurements, findings, rules, profile,
             f"Normalise loudness to {target_i:g} LUFS integrated with a "
             f"{target_tp:g} dBTP ceiling, measuring the file first so the "
             f"correction is a single known gain rather than a guess."),
+        "caveat": None,
+    }
+
+
+def _faststart(facts, measurements, findings, rules, profile, context=None):
+    """Move the index in front of the media.
+
+    The only correction here that costs the file nothing. Where the plan holds
+    no other change this is a remux — every stream copied through untouched and
+    rewritten in a different order — so the output holds exactly the media the
+    input did. Where the plan does hold other changes it is one more flag on
+    the encode that was happening anyway.
+    """
+    return {
+        "id": "faststart",
+        "kind": "mux",
+        "args": ["-movflags", "+faststart"],
+        "filters": [],
+        "description": ("Rewrite the file with its index in front of its "
+                        "media, so it can start playing before it has "
+                        "finished downloading."),
         "caveat": None,
     }
 
@@ -566,6 +590,7 @@ _BUILDERS = {
     "limit_peak": _limit_peak,
     "loudnorm": _loudnorm,
     "remove_dc": _remove_dc,
+    "faststart": _faststart,
     "room_tone_head": _room_tone_head,
     "room_tone_tail": _room_tone_tail,
     "encode": _encode,
@@ -665,6 +690,11 @@ def _lossy_headroom(steps):
 
 # ------------------------------------------------------------- the command
 
+def is_remux(steps):
+    """True when the plan copies every stream and only rewrites the container."""
+    return bool(steps) and all(step["kind"] == "mux" for step in steps)
+
+
 def output_path(source, steps, suffix=".preflight", directory=None):
     """Where the corrected copy goes: beside the source unless told otherwise."""
     folder = directory or os.path.dirname(os.path.abspath(source))
@@ -678,7 +708,7 @@ def output_path(source, steps, suffix=".preflight", directory=None):
 def build_command(source, destination, steps, facts, ffmpeg="ffmpeg"):
     """The exact argv. Returned before anything runs, and recorded afterwards."""
     filters, concat = [], None
-    encode_args = []
+    encode_args, mux_args = [], []
     for step in steps:
         if step["kind"] == "filter":
             filters.extend(step["filters"])
@@ -686,8 +716,19 @@ def build_command(source, destination, steps, facts, ffmpeg="ffmpeg"):
             concat = step
         elif step["kind"] == "encode":
             encode_args = list(step["args"])
+        elif step["kind"] == "mux":
+            mux_args.extend(step["args"])
 
     command = [ffmpeg, "-hide_banner", "-nostdin", "-y", "-i", source]
+
+    # Nothing to filter and nothing to encode: every stream is copied through
+    # and only the container is rearranged. This is the one path on which the
+    # output holds exactly the media the input did.
+    if not filters and not concat and not encode_args:
+        command += ["-map", "0", "-c", "copy", "-map_metadata", "0",
+                    "-map_chapters", "0"] + mux_args
+        command.append(destination)
+        return command
 
     if concat:
         graph = _concat_graph(concat["room_tone"], filters)
@@ -706,7 +747,7 @@ def build_command(source, destination, steps, facts, ffmpeg="ffmpeg"):
         command += ["-map", "0:v", "-c:v", "copy", "-disposition:v:0",
                     "attached_pic"]
     command += ["-map_metadata", "0", "-map_chapters", "0"]
-    command += encode_args
+    command += encode_args + mux_args
     command.append(destination)
     return command
 

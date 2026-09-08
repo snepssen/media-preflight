@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>294</b> checks passing</span>
+    <span><b>301</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -276,6 +276,9 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
   <span class="r-fail">✕</span> → <span class="r-pass">✓</span>  Bitrate mode: vbr → cbr
   </div>
   <p class="caption">Room tone is copied from a quiet stretch of the file itself wherever there is one, rather than padded with digital zeroes — because a target asking for a quiet ending is asking for the room, not for nothing.</p>
+
+  <h3 style="margin-top:44px">One correction costs nothing at all</h3>
+  <p>Every other fix re-encodes, and the plan says so in a caveat. Moving an MP4's index in front of its media does not: nothing about the sound or the picture changes, only the order of the boxes in the container. Every stream is copied through — no filter, no encoder — so the corrected copy holds exactly the media the original did, and a test proves it by comparing a hash of the decoded video before and after.</p>
 
   <h3 style="margin-top:44px">What it will not do</h3>
   <ul class="plain">
