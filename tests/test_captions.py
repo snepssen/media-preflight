@@ -308,3 +308,114 @@ class AlignmentTests(unittest.TestCase):
         out = captions.align(self._cues([(1, 6)]), None, None)
         self.assertIsNone(out["caption_drift_s"])
         self.assertIsNone(out["caption_uncaptioned_speech_s"])
+
+
+class AssFieldOrderTests(unittest.TestCase):
+    """The field order is declared by the file, not fixed by the format."""
+
+    # A real Protoke lyric-video script: no Effect field, positioned lines.
+    NO_EFFECT = """[Script Info]
+ScriptType: v4.00+
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize
+Style: Active,SF Pro Display,72
+Style: Inactive,SF Pro Display,54
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Text
+Dialogue: 0,0:00:00.00,0:00:00.16,Active,,0,0,0,{\\an5\\pos(540,1360)}Close your eyes
+Dialogue: 0,0:00:00.00,0:00:00.16,Inactive,,0,0,0,{\\an5\\pos(540,1450)}What do you see
+"""
+
+    STANDARD = """[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello, with a comma
+"""
+
+    def test_a_missing_effect_field_does_not_eat_the_caption(self):
+        """Assuming the usual ten fields reads part of the positioning
+        override as the text: 'Close your eyes' arrives as
+        '1360)}Close your eyes'."""
+        cues = captions.parse(self.NO_EFFECT, "ass")["cues"]
+        self.assertEqual(cues[0]["text"], "Close your eyes")
+        self.assertEqual(cues[1]["text"], "What do you see")
+
+    def test_the_usual_field_order_still_parses(self):
+        cues = captions.parse(self.STANDARD, "ass")["cues"]
+        self.assertEqual(cues[0]["text"], "Hello, with a comma",
+                         "Text is the last field and may contain commas")
+
+    def test_a_file_with_no_format_line_falls_back_to_the_usual_order(self):
+        cues = captions.parse(
+            "[Events]\nDialogue: 0,0:00:01.00,0:00:02.00,D,,0,0,0,,Hi\n",
+            "ass")["cues"]
+        self.assertEqual(cues[0]["text"], "Hi")
+
+
+class OverlapSlotTests(unittest.TestCase):
+    """Two cues drawn in different places are a layout, not an overlap."""
+
+    KARAOKE = AssFieldOrderTests.NO_EFFECT
+
+    def test_positioned_lines_playing_together_are_not_an_overlap(self):
+        """Karaoke shows the line being sung above the line coming next.
+        Reporting that as a fault is reporting the format working."""
+        m = captions.measure(captions.parse(self.KARAOKE, "ass"), 10.0)
+        self.assertEqual(m["caption_overlaps"], 0)
+
+    def test_two_cues_in_the_same_slot_still_overlap(self):
+        same = self.KARAOKE.replace(
+            "Dialogue: 0,0:00:00.00,0:00:00.16,Inactive,,0,0,0,"
+            "{\\an5\\pos(540,1450)}What do you see",
+            "Dialogue: 0,0:00:00.10,0:00:00.30,Active,,0,0,0,"
+            "{\\an5\\pos(540,1360)}What do you see")
+        m = captions.measure(captions.parse(same, "ass"), 10.0)
+        self.assertEqual(m["caption_overlaps"], 1)
+
+    def test_subrip_has_one_caption_area_so_any_overlap_counts(self):
+        srt = ("1\n00:00:01,000 --> 00:00:03,000\nA\n\n"
+               "2\n00:00:02,000 --> 00:00:04,000\nB\n")
+        m = captions.measure(captions.parse(srt, "srt"), 10.0)
+        self.assertEqual(m["caption_overlaps"], 1)
+
+    def test_the_slot_takes_in_layer_style_and_position(self):
+        slots = {c["slot"] for c in
+                 captions.parse(self.KARAOKE, "ass")["cues"]}
+        self.assertEqual(len(slots), 2)
+        self.assertTrue(any("540,1360" in slot for slot in slots))
+
+
+class DriftConfidenceTests(unittest.TestCase):
+    """A figure computed from one per cent of the cues is not a measurement."""
+
+    def test_continuous_music_reports_no_drift(self):
+        """The case from a real lyric video: 1,254 cues, one run of sound,
+        and about a dozen cues near enough to an onset to match. The median of
+        those said 2.32 seconds, which was a number about nothing."""
+        silences = [{"start": 0.0, "end": 0.4}]
+        cues = [{"index": i, "start": i * 0.15, "end": i * 0.15 + 0.14,
+                 "slot": ""} for i in range(1, 400)]
+        out = captions.align(cues, silences, 186.0)
+        self.assertIsNone(out["caption_drift_s"])
+        self.assertLess(out["caption_drift_confidence"], 0.5)
+
+    def test_the_suppressed_figure_is_still_recorded(self):
+        silences = [{"start": 0.0, "end": 0.4}]
+        cues = [{"index": i, "start": i * 0.15, "end": i * 0.15 + 0.14,
+                 "slot": ""} for i in range(1, 400)]
+        out = captions.align(cues, silences, 186.0)
+        self.assertIsNotNone(out["caption_drift_measured_s"],
+                             "kept for the record, acted on by no rule")
+
+    def test_dialogue_with_gaps_still_measures(self):
+        silences = [{"start": 0.0, "end": 1.0}]
+        silences += [{"start": i * 4 - 0.6, "end": i * 4} for i in range(1, 12)]
+        cues = [{"index": i, "start": i * 4 + 0.9, "end": i * 4 + 3.0,
+                 "slot": ""} for i in range(1, 12)]
+        out = captions.align(cues, silences, 60.0)
+        self.assertAlmostEqual(out["caption_drift_s"], 0.9, places=1)
+        self.assertEqual(out["caption_drift_confidence"], 1.0)
+
+    def test_the_threshold_is_a_measurement_option(self):
+        self.assertIn("drift_confidence_min", captions.ALIGNMENT_DEFAULTS)

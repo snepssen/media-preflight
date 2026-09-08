@@ -35,6 +35,8 @@ _ASS_OVERRIDE = re.compile(r"\{[^}]*\}")
 _ASS_DRAWING = re.compile(r"\\p[1-9].*?\\p0", re.S)
 _TAG = re.compile(r"</?[a-zA-Z][^>]*>")
 _ASS_FONT = re.compile(r"\\fn([^\\{}]+)")
+_ASS_POS = re.compile(r"\\(?:pos|move)\(([^)]*)\)")
+_ASS_ALIGN = re.compile(r"\\an?(\d+)")
 _VTT_TIME = re.compile(
     r"(\d{1,3}):(\d{2}):(\d{2})[.,](\d{1,3})|(\d{1,3}):(\d{2})[.,](\d{1,3})")
 
@@ -175,33 +177,80 @@ def parse_vtt(text):
 
 
 def parse_ass(text):
-    cues, fonts, order = [], set(), []
+    """Parse an ASS/SSA events section, honouring its own Format line.
+
+    The field order is declared by the file, not fixed by the format: a
+    perfectly valid script may omit Effect, and assuming the usual ten fields
+    then reads part of the positioning override as the caption text. Text is
+    always the last field and may contain commas, so it is split off by count
+    once the header has said how many fields precede it.
+    """
+    cues, fonts = [], set()
+    fields_order = ["Layer", "Start", "End", "Style", "Name", "MarginL",
+                    "MarginR", "MarginV", "Effect", "Text"]
+    in_events = False
+
     for raw in text.splitlines():
         line = raw.strip()
-        if line.lower().startswith("style:"):
+        lowered = line.lower()
+        if line.startswith("["):
+            in_events = lowered.startswith("[events")
+            continue
+        if lowered.startswith("style:"):
             parts = line.split(":", 1)[1].split(",")
             if len(parts) > 1 and parts[1].strip():
                 fonts.add(parts[1].strip())
             continue
-        if not line.lower().startswith("dialogue:"):
+        if in_events and lowered.startswith("format:"):
+            named = [part.strip() for part in line.split(":", 1)[1].split(",")]
+            if "Text" in named:
+                fields_order = named
             continue
-        fields = line.split(":", 1)[1].split(",", 9)
-        if len(fields) < 10:
+        if not lowered.startswith("dialogue:"):
             continue
-        start, end, body = fields[1], fields[2], fields[9]
+
+        values = line.split(":", 1)[1].split(",", len(fields_order) - 1)
+        if len(values) < len(fields_order):
+            continue
+        row = dict(zip(fields_order, values))
+        body = row.get("Text", "")
         fonts.update(_ASS_FONT.findall(body))
-        cues.append(_cue(len(cues) + 1, _timestamp(start), _timestamp(end),
-                         body))
-        order.append(cues[-1])
+        cue = _cue(len(cues) + 1, _timestamp(row.get("Start")),
+                   _timestamp(row.get("End")), body,
+                   slot=_slot(row.get("Layer"), row.get("Style"), body))
+        if cue:
+            cues.append(cue)
+
     # Dialogue lines are not required to be in time order, and a file where
     # they are not would otherwise report every cue as overlapping the last.
-    cues = sorted([c for c in cues if c], key=lambda c: c["start"])
+    cues = sorted(cues, key=lambda c: c["start"])
     for index, cue in enumerate(cues, 1):
         cue["index"] = index
     return {"cues": cues, "format": "ass", "fonts": sorted(fonts)}
 
 
-def _cue(index, start, end, body):
+def _slot(layer, style, body):
+    """Where on screen a cue is drawn, as far as its own markup says.
+
+    SubRip and WebVTT have one caption area and two cues in it at once is an
+    error. Advanced SubStation does not: a cue carries a layer, a style and
+    often an explicit position, and putting two of them on screen together is
+    how karaoke shows the line being sung above the line coming next, and how
+    a sign is translated without covering the dialogue. Cues that differ here
+    are designed to coexist, and calling that an overlap would be reporting
+    the format working as intended.
+    """
+    position = _ASS_POS.search(body)
+    align = _ASS_ALIGN.search(body)
+    return "|".join([
+        (layer or "0").strip(),
+        (style or "").strip(),
+        position.group(1).strip() if position else "",
+        align.group(1) if align else "",
+    ])
+
+
+def _cue(index, start, end, body, slot=""):
     if start is None or end is None:
         return None
     text = clean(body)
@@ -210,6 +259,7 @@ def _cue(index, start, end, body):
     characters = len(text.replace("\n", " ").strip())
     return {
         "index": index,
+        "slot": slot,
         "start": start,
         "end": end,
         "duration": duration,
@@ -252,20 +302,28 @@ def measure(track, duration_s=None):
     if not cues:
         return out
 
+    # Overlap is judged within a rendering slot, not across the whole file:
+    # two cues drawn in different places at the same time are not overlapping,
+    # they are a layout.
     overlaps, gaps = [], []
-    previous = None
+    slots = {}
     for cue in cues:
-        if previous is not None:
-            gap = cue["start"] - previous["end"]
-            if gap < 0:
-                overlaps.append({
-                    "start": cue["start"], "end": previous["end"],
-                    "duration": -gap,
-                    "detail": f"cue {cue['index']} starts {-gap:.2f} s before "
-                              f"cue {previous['index']} ends"})
-            else:
-                gaps.append(gap)
-        previous = cue
+        slots.setdefault(cue.get("slot", ""), []).append(cue)
+    for slot_cues in slots.values():
+        previous = None
+        for cue in slot_cues:
+            if previous is not None:
+                gap = cue["start"] - previous["end"]
+                if gap < 0:
+                    overlaps.append({
+                        "start": cue["start"], "end": previous["end"],
+                        "duration": -gap,
+                        "detail": f"cue {cue['index']} starts {-gap:.2f} s "
+                                  f"before cue {previous['index']} ends"})
+                else:
+                    gaps.append(gap)
+            previous = cue
+    overlaps.sort(key=lambda item: item["start"])
 
     speeds = [c["cps"] for c in cues if c["cps"] is not None]
     past_end = 0.0
@@ -411,6 +469,11 @@ ALIGNMENT_DEFAULTS = {
     # evidence of drift.
     "drift_window_s": 5.0,
     "drift_min_s": 0.4,
+    # How many cues must match a sound onset before the median of their
+    # offsets is worth reporting. A song is one long run of sound with a
+    # handful of onsets in it, so most cues match nothing and the few that do
+    # are not evidence about the file.
+    "drift_confidence_min": 0.5,
     # A cue wholly inside silence longer than this is a cue on nothing.
     "orphan_margin_s": 0.35,
 }
@@ -531,7 +594,17 @@ def _drift(cues, sound, settings):
             offsets.append(cue["start"] - nearest)
     if len(offsets) < 3:
         return {}
+    confidence = len(offsets) / len(cues)
     offsets.sort()
     median = offsets[len(offsets) // 2]
+    # Below the threshold the figure is reported for the record and no rule
+    # acts on it, because a file most of whose cues matched nothing has not
+    # been measured. Continuous music is the case that makes this necessary:
+    # one long run of sound offers almost no onsets to match against, and the
+    # few cues that land near one would otherwise decide the answer.
+    if confidence < settings["drift_confidence_min"]:
+        return {"caption_drift_s": None,
+                "caption_drift_measured_s": round(median, 2),
+                "caption_drift_confidence": round(confidence, 2)}
     return {"caption_drift_s": round(median, 2),
-            "caption_drift_confidence": round(len(offsets) / len(cues), 2)}
+            "caption_drift_confidence": round(confidence, 2)}

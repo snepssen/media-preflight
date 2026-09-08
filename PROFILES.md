@@ -281,6 +281,7 @@ any metric it states itself, so nothing is checked twice at two thresholds.
 | `uncaptioned_min_s` | 6.0 | uncaptioned sound before it is worth reporting |
 | `drift_window_s` | 5.0 | how far a cue may sit from speech and still match |
 | `drift_min_s` | 0.4 | offset that counts as drift |
+| `drift_confidence_min` | 0.5 | cues that must match an onset before drift is claimed |
 | `orphan_margin_s` | 0.35 | how far inside silence a cue must sit to be orphaned |
 
 The silence threshold matters more than it looks. "Room tone" is a claim about
