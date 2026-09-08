@@ -191,6 +191,10 @@
     <p class="meta" id="sourceNote"></p>
   </section>
 
+  <p class="meta" style="text-align:center;margin-top:26px">
+    <button class="toggle" id="quit">stop Media Preflight</button>
+  </p>
+
   <section class="panel hidden" id="planPanel">
     <p class="verdict">Proposed corrections</p>
     <p class="counts">Nothing has been written yet. The source file is not
@@ -648,6 +652,16 @@ for (const [id, kind] of [["exportMd", "markdown"], ["exportJson", "json"]]) {
     } catch (error) { fail(error.message); }
   });
 }
+
+// The app can be started by double-clicking, which leaves no terminal to
+// stop it from. This is that terminal.
+$("quit").addEventListener("click", async () => {
+  try { await api("/quit", {}); } catch (error) { /* it went away, which is the point */ }
+  document.body.innerHTML =
+    '<main style="max-width:780px;margin:0 auto;padding:60px 20px">'
+    + '<h1 style="font-size:19px">Media Preflight has stopped.</h1>'
+    + '<p class="sub">Nothing was left running. Close this tab.</p></main>';
+});
 
 boot().catch((error) => fail(error.message));
 </script>

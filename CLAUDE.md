@@ -178,6 +178,35 @@ terminal, and the reduced points themselves in the JSON.
   comparison the table exists for. A chapter too short for a clean window keeps
   everything rather than reporting nothing.
 
+## Building something to double-click
+
+`./build.sh` makes `Media Preflight.app`, `media-preflight.pyz` and a
+`.desktop` file, and verifies each — the .pyz is executed and asked to list
+targets before the build calls itself finished.
+
+**It bundles neither Python nor ffmpeg, deliberately.** Bundling Python means a
+build-time dependency (PyInstaller, py2app) on a tool whose claim is that it
+needs nothing installed; bundling ffmpeg means eighty megabytes and somebody
+else's licensing decision. The bundle removes the terminal, not the
+prerequisites: `packaging/launcher.sh` finds a Python of at least 3.10 and asks
+`tools/check_ffmpeg.py` the same question the application will, and turns
+either absence into an osascript dialog carrying the install command. If you
+are ever tempted to make the launcher import the application to check
+something, do not — it must run before there is a Python that can.
+
+**`build.sh`'s `MODULES` list is checked by a test** against the modules that
+exist, because a bundle missing a file fails on somebody else's machine. Add a
+top-level module and that test fails until the build copies it.
+
+**The icon is drawn, not stored.** `tools/icon.py` is a PNG writer and a
+rasteriser in the standard library, oversampling four times below 256 pixels
+and twice above — the full factor at 1024 costs fifteen seconds and buys
+nothing visible. Rendering is deterministic; a test asserts it, because a build
+that differs run to run is a build nobody can verify.
+
+**The window can stop itself.** A double-clicked app has no terminal to
+interrupt, so `/api/quit` shuts the server down and the page offers it.
+
 ## Traps
 
 - **JSON has no infinity.** Digital silence measures as `-inf` and `json.dumps`
@@ -238,7 +267,8 @@ one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 196 checks, about twelve seconds
+python3 -m unittest discover -s tests    # 212 checks, about fourteen seconds
+./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
 python3 app.py                           # the window
@@ -275,8 +305,6 @@ Three questions decide the rest:
 Nothing in the original three-week plan. Candidates, in rough order of how
 often they would earn their place:
 
-- **Packaging** — double-clickable builds for the three platforms. `build.sh`
-  in Gateway Forge is the template for the Mac side.
 - **Verifying the thresholds** — every published profile against its actual
   source document. The numbers were set from knowledge and stamped
   `checked: 2026-09`; nobody has read the specifications against them.

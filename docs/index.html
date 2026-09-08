@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>196</b> checks passing</span>
+    <span><b>212</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -347,6 +347,11 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
   <p class="eyebrow">Running it</p>
   <h2>Two commands, no packages</h2>
   <p class="lede">Python 3.10 or newer, standard library only. ffmpeg and ffprobe are located at runtime rather than bundled, and their absence is reported as a sentence with the install line for your platform.</p>
+
+<pre class="code"><span class="c"># something to double-click: a .app, a .pyz, a .desktop</span>
+./build.sh</pre>
+
+  <p style="margin-top:22px">The build bundles neither Python nor ffmpeg, and that is a decision rather than an omission. Bundling Python would mean a build-time dependency on a tool whose whole claim is that it needs nothing installed; bundling ffmpeg means eighty megabytes and somebody else's licensing decision. So the bundle removes the terminal, not the prerequisites — it looks for both, and when one is missing it says which, and prints the command that installs it.</p>
 
 <pre class="code"><span class="c"># the window — a local server and a page in your browser</span>
 python3 app.py

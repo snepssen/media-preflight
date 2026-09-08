@@ -8,3 +8,6 @@ fixtures/
 
 # Anything this tool produced, wherever it was left.
 *.preflight.*
+
+# Build output. ./build.sh remakes all of it from what is committed.
+build/

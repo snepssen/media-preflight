@@ -125,10 +125,46 @@ The tool probes for the filter rather than trusting the first ffmpeg on PATH,
 because slim distribution builds omit it and the failure otherwise appears
 halfway through an analysis as an unexplained filtergraph error.
 
+## Build something you can double-click
+
+```sh
+./build.sh
+```
+
+Three things land in `build/`:
+
+| | what it is |
+| --- | --- |
+| `Media Preflight.app` | a macOS bundle — drag it to /Applications |
+| `media-preflight.pyz` | a single 88 KB archive that runs anywhere with Python |
+| `media-preflight.desktop` | a Linux launcher for `~/.local/share/applications/` |
+
+**What the build does not do is bundle a Python or an ffmpeg, and that is a
+decision rather than an omission.** Bundling Python means taking a build-time
+dependency — PyInstaller or py2app — on a tool whose entire claim is that it
+needs nothing installed, and everybody who then wanted to build it would need
+that dependency too. Bundling ffmpeg means shipping eighty megabytes and
+inheriting a licensing decision that belongs to whoever redistributes it.
+
+So the bundle removes the terminal, not the prerequisites. It looks for a
+Python and an ffmpeg, and when it cannot find one it says which is missing and
+prints the command that installs it, in a dialog rather than into a log nobody
+opens. That is the honest version of "double-click to run" for a program that
+is, underneath, a front end to ffmpeg.
+
+The app has no terminal behind it to press Ctrl-C in, so the page it opens
+carries a **stop Media Preflight** button that shuts the server down and leaves
+nothing running.
+
+The icon is drawn by `tools/icon.py`, which is a PNG writer and a rasteriser in
+a hundred lines of standard library. An icon is a rounded square and two
+strokes; that does not justify an imaging dependency, and a build that pulls
+one in is a build somebody cannot run.
+
 ## Use it
 
-**The window.** Double-click `Start Media Preflight.command` on macOS,
-`start.bat` on Windows, or:
+**The window.** Double-click the built app, `Start Media Preflight.command` on
+macOS, `start.bat` on Windows, or:
 
 ```sh
 python3 app.py
@@ -294,9 +330,14 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 196 checks, about twelve seconds
+python3 -m unittest discover -s tests     # 212 checks, about fourteen seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
+./build.sh                                # the double-clickable builds
 ```
+
+One of those checks reads `build.sh` and compares the modules it copies against
+the modules that exist. A bundle missing a file fails at runtime, on somebody
+else's machine, which is the worst place to find out.
 
 Test media is generated, not committed: every fixture is built from ffmpeg's
 own sources, so it weighs nothing in the repository and its definition reads as
@@ -320,6 +361,8 @@ with an install line when ffmpeg is absent.
 | `captions.py` | SubRip, WebVTT and ASS, parsed and measured |
 | `chart.py` | the loudness picture — reduced, then drawn as SVG or as one terminal line |
 | `batch.py` | a whole delivery: discovery, ordering, and the properties of the set |
+| `build.sh` | the .app, the .pyz and the .desktop, each verified after building |
+| `tools/icon.py` | the icon, drawn with zlib and arithmetic |
 | `checks.py` | the rule engine: measurements plus a target, in, findings out |
 | `profiles.py` | the delivery targets, as data |
 | `corrections.py` | planning, previewing, applying and verifying a fix |

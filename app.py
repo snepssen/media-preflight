@@ -390,6 +390,12 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/export":
                 return self._json(self._export(body))
 
+            if url.path == "/api/quit":
+                # A double-clicked app has no terminal to press Ctrl-C in, so
+                # the page it opened is the only place a person can stop it.
+                threading.Timer(0.2, self.server.shutdown).start()
+                return self._json({"stopping": True})
+
             if url.path == "/api/reveal":
                 return self._json({"shown": platform_support.reveal(
                     body.get("path", ""))})
