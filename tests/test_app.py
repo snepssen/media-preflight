@@ -154,3 +154,27 @@ class EstimatingBeforeAnythingRuns(unittest.TestCase):
         for _ in range(app._INTAKES_KEPT + 3):
             self.stash(self.audio("/a.wav", 1))
         self.assertLessEqual(len(app._intakes), app._INTAKES_KEPT)
+
+
+class ProfilesAreRefusedForTheWrongFile(unittest.TestCase):
+    """A dropdown is a convenience, not a guarantee about what arrives."""
+
+    def test_a_picture_target_is_refused_for_a_caption_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "lines.srt")
+            path.write_text("1\n00:00:00,000 --> 00:00:01,000\nhi\n")
+            with self.assertRaises(ValueError) as caught:
+                app._refuse_mismatch(str(path), "youtube")
+            self.assertIn("caption", str(caught.exception))
+
+    def test_the_caption_target_is_allowed_for_a_caption_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "lines.srt")
+            path.write_text("1\n00:00:00,000 --> 00:00:01,000\nhi\n")
+            app._refuse_mismatch(str(path), "subtitles")
+
+    def test_an_unreadable_file_is_left_to_the_check_to_explain(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder, "broken.wav")
+            path.write_bytes(b"not audio")
+            app._refuse_mismatch(str(path), "acx")

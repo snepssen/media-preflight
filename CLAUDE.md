@@ -387,6 +387,35 @@ interrupt, so `/api/quit` shuts the server down and the page offers it.
   depth is part of both single-file and delivery keys so a selective pass can
   never stand in for a full one.
 
+## Guided and Professional
+
+One page, two amounts of exposed decision. The mode is a presentation
+preference: it lives in `localStorage`, it is never sent with a job, and
+switching it re-renders the queue without re-measuring anything. **Anything
+that made the two modes disagree about a verdict would be a bug in
+index.html, not a feature.** Guided asks for a target once per kind;
+Professional asks once per file and adds the picture-depth control. Same
+question, same answers, different number of times.
+
+`intake.classify` runs first in both. `/api/intake` returns the sorted list
+with the probe output stripped and keeps the full envelope server-side under a
+token, because `/api/estimate` needs the width, height and frame rate that
+were in it and probing a folder twice to avoid holding it once is the wrong
+trade.
+
+The queue runs as one `/api/check` per file from the page, in order, and not
+as a batch endpoint. Three reasons: every result lands in the same cache a
+single check would fill, so opening a row afterwards is a lookup; one file
+that cannot be measured does not take the rest with it; and the bar can be
+weighted by `/api/estimate` rather than by file count. That last one is not a
+nicety — eight WAVs and eight lyric videos from one album are 1.9 seconds each
+and 180 seconds each, so a file-counting bar spends half its travel on one
+percent of the work.
+
+Estimates are given as a range. They are arithmetic over constants measured on
+one laptop, and "about 16 to 33 minutes" is honest in a way "1406 seconds" is
+not.
+
 ## What a profile is for
 
 `profiles.applies_to` reads it off the rules. Profiles used to carry a `kind`

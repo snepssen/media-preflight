@@ -248,8 +248,38 @@ def picture_plan(path, target):
         return None
 
 
+def _refuse_mismatch(path, target, ffprobe=None):
+    """A profile may not be run against a file it was never a target for.
+
+    The page only offers compatible profiles, but a dropdown is a convenience
+    and not a guarantee about what arrives: a stale page, a second window, or
+    anything that is not the page at all can still ask. Refusing here means
+    the answer to "can this be checked against that" is the same wherever it
+    is asked.
+    """
+    if preflight.is_caption_file(path):
+        kind = "captions"
+    else:
+        if ffprobe is None:
+            _, ffprobe = platform_support.require_tools()
+        try:
+            kind = probe.kind_of(probe.inspect(path, ffprobe))
+        except probe.ProbeError:
+            return          # the check itself will report this properly
+    profile = profiles.get(target) if not isinstance(target, dict) else target
+    if kind and not profiles.accepts(profile, kind):
+        WORD = {"audio": "a sound file", "video": "a video file",
+                "captions": "a caption file"}
+        for_kinds = " or ".join(profiles.applies_to(profile))
+        raise ValueError(
+            "%s is %s, and %s is a target for %s."
+            % (os.path.basename(path), WORD.get(kind, "a " + kind + " file"),
+               profile.get("label", target), for_kinds))
+
+
 def check_job(path, target, depth="selective"):
     def work(update):
+        _refuse_mismatch(path, target)
         cached = _recall(path, target, depth)
         if cached:
             update(stage="already measured", phase="target", progress=1.0)

@@ -59,6 +59,31 @@ def _rate(value):
     return float(fraction)
 
 
+def is_still(facts):
+    """A single frame is not a programme, wherever it is found.
+
+    ffprobe reports a video stream for a PNG and invents a frame rate for it —
+    25 fps on a file with no second to hold 25 frames — so the frame rate
+    proves nothing. What separates a still from a picture is a timeline: a
+    programme has a duration or a frame count and a still has neither. This is
+    the cover-art rule applied to a whole file instead of a stream.
+    """
+    stream = facts.get("video") or {}
+    frames = stream.get("nb_frames") or 0
+    duration = (facts.get("container", {}).get("duration_s")
+                or stream.get("duration_s") or 0)
+    return frames <= 1 and not duration
+
+
+def kind_of(facts):
+    """'video', 'audio' or None — what this file is, as a deliverable."""
+    if facts.get("video") and not is_still(facts):
+        return "video"
+    if facts.get("audio"):
+        return "audio"
+    return None
+
+
 def inspect(path, ffprobe=None):
     """Return the normalised declaration of one media file."""
     if ffprobe is None:

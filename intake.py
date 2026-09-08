@@ -106,7 +106,7 @@ def _identify(path, ffprobe):
     except probe.ProbeError as error:
         return _unsupported(path, name, _plain_error(error, path))
 
-    if facts.get("video") and not _is_still(facts):
+    if facts.get("video") and not probe.is_still(facts):
         return _item(path, name, "video", facts=facts,
                      summary=_picture_summary(facts))
     if facts.get("video") and not facts.get("audio"):
@@ -122,21 +122,9 @@ def _identify(path, ffprobe):
         "Opened, but carries neither sound nor moving picture.")
 
 
-def _is_still(facts):
-    """A single frame is not a programme, wherever it is found.
-
-    The module already refuses to call an MP3 a video because of its embedded
-    artwork; a PNG on its own is the same claim from the other direction.
-    ffprobe reports a video stream for both and invents a frame rate for it —
-    25 fps on a file that has no second to be 25 frames of — so the frame rate
-    proves nothing. What separates them is a timeline: a moving picture has a
-    duration or a frame count, and a still has neither.
-    """
-    stream = facts.get("video") or {}
-    frames = stream.get("nb_frames") or 0
-    duration = (facts.get("container", {}).get("duration_s")
-                or stream.get("duration_s") or 0)
-    return frames <= 1 and not duration
+# The rule lives with the prober, so that what intake calls a video and what
+# a check refuses to run a caption profile against are the same judgement.
+_is_still = probe.is_still
 
 
 def _identify_caption(path, name):

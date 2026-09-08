@@ -123,6 +123,45 @@
   .meta { color: var(--quiet); font-size: 12.5px; margin-top: 12px; }
   .toggle { background: none; border: none; color: var(--accent); padding: 0;
             font-size: 13px; text-decoration: underline; }
+
+  /* The mode switch. Two words and a line saying what does not change
+     between them, because the honest half of this choice is the half people
+     will not otherwise believe. */
+  .modes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+           margin-bottom: 14px; }
+  .modes .seg { display: inline-flex; border: 1px solid var(--line);
+                border-radius: 6px; overflow: hidden; }
+  .modes .seg button { background: none; border: none; padding: 6px 14px;
+                       font-size: 13px; color: var(--quiet); }
+  .modes .seg button.on { background: var(--accent); color: var(--bg); }
+  .modes .why { font-size: 12.5px; color: var(--quiet); }
+
+  .qgroup { margin-top: 18px; }
+  .qgroup > h4 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+                 color: var(--quiet); margin: 0 0 8px; font-weight: 600;
+                 display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .qgroup > h4 select { font-size: 12px; text-transform: none;
+                        letter-spacing: 0; }
+  .qrow { display: grid; grid-template-columns: 1fr auto auto;
+          gap: 10px; align-items: center; padding: 7px 0;
+          border-top: 1px solid var(--line); }
+  .qrow:first-of-type { border-top: none; }
+  .qname { min-width: 0; }
+  .qname b { font-weight: 500; display: block; overflow: hidden;
+             text-overflow: ellipsis; white-space: nowrap; }
+  .qsub { color: var(--quiet); font-size: 12px; }
+  .qsub .with { color: var(--accent); }
+  .qrow.out { opacity: .45; }
+  .qrow select { font-size: 12.5px; max-width: 210px; }
+  .qcost { color: var(--quiet); font-size: 12px; font-variant-numeric: tabular-nums;
+           text-align: right; min-width: 62px; }
+  .qgroup.unreadable .qrow { grid-template-columns: 1fr; }
+  .qgroup.unreadable .qsub { color: var(--warn); }
+  .qtotal { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+            margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .qtotal .big { font-size: 15px; }
+  .qdelivery { font-size: 12.5px; color: var(--quiet); margin-top: 10px; }
+  .qdelivery label { display: inline-flex; gap: 6px; align-items: center; }
 </style>
 
 <main>
@@ -131,6 +170,13 @@
     Nothing is uploaded and the file you choose is never modified.</p>
 
   <section class="panel">
+    <div class="modes">
+      <div class="seg">
+        <button id="modeGuided" class="on">Guided</button>
+        <button id="modePro">Professional</button>
+      </div>
+      <span class="why">Same measurements. Different level of control.</span>
+    </div>
     <div class="drop" id="drop">
       <strong id="dropTitle">Choose your finished media</strong>
       <span id="dropHint">A browser cannot read a dropped file's location, so this
@@ -145,6 +191,7 @@
       <select id="target"></select>
       <button class="primary" id="run">Run</button>
       <button id="runFolder" title="Check a folder as one delivery">Check a folder…</button>
+      <button id="sortFolder" title="Sort a folder into audio, video and captions">Sort a folder…</button>
     </div>
     <p class="note" id="targetNote"></p>
     <div class="row hidden" id="pictureRow">
@@ -156,6 +203,18 @@
     </div>
     <p class="note hidden" id="pictureNote"></p>
     <p class="error hidden" id="toolError"></p>
+  </section>
+
+  <section class="panel hidden" id="queuePanel">
+    <p class="verdict" id="queueTitle"></p>
+    <p class="counts" id="queueCounts"></p>
+    <div id="queueBody"></div>
+    <div class="qdelivery hidden" id="queueGroups"></div>
+    <div class="qtotal">
+      <button class="primary" id="startQueue">Start</button>
+      <span class="big" id="queueEstimate"></span>
+      <button class="toggle" id="cancelQueue">Choose something else</button>
+    </div>
   </section>
 
   <section class="panel hidden" id="progressPanel">
@@ -479,6 +538,7 @@ async function boot() {
     `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join("");
   $("target").value = localStorage.getItem("target") || "web";
   $("depth").value = localStorage.getItem("depth") || "selective";
+  setMode(mode);
   describeTarget();
   refreshPicturePlan();
   if (!state.ffmpeg) fail(`ffmpeg was not found. Install it with: ${state.ffmpeg_hint}`);
@@ -568,6 +628,322 @@ $("path").addEventListener("input", () => {
   planTimer = setTimeout(refreshPicturePlan, 400);
 });
 let planTimer = null;
+
+// ---------------------------------------------------------------- modes
+//
+// The mode is a presentation preference and nothing else. It lives in this
+// browser, it is not sent with any job, and switching it never re-measures
+// anything or changes a verdict — Guided and Professional are the same
+// measurements with different amounts of the decision exposed. Anything that
+// made them disagree would be a bug in this file, not a feature.
+
+let mode = localStorage.getItem("mode") === "pro" ? "pro" : "guided";
+
+function setMode(next) {
+  mode = next;
+  localStorage.setItem("mode", next);
+  $("modeGuided").classList.toggle("on", next === "guided");
+  $("modePro").classList.toggle("on", next === "pro");
+  document.body.classList.toggle("pro", next === "pro");
+  $("pictureRow").classList.toggle("hidden", next !== "pro" || !lastPicturePlan);
+  if (queue) renderQueue();
+}
+
+$("modeGuided").addEventListener("click", () => setMode("guided"));
+$("modePro").addEventListener("click", () => setMode("pro"));
+
+// ---------------------------------------------------------------- the queue
+
+let queue = null;          // the sorted selection, as the server returned it
+let choices = {};          // path -> { target, depth, action }
+
+const KIND_TITLE = { video: "Video", audio: "Audio", captions: "Subtitles",
+                     unsupported: "Not checked" };
+
+$("sortFolder").addEventListener("click", async () => {
+  try {
+    const { path } = await api("/pick_folder", {});
+    if (path) await sortSelection([path]);
+  } catch (error) { fail(error.message); }
+});
+
+async function sortSelection(paths) {
+  busy(true);
+  try {
+    const { job } = await api("/intake", { paths, recursive: true });
+    poll(job, (result) => {
+      busy(false);
+      queue = result;
+      choices = {};
+      for (const row of queue.items) {
+        if (row.kind === "unsupported") continue;
+        choices[row.path] = {
+          target: defaultTarget(row.kind),
+          depth: "selective",
+          action: "check",
+        };
+      }
+      renderQueue();
+      $("queuePanel").classList.remove("hidden");
+      $("queuePanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  } catch (error) { busy(false); fail(error.message); }
+}
+
+function defaultTarget(kind) {
+  const offered = (queue.profiles[kind] || []).map((p) => p.id);
+  const remembered = localStorage.getItem("target." + kind);
+  if (remembered && offered.includes(remembered)) return remembered;
+  const preferred = { video: "web", audio: "ebu_r128", captions: "subtitles" };
+  return offered.includes(preferred[kind]) ? preferred[kind] : offered[0];
+}
+
+function renderQueue() {
+  const byKind = {};
+  for (const row of queue.items) (byKind[row.kind] ||= []).push(row);
+
+  const counted = ["video", "audio", "captions"]
+    .filter((k) => byKind[k])
+    .map((k) => `${byKind[k].length} ${KIND_TITLE[k].toLowerCase()}`);
+  $("queueTitle").textContent = "What is in here";
+  $("queueTitle").className = "verdict";
+  $("queueCounts").textContent = counted.join(", ")
+    + (byKind.unsupported ? `, and ${byKind.unsupported.length} this tool cannot read` : "")
+    + (queue.counts.companions
+       ? `. ${queue.counts.companions} caption file${queue.counts.companions === 1 ? "" : "s"} `
+         + "will be checked with the media each belongs to." : ".");
+
+  const parts = [];
+  for (const kind of ["video", "audio", "captions"]) {
+    const rows = byKind[kind];
+    if (!rows) continue;
+    parts.push(groupHtml(kind, rows));
+  }
+  if (byKind.unsupported) parts.push(unreadableHtml(byKind.unsupported));
+  $("queueBody").innerHTML = parts.join("");
+
+  wireQueue();
+  renderGroups();
+  refreshEstimate();
+}
+
+function groupHtml(kind, rows) {
+  const offered = queue.profiles[kind] || [];
+  // Guided asks once per kind; Professional asks once per file. Same
+  // question, same list of answers, different number of times.
+  const shared = mode === "guided"
+    ? `<select data-all="${kind}">${optionsHtml(offered, choices[rows[0].path]?.target)}</select>`
+    : "";
+  const head = `<h4>${esc(KIND_TITLE[kind])} · ${rows.length}${shared
+    ? " <span style='text-transform:none;letter-spacing:0'>checked against</span> " + shared : ""}</h4>`;
+  return `<div class="qgroup">${head}${rows.map((r) => rowHtml(r, kind, offered)).join("")}</div>`;
+}
+
+function rowHtml(row, kind, offered) {
+  const chosen = choices[row.path] || {};
+  const skipped = chosen.action === "skip";
+  const withCaptions = row.companions.length
+    ? ` <span class="with">+ ${esc(row.companions.map((c) => c.name).join(", "))}</span>` : "";
+  const picker = mode === "pro"
+    ? `<select data-path="${esc(row.path)}" data-field="target">${optionsHtml(offered, chosen.target)}</select>`
+    : `<button class="toggle" data-skip="${esc(row.path)}">${skipped ? "include" : "skip"}</button>`;
+  return `<div class="qrow${skipped ? " out" : ""}">
+    <span class="qname"><b>${esc(row.name)}</b>
+      <span class="qsub">${esc(row.summary)}${withCaptions}</span></span>
+    ${picker}
+    <span class="qcost" data-cost="${esc(row.path)}"></span>
+  </div>`;
+}
+
+function unreadableHtml(rows) {
+  return `<div class="qgroup unreadable"><h4>Not checked · ${rows.length}</h4>`
+    + rows.map((r) => `<div class="qrow"><span class="qname"><b>${esc(r.name)}</b>
+        <span class="qsub">${esc(r.reason || "")}</span></span></div>`).join("")
+    + `</div>`;
+}
+
+function optionsHtml(offered, selected) {
+  return offered.map((p) =>
+    `<option value="${esc(p.id)}"${p.id === selected ? " selected" : ""}>${esc(p.label)}</option>`
+  ).join("");
+}
+
+function wireQueue() {
+  $("queueBody").querySelectorAll("select[data-all]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const kind = select.dataset.all;
+      localStorage.setItem("target." + kind, select.value);
+      for (const row of queue.items) {
+        if (row.kind === kind && choices[row.path]) choices[row.path].target = select.value;
+      }
+      refreshEstimate();
+    });
+  });
+  $("queueBody").querySelectorAll("select[data-path]").forEach((select) => {
+    select.addEventListener("change", () => {
+      choices[select.dataset.path][select.dataset.field] = select.value;
+      refreshEstimate();
+    });
+  });
+  $("queueBody").querySelectorAll("button[data-skip]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const at = choices[button.dataset.skip];
+      at.action = at.action === "skip" ? "check" : "skip";
+      renderQueue();
+    });
+  });
+}
+
+function renderGroups() {
+  const box = $("queueGroups");
+  if (!queue.groups.length) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  // Suggested, never assumed: ten files in a folder might be one audiobook
+  // that has to be consistent with itself, or ten unrelated episodes that
+  // have no business being compared.
+  box.innerHTML = queue.groups.map((g, i) => `<label>
+      <input type="checkbox" data-group="${i}" ${g.count >= 3 ? "checked" : ""}>
+      ${esc(g.sequence)} — ${g.count} ${esc(g.kind)} files in one folder.
+      Check them as a single delivery?
+      ${g.missing.length ? `<b>${esc(g.missing.join(", "))} missing.</b>` : ""}
+    </label>`).join("<br>");
+}
+
+async function refreshEstimate() {
+  const assignments = Object.entries(choices).map(([path, c]) => ({ path, ...c }));
+  $("queueEstimate").textContent = "…";
+  try {
+    const out = await api("/estimate", { intake: queue.intake, assignments });
+    $("queueEstimate").textContent = out.files
+      ? `${out.files} file${out.files === 1 ? "" : "s"}, about ${spell(out.low)} to ${spell(out.high)}`
+      : "Nothing selected.";
+    $("startQueue").disabled = !out.files;
+    for (const row of out.per_file) {
+      const cell = $("queueBody").querySelector(`[data-cost="${CSS.escape(row.path)}"]`);
+      if (cell) cell.textContent = spell(row.seconds);
+    }
+  } catch (error) { $("queueEstimate").textContent = error.message; }
+}
+
+// Running the queue is one /api/check per file, in order. There is no
+// batch-of-everything endpoint behind this on purpose: each result lands in
+// the server's cache exactly as a single check would, so opening any row
+// afterwards is a lookup rather than a second decode, and one file that
+// cannot be measured does not take the other nineteen with it.
+//
+// The bar is weighted by the estimate, not by file count. On real material
+// that is the difference between a truthful bar and a decorative one: eight
+// WAVs and eight lyric videos from one album are 1.9 seconds each and 180
+// seconds each, so counting files would spend half the travel on one percent
+// of the work.
+let queueResults = [];
+
+$("startQueue").addEventListener("click", async () => {
+  const todo = Object.entries(choices)
+    .filter(([, c]) => c.action !== "skip")
+    .map(([path, c]) => ({ path, ...c }));
+  if (!todo.length) return;
+
+  let weights = {};
+  try {
+    const out = await api("/estimate", { intake: queue.intake, assignments: todo });
+    for (const row of out.per_file) weights[row.path] = row.seconds;
+  } catch (error) { /* an unweighted bar still moves */ }
+  const total = todo.reduce((sum, t) => sum + (weights[t.path] || 1), 0);
+
+  $("queuePanel").classList.add("hidden");
+  $("progressPanel").classList.remove("hidden");
+  queueResults = [];
+  let done = 0;
+
+  for (const item of todo) {
+    const name = item.path.split(/[\\/]/).pop();
+    $("stage").textContent = `${name} — ${queueResults.length + 1} of ${todo.length}`;
+    try {
+      const { job } = await api("/check", {
+        path: item.path, target: item.target, depth: item.depth });
+      const envelope = await settle(job, done, done + (weights[item.path] || 1), total);
+      queueResults.push({ path: item.path, name, envelope });
+    } catch (error) {
+      queueResults.push({ path: item.path, name, error: error.message });
+    }
+    done += weights[item.path] || 1;
+  }
+
+  $("progressPanel").classList.add("hidden");
+  renderQueueResults();
+});
+
+// poll() drives the shared bar between 0 and 1; here each file owns a slice
+// of it, sized by what that file was predicted to cost.
+function settle(jobId, from, to, total) {
+  return new Promise((resolve, reject) => {
+    const tick = async () => {
+      let job;
+      try { job = await api(`/job?id=${encodeURIComponent(jobId)}`); }
+      catch (error) { return reject(error); }
+      const within = from + (job.progress || 0) * (to - from);
+      $("bar").style.width = Math.round((within / total) * 100) + "%";
+      if (job.state === "running") return setTimeout(tick, 220);
+      if (job.state === "error") return reject(new Error(job.error));
+      resolve(job.result);
+    };
+    tick();
+  });
+}
+
+function renderQueueResults() {
+  const worst = { fail: 0, warn: 1, pass: 2 };
+  const rows = [...queueResults].sort((a, b) =>
+    (worst[a.envelope?.verdict] ?? -1) - (worst[b.envelope?.verdict] ?? -1));
+
+  const failed = rows.filter((r) => r.envelope?.verdict === "fail").length;
+  const warned = rows.filter((r) => r.envelope?.verdict === "warn").length;
+  const broke = rows.filter((r) => r.error).length;
+
+  $("queueTitle").textContent = failed
+    ? `${MARK.fail} ${failed} of ${rows.length} would be rejected.`
+    : warned ? `${MARK.warn} Deliverable, with things worth looking at.`
+             : `${MARK.pass} All ${rows.length} are ready.`;
+  $("queueTitle").className = "verdict " + (failed ? "fail" : warned ? "warn" : "pass");
+  $("queueCounts").textContent =
+    `${failed} failed, ${warned} warned, ${rows.length - failed - warned - broke} passed`
+    + (broke ? `, ${broke} could not be measured` : "") + ".";
+
+  $("queueBody").innerHTML = `<div class="qgroup">` + rows.map((r) => {
+    const v = r.envelope?.verdict;
+    const worstFinding = r.envelope && [...r.envelope.findings]
+      .filter((f) => f.status === "fail" || f.status === "warn")
+      .map((f) => f.label)[0];
+    return `<div class="qrow"><span class="qname">
+        <b>${MARK[v] || "·"} ${esc(r.name)}</b>
+        <span class="qsub">${esc(r.error || worstFinding || "Nothing to report.")}</span>
+      </span>
+      <button class="toggle" data-open="${esc(r.path)}">open</button>
+      <span class="qcost"></span></div>`;
+  }).join("") + `</div>`;
+
+  $("queueGroups").classList.add("hidden");
+  $("startQueue").classList.add("hidden");
+  $("queueEstimate").textContent = "";
+  $("queuePanel").classList.remove("hidden");
+
+  $("queueBody").querySelectorAll("button[data-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const found = queueResults.find((r) => r.path === button.dataset.open);
+      if (!found || !found.envelope) return;
+      $("path").value = found.path;
+      renderReport(found.envelope);
+      $("reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+$("cancelQueue").addEventListener("click", () => {
+  $("queuePanel").classList.add("hidden");
+  $("startQueue").classList.remove("hidden");
+  queue = null;
+});
 
 $("drop").addEventListener("click", async () => {
   try {
