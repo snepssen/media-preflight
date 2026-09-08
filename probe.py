@@ -100,6 +100,9 @@ def normalise(raw, path):
             "duration_s": _number(fmt.get("duration")),
             "bit_rate": _number(fmt.get("bit_rate")),
             "tags": _lower_tags(fmt.get("tags")),
+            # Costs a handful of seeks over the box headers, so it is read
+            # here rather than asked for.
+            "fast_start": fast_start(path, fmt.get("format_name", "")),
         },
         "chapters": [_chapter(c) for c in (raw.get("chapters") or [])],
         "streams": streams,
@@ -226,3 +229,71 @@ def _intervals(duration_s):
     step = duration_s / (_SAMPLE_WINDOWS + 1)
     return ["%.3f%%+%d" % (step * (i + 1), _SAMPLE_SECONDS)
             for i in range(_SAMPLE_WINDOWS)]
+
+
+# ------------------------------------------------------------- fast start
+
+# An MP4 is a sequence of boxes, each headed by its own length and a four-byte
+# name. The index — `moov` — may sit before the media data or after it, and
+# nothing about the file is otherwise different. A player streaming the file
+# over HTTP cannot start until it has the index, so `moov` after `mdat` means
+# waiting for the whole download before the first frame appears. YouTube's
+# upload guide asks for the front position by name.
+#
+# Reading this costs a few seeks: each box header says how long the box is, so
+# the whole top level can be walked without touching a byte of the media.
+
+ISO_CONTAINERS = ("mp4", "mov", "m4a", "m4b", "m4v", "3gp", "3g2", "mj2")
+_MAX_ATOMS = 64
+
+
+def atom_order(path, limit=_MAX_ATOMS):
+    """The names of an ISO-BMFF file's top-level boxes, in order.
+
+    Returns None for anything that is not one — a WAV has no such structure
+    and the question does not apply to it.
+    """
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(12)
+            if len(head) < 8 or head[4:8] not in (b"ftyp", b"moov", b"free",
+                                                  b"skip", b"mdat", b"wide"):
+                return None
+            handle.seek(0)
+            names, position = [], 0
+            size_of = os.path.getsize(path)
+            while position < size_of and len(names) < limit:
+                handle.seek(position)
+                header = handle.read(8)
+                if len(header) < 8:
+                    break
+                size = int.from_bytes(header[:4], "big")
+                name = header[4:8].decode("latin-1")
+                if size == 1:                       # 64-bit length follows
+                    extended = handle.read(8)
+                    if len(extended) < 8:
+                        break
+                    size = int.from_bytes(extended, "big")
+                elif size == 0:                     # runs to end of file
+                    names.append(name)
+                    break
+                if size < 8:
+                    break
+                names.append(name)
+                position += size
+            return names
+    except OSError:
+        return None
+
+
+def fast_start(path, container=""):
+    """True when the index precedes the media, None when the question does not
+    apply to this kind of file."""
+    kinds = {part.strip() for part in (container or "").split(",")}
+    if not (kinds & set(ISO_CONTAINERS)) and \
+            os.path.splitext(path)[1].lstrip(".").lower() not in ISO_CONTAINERS:
+        return None
+    names = atom_order(path)
+    if not names or "moov" not in names or "mdat" not in names:
+        return None
+    return names.index("moov") < names.index("mdat")

@@ -121,6 +121,13 @@ are the ones that actually save somebody an afternoon.
   whole rule: short-term loudness can locate an integrated failure, and cannot
   locate an RMS failure. Adding an entry there is claiming two measurements are
   the same measurement. Be sure.
+- **Fast start is read, not decoded.** An MP4's top level is a list of boxes,
+  each headed by its own length, so `probe.atom_order` walks the whole thing in
+  a handful of seeks without touching a byte of media. `moov` behind `mdat`
+  means nothing plays until the file has finished downloading. Handles the
+  64-bit length escape (`size == 1`) and the run-to-end case (`size == 0`);
+  returns None for anything that is not ISO-BMFF, because the question does
+  not apply to a WAV.
 - **`bitrate_mode` samples three windows** rather than reading every packet of
   a ten-hour file. A VBR encoder that produced identical packet sizes in three
   separated windows would have had to be fed three identical stretches of audio.
@@ -181,6 +188,11 @@ rejected on submission.
   something somebody has to re-sort in their head.
 - **One unreadable file is reported, not fatal.** Only a delivery where
   *nothing* could be read raises.
+- **A gap in the numbering is a delivery fault.** `batch.numbering` only
+  reports one where there is actually a sequence: three or more files sharing
+  a prefix, a suffix **and a digit width**. The width matters — grouping
+  `a1, a2, a10` together would invent six missing files. A folder of unrelated
+  names reports nothing, which is the right answer.
 
 ### Correcting one
 
@@ -351,7 +363,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 281 checks, about thirty seconds
+python3 -m unittest discover -s tests    # 294 checks, about thirty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -389,11 +401,7 @@ Three questions decide the rest:
 Nothing in the original three-week plan, and nothing named since. Candidates,
 in rough order of how often they would earn their place:
 
-- **Fast-start check** — whether an MP4's `moov` atom precedes `mdat`.
-  YouTube's guide asks for it by name, it is a real cause of stalled
-  progressive downloads, and it needs no decode: read the atom order off the
-  front of the file.
-- **Gaps in a delivery's numbering** — `chapter-01, -02, -04` is a missing
-  chapter, visible from the filenames alone.
 - **Loudness of the corrected copy plotted against the original**, so a
   correction can be seen as well as verified.
+- **A `--fix` for fast start**, which is a remux rather than a re-encode and
+  so is lossless — the one correction on the list that costs the file nothing.

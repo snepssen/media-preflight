@@ -288,3 +288,51 @@ class AuditedThresholdTests(unittest.TestCase):
             if profile.get("confidence") == "published":
                 self.assertRegex(profile.get("checked", ""), r"^\d{4}-\d{2}$",
                                  profile["id"])
+
+
+class FastStartTests(unittest.TestCase):
+    """The index in front of the media, which costs a few seeks to check."""
+
+    def _mp4(self, folder, faststart):
+        import subprocess
+        import platform_support
+        ffmpeg = platform_support.find_ffmpeg()
+        if not ffmpeg:
+            self.skipTest("ffmpeg is not installed")
+        path = os.path.join(folder, f"{'fast' if faststart else 'slow'}.mp4")
+        command = [ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i",
+                   "testsrc2=size=160x120:rate=25:d=1", "-c:v", "libx264",
+                   "-pix_fmt", "yuv420p"]
+        if faststart:
+            command += ["-movflags", "+faststart"]
+        subprocess.run(command + [path], check=True)
+        return path
+
+    def test_the_atom_order_is_read_without_decoding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            order = probe.atom_order(self._mp4(folder, False))
+            self.assertIn("moov", order)
+            self.assertIn("mdat", order)
+
+    def test_faststart_puts_the_index_first(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertTrue(probe.fast_start(self._mp4(folder, True), "mp4"))
+            self.assertFalse(probe.fast_start(self._mp4(folder, False), "mp4"))
+
+    def test_a_file_with_no_such_structure_is_not_asked(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "notes.wav")
+            Path(path).write_bytes(b"RIFF....WAVEfmt ")
+            self.assertIsNone(probe.fast_start(path, "wav"))
+
+    def test_a_truncated_file_does_not_raise(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "cut.mp4")
+            Path(path).write_bytes(b"\x00\x00\x00\x18ftypisom")
+            self.assertIsNone(probe.fast_start(path, "mp4"))
+
+    def test_youtube_asks_for_it_by_name(self):
+        rule = next(r for r in profiles.get("youtube")["rules"]
+                    if r["id"] == "fast_start")
+        self.assertEqual(rule["basis"], "published")
+        self.assertTrue(rule["require"])

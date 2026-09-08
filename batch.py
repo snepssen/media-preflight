@@ -191,7 +191,10 @@ def measure_set(files, profile):
     loudness = _loudness_across(files, profile)
     peaks = _spread(files, "peak_dbfs")
 
+    order = numbering([entry["name"] for entry in files])
     out = {
+        "numbering": order,
+        "missing_files": order["missing"],
         "file_count": len(files),
         "failing_files": sum(1 for f in files
                              if f["result"]["verdict"] == "fail"),
@@ -537,3 +540,57 @@ def apply(planned, facts_by_path, ffmpeg=None, overwrite=False,
         written.append({"name": entry["name"], "source": entry["path"],
                         "output": path, "command": command, "steps": steps})
     return {"written": written, "failed": failed}
+
+
+# ------------------------------------------------------------- the numbering
+
+# `chapter-01, chapter-02, chapter-04` is a missing chapter, and it is visible
+# from the filenames alone. Nothing about any file is wrong; the delivery is
+# simply short one, and that is the kind of thing found at submission rather
+# than at export.
+
+_SEQUENCE = re.compile(r"^(.*?)(\d+)(\D*)$")
+_MIN_SEQUENCE = 3
+
+
+def numbering(names):
+    """Missing numbers in what looks like a numbered sequence.
+
+    Only what looks like one: three or more files sharing a prefix, a suffix
+    and a digit width. A folder of unrelated names has no sequence to be
+    missing from, and inventing one would produce a finding about nothing.
+    """
+    groups = {}
+    for name in names:
+        stem = os.path.splitext(name)[0]
+        found = _SEQUENCE.match(stem)
+        if not found:
+            continue
+        prefix, digits, suffix = found.groups()
+        # The digit width is part of the key: `part2` and `part02` are two
+        # naming schemes, and a delivery that mixes them has a different
+        # problem from a missing file.
+        key = (prefix, suffix, len(digits))
+        groups.setdefault(key, []).append(int(digits))
+
+    best_key, best = None, []
+    for key, numbers in groups.items():
+        if len(numbers) > len(best):
+            best_key, best = key, numbers
+    if len(best) < _MIN_SEQUENCE:
+        return {"missing": [], "expected": len(names), "sequence": None}
+
+    numbers = sorted(set(best))
+    missing = [n for n in range(numbers[0], numbers[-1] + 1)
+               if n not in set(numbers)]
+    prefix, suffix, width = best_key
+    extension = os.path.splitext(names[0])[1]
+    return {
+        "missing": [f"{prefix}{n:0{width}d}{suffix}{extension}"
+                    for n in missing],
+        "first": numbers[0],
+        "last": numbers[-1],
+        "present": len(numbers),
+        "expected": numbers[-1] - numbers[0] + 1,
+        "sequence": f"{prefix}…{suffix}",
+    }

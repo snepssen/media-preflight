@@ -298,9 +298,14 @@ TITLE_CHAPTERS = [
     ("chapter-01.mp3", 0.392, 1),
     ("chapter-02.mp3", 0.392, 1),
     ("chapter-03.mp3", 0.621, 1),     # four decibels above its neighbours
-    ("chapter-09.mp3", 0.392, 2),     # the stereo one
-    ("chapter-10.mp3", 0.392, 1),     # sorts before 09 unless sorted naturally
+    ("chapter-04.mp3", 0.392, 2),     # the stereo one
+    ("chapter-05.mp3", 0.392, 1),
 ]
+
+# The numbering is contiguous on purpose: this fixture is about the two faults
+# a set can have, and a gap in the sequence would be a third one confusing the
+# demonstration. Natural sorting is covered by its own test, on names that
+# actually need it.
 
 
 def build_title(folder, ffmpeg):

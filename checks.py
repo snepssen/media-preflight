@@ -168,6 +168,7 @@ METRICS = {
     "audio_bitrate_kbps": _bitrate_kbps,
     "bitrate_mode": lambda f, m: m.get("bitrate_mode"),
     "container": lambda f, m: f.get("container", {}).get("format_name"),
+    "fast_start": lambda f, m: f.get("container", {}).get("fast_start"),
     "bit_depth": lambda f, m: _audio(f, "bits_per_sample") or None,
     "cover_art": lambda f, m: f.get("cover_art"),
     "av_duration_gap_s": _av_gap,
@@ -256,6 +257,7 @@ LOCATABLE = {
 DECLARED_METRICS = {
     "audio_codec", "sample_rate", "channels", "audio_bitrate_kbps",
     "bitrate_mode", "container", "bit_depth", "cover_art", "duration_s",
+    "fast_start",
     "duration_min", "av_duration_gap_s",
     "video_codec", "video_width", "video_height", "resolution", "frame_rate",
     "frame_rate_mode", "pix_fmt", "video_bitrate_kbps", "interlaced",
@@ -532,6 +534,8 @@ SET_METRICS = {
     "set_peak_spread_db": _spread("peak"),
     "set_total_duration_min": lambda m: (
         (m["total_duration_s"] / 60.0) if m.get("total_duration_s") else None),
+    "set_missing_files": lambda m: (float(len(m["missing_files"]))
+                                    if "missing_files" in m else None),
     "set_longest_file_min": lambda m: (
         (m["longest_file_s"] / 60.0) if m.get("longest_file_s") else None),
 }
@@ -544,6 +548,7 @@ SET_OFFENDERS = {
     "set_container_distinct": "container_odd",
     "set_bitrate_mode_distinct": "bitrate_mode_odd",
     "set_bit_depth_distinct": "bit_depth_odd",
+    "set_missing_files": "missing_files",
 }
 
 
@@ -602,6 +607,10 @@ def _set_actual(rule, value, set_measurements):
     """A count of distinct values means nothing on its own; say what they are."""
     if value is None:
         return "—"
+    if rule["metric"] == "set_missing_files" and value:
+        sequence = (set_measurements.get("numbering") or {}).get("sequence")
+        return (f"{int(value)} missing from {sequence}" if sequence
+                else f"{int(value)} missing")
     key = SET_OFFENDERS.get(rule["metric"])
     if key and isinstance(value, (int, float)) and value > 1:
         name = key[:-4]
@@ -643,10 +652,12 @@ def describe(rule):
         return " or ".join([", ".join(allowed[:-1]), allowed[-1]]) + suffix
     if "equals" in rule:
         return f"{rule['equals']}{suffix}"
+    # Booleans are shown as yes/no by format_value, so the requirement column
+    # has to speak the same way: "Fast start: no — Required: yes".
     if rule.get("forbid"):
-        return "none"
+        return "no"
     if rule.get("require"):
-        return "required"
+        return "yes"
 
     low, high = rule.get("min"), rule.get("max")
     if low is not None and high is not None:

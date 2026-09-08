@@ -549,14 +549,18 @@ class DeliveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             for name in ("chapter-01.mp3", "chapter-02.mp3"):
                 self._chapter(folder, name, 0.435)
-            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            self._chapter(folder, "chapter-03.mp3", 0.435, channels=2)
             result = batch.run([folder], "acx", FFMPEG, FFPROBE)
 
             self.assertEqual(len(result["files"]), 3)
             self.assertEqual(result["set_result"]["verdict"], "fail")
             channels = next(f for f in result["set_result"]["findings"]
                             if f["id"] == "channels")
-            self.assertEqual(channels["files"], ["chapter-09.mp3"])
+            self.assertEqual(channels["files"], ["chapter-03.mp3"])
+            numbering = next(f for f in result["set_result"]["findings"]
+                             if f["id"] == "set_numbering")
+            self.assertEqual(numbering["status"], "pass",
+                             "this title is about channel count, not gaps")
 
     def test_the_corrected_copies_of_a_folder_are_not_checked_next_time(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -641,7 +645,7 @@ class DeliveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             self._chapter(folder, "chapter-01.mp3", 0.435)
             self._chapter(folder, "chapter-02.mp3", 0.435)
-            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            self._chapter(folder, "chapter-04.mp3", 0.435, channels=2)
             result = batch.run([folder], "acx", FFMPEG, FFPROBE)
             planned = batch.plan(result)
             facts = {e["path"]: e["facts"] for e in result["files"]}
@@ -661,7 +665,7 @@ class DeliveryTests(unittest.TestCase):
             self._chapter(folder, "chapter-01.mp3", 0.435)
             self._chapter(folder, "chapter-02.mp3", 0.435)
             self._chapter(folder, "chapter-03.mp3", 0.689)
-            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            self._chapter(folder, "chapter-04.mp3", 0.435, channels=2)
             said = []
             result = batch.run([folder], "acx", FFMPEG, FFPROBE)
             done = batch.correct(result, "acx", ffmpeg=FFMPEG,
@@ -680,7 +684,7 @@ class DeliveryTests(unittest.TestCase):
             self._chapter(folder, "chapter-01.mp3", 0.435)
             self._chapter(folder, "chapter-02.mp3", 0.435)
             self._chapter(folder, "chapter-03.mp3", 0.689)
-            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            self._chapter(folder, "chapter-04.mp3", 0.435, channels=2)
             result = batch.run([folder], "acx", FFMPEG, FFPROBE)
             done = batch.correct(result, "acx", ffmpeg=FFMPEG)
             self.assertTrue(done["written"]["written"], "nothing was written")
@@ -719,7 +723,7 @@ class DeliveryTests(unittest.TestCase):
     def test_the_command_line_exit_code_reports_the_delivery(self):
         with tempfile.TemporaryDirectory() as folder:
             self._chapter(folder, "chapter-01.mp3", 0.435)
-            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            self._chapter(folder, "chapter-04.mp3", 0.435, channels=2)
             self.assertEqual(
                 preflight.main(["batch", folder, "--target", "acx",
                                 "--quiet"]), 1,

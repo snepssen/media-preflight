@@ -320,3 +320,54 @@ class DeliveryPlanTests(unittest.TestCase):
         for entry_file in self._planned()["files"]:
             for step in entry_file["steps"]:
                 self.assertTrue(step["description"].strip(), step["id"])
+
+
+class NumberingTests(unittest.TestCase):
+    """A missing chapter is visible from the filenames alone."""
+
+    def test_a_gap_in_the_middle_is_found_and_named(self):
+        out = batch.numbering(["chapter-01.mp3", "chapter-02.mp3",
+                               "chapter-04.mp3", "chapter-05.mp3"])
+        self.assertEqual(out["missing"], ["chapter-03.mp3"])
+        self.assertEqual((out["first"], out["last"]), (1, 5))
+
+    def test_a_complete_sequence_is_missing_nothing(self):
+        out = batch.numbering([f"chapter-{n:02d}.mp3" for n in range(1, 6)])
+        self.assertEqual(out["missing"], [])
+
+    def test_a_sequence_that_starts_at_four_is_not_missing_one_to_three(self):
+        """Where a delivery starts is its business; gaps inside it are not."""
+        out = batch.numbering(["part-04.wav", "part-05.wav", "part-06.wav"])
+        self.assertEqual(out["missing"], [])
+
+    def test_names_that_are_not_a_sequence_make_no_claim(self):
+        out = batch.numbering(["intro.wav", "outro.wav", "bed.wav"])
+        self.assertIsNone(out["sequence"])
+        self.assertEqual(out["missing"], [])
+
+    def test_two_files_are_not_enough_to_be_a_sequence(self):
+        self.assertEqual(
+            batch.numbering(["a-01.wav", "a-03.wav"])["missing"], [])
+
+    def test_padding_width_is_part_of_the_scheme(self):
+        """`part2` and `part02` are two naming schemes, and a delivery that
+        mixes them has a different problem from a missing file."""
+        out = batch.numbering(["a1.wav", "a2.wav", "a10.wav"])
+        self.assertEqual(out["missing"], [], "no invented gap from 3 to 9")
+
+    def test_the_largest_consistent_group_is_the_sequence(self):
+        out = batch.numbering(["chapter-01.mp3", "chapter-02.mp3",
+                               "chapter-04.mp3", "bonus.mp3", "intro.mp3"])
+        self.assertEqual(out["missing"], ["chapter-03.mp3"])
+
+    def test_the_finding_says_what_is_missing_rather_than_how_many(self):
+        profile = profiles.get("acx")
+        files = [entry("chapter-01.mp3"), entry("chapter-02.mp3"),
+                 entry("chapter-04.mp3")]
+        measurements = batch.measure_set(files, profile)
+        result = checks.evaluate_set(measurements, profile)
+        finding = next(f for f in result["findings"]
+                       if f["id"] == "set_numbering")
+        self.assertEqual(finding["status"], "warn")
+        self.assertIn("chapter-", finding["actual"])
+        self.assertEqual(finding["files"], ["chapter-03.mp3"])

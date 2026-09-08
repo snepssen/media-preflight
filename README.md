@@ -61,8 +61,11 @@ silence, and a constant offset between the two. Nobody scrubs a two-hour
 recording to find the eleven seconds that were missed, and nobody notices a
 file is a second and a half out of sync until a viewer says so.
 
-**Declarations** — codec, container, sample rate, channel count, bitrate, and
-whether an MP3 is constant or variable bitrate.
+**Declarations** — codec, container, sample rate, channel count, bitrate,
+whether an MP3 is constant or variable bitrate, and whether an MP4's index
+sits in front of its media or behind it. That last one costs a few seeks over
+the box headers and decides whether anything can play before the whole file
+has downloaded; YouTube's guide asks for it by name.
 
 Every failure that can be tied to a moment carries one. Failures that are
 whole-file measurements say so rather than pointing at a second that means
@@ -322,16 +325,16 @@ submission:
 
 Across the delivery
   ✕ Channel count across the title: 2 different: 1, 2  Required: ≤ 1
-      chapter-09.mp3
+      chapter-04.mp3
   ⚠ Loudness spread across the title: 4 dB          Required: ≤ 3 dB
       chapter-03.mp3
 
 Files
-  ✓ chapter-01.mp3                             00:14  -22.5 dBFS RMS
-  ✓ chapter-02.mp3                             00:14  -22.5 dBFS RMS
-  ✓ chapter-03.mp3                             00:14  -18.5 dBFS RMS
-  ✓ chapter-09.mp3                             00:14  -22.5 dBFS RMS
-  ✓ chapter-10.mp3                             00:14  -22.5 dBFS RMS
+  ✓ chapter-01.mp3                             00:14  -22.8 dBFS RMS
+  ✓ chapter-02.mp3                             00:14  -22.8 dBFS RMS
+  ✓ chapter-03.mp3                             00:14  -18.8 dBFS RMS
+  ✓ chapter-04.mp3                             00:14  -22.8 dBFS RMS
+  ✓ chapter-05.mp3                             00:14  -22.8 dBFS RMS
 ```
 
 Every file passes. The delivery does not.
@@ -348,6 +351,14 @@ lists chapter 10 second is one somebody has to re-sort in their head.
 
 **The tool's own output is never swept back in.** A folder checked twice would
 otherwise start checking its own corrected copies.
+
+**A missing chapter is visible from the filenames.** `chapter-01, -02, -04` is
+a delivery short one file, and nothing about any file in it is wrong — which
+is exactly the sort of thing found at submission rather than at export. Only
+what actually looks like a sequence is checked: three or more files sharing a
+prefix, a suffix and a digit width, because a folder of unrelated names has no
+sequence to be missing from and inventing one would produce a finding about
+nothing.
 
 Files it cannot read are reported rather than fatal — one broken file in thirty
 should not cost you the other twenty-nine — and the window has the same view,
@@ -474,7 +485,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 281 checks, about thirty seconds
+python3 -m unittest discover -s tests     # 294 checks, about thirty seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

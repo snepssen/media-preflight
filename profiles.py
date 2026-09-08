@@ -264,6 +264,12 @@ YOUTUBE = {
                  "rule cannot vary with channel count, so this checks the "
                  "lower of the two; a stereo upload at 128 meets the letter "
                  "of this check and not the recommendation."},
+        {"id": "fast_start", "metric": "fast_start", "label": "Fast start",
+         "require": True, "severity": "warn", "basis": "published",
+         "note": "YouTube's guide asks for the moov atom at the front of the "
+                 "file. Behind it, nothing can start playing until the whole "
+                 "file has downloaded. ffmpeg writes it there with "
+                 "-movflags +faststart."},
         {"id": "video_codec", "metric": "video_codec", "label": "Video codec",
          "one_of": ["h264", "vp9", "av1", "hevc"], "severity": "warn",
          "basis": "house",
@@ -409,6 +415,11 @@ GENERIC_WEB = {
         {"id": "integrated", "metric": "integrated_lufs",
          "label": "Integrated loudness", "unit": "LUFS",
          "min": -24.0, "max": -9.0, "severity": "warn", "fix": "loudnorm"},
+        {"id": "fast_start", "metric": "fast_start", "label": "Fast start",
+         "require": True, "severity": "warn",
+         "note": "The index sits behind the media, so nothing can start "
+                 "playing until the whole file has downloaded. Rewrite it "
+                 "with -movflags +faststart."},
         {"id": "frame_rate_mode", "metric": "frame_rate_mode",
          "label": "Frame rate mode", "one_of": ["cfr"], "severity": "warn"},
         {"id": "leading_black", "metric": "leading_black_s",
@@ -555,6 +566,13 @@ UNIVERSAL_SET = [
      "note": "Some files are mono and some are stereo."},
     {"id": "set_sample_rate", "metric": "set_sample_rate_distinct",
      "label": "Sample rate across the set", "max": 1.0, "severity": "warn", "basis": "house"},
+    {"id": "set_numbering", "metric": "set_missing_files",
+     "label": "Gaps in the numbering", "max": 0.0, "severity": "warn",
+     "basis": "house",
+     "note": "A numbered sequence with a number absent from the middle of it. "
+             "Nothing is wrong with any file here; the delivery is simply "
+             "short one, which is the kind of thing found at submission "
+             "rather than at export."},
     {"id": "set_loudness", "metric": "set_loudness_spread_db",
      "label": "Loudness spread across the set", "unit": "dB", "max": 6.0,
      "severity": "warn", "basis": "house",

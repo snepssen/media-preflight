@@ -123,7 +123,7 @@ an ending is an edit, retiming a cue is an edit, and this tool does not edit.
 
 `audio_codec`, `sample_rate`, `channels`, `audio_bitrate_kbps`,
 `bitrate_mode`, `container`, `bit_depth`, `cover_art`, `duration_s`,
-`duration_min`, `av_duration_gap_s`
+`duration_min`, `av_duration_gap_s`, `fast_start`
 
 **Measured from the picture**
 
@@ -238,7 +238,7 @@ that every file in a title share a channel count.
 `set_sample_rate_distinct`, `set_codec_distinct`, `set_container_distinct`,
 `set_bitrate_mode_distinct`, `set_bit_depth_distinct`,
 `set_loudness_spread_db`, `set_peak_spread_db`, `set_total_duration_min`,
-`set_longest_file_min`
+`set_longest_file_min`, `set_missing_files`
 
 A `*_distinct` rule counts how many different values the delivery holds, and
 its finding names the files in the minority — the odd ones out. When two groups

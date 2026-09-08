@@ -162,7 +162,10 @@ class WordingTests(unittest.TestCase):
                          "1 to 5 s")
         self.assertEqual(checks.describe({"one_of": ["mp3", "aac"]}),
                          "mp3 or aac")
-        self.assertEqual(checks.describe({"forbid": True}), "none")
+        # Booleans read as yes/no, matching how their values are shown:
+        # "Fast start: no — Required: yes".
+        self.assertEqual(checks.describe({"forbid": True}), "no")
+        self.assertEqual(checks.describe({"require": True}), "yes")
 
     def test_timecodes_grow_an_hour_field_only_when_needed(self):
         self.assertEqual(checks.timecode(222), "03:42")
