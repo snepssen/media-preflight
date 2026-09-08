@@ -157,6 +157,10 @@ ul.plain li.no::before{content:"✕";color:var(--fail)}
 /* A faithful reproduction of the application window rather than a bitmap of
    it: sharp at any size, legible to a screen reader, and it follows the
    reader's own light or dark setting the way the real window does. */
+.figure{margin:28px 0 0;padding:0}
+.figure svg{display:block;width:100%;border:1px solid var(--line);border-radius:8px}
+.figure figcaption{margin-top:9px;font-size:13.5px;color:var(--muted);max-width:var(--measure)}
+
 .window{margin:28px 0 0;padding:0}
 .window-panel{background:var(--surface);border:1px solid var(--line);
               border-radius:10px;padding:20px}
