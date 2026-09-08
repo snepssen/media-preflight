@@ -60,12 +60,17 @@ STEP_ORDER = ["trim_head", "pad_head", "trim_tail", "pad_tail", "remove_dc",
               "gain", "loudnorm", "limit_peak", "encode"]
 
 
-def plan(facts, measurements, result, profile):
+def plan(facts, measurements, result, profile, overrides=None):
     """Turn the failing findings into an ordered list of proposed operations.
 
     Findings with no ``fix`` are not silently dropped: they come back as
     ``unfixable`` so the caller can say what the corrected copy will still not
     solve.
+
+    ``overrides`` carries decisions made above this function — by a delivery
+    that has worked out what its files should agree on. A per-file rule allows
+    mono *or* stereo; only the set knows that this title is mono and this one
+    chapter is not.
     """
     failing = [f for f in result["findings"]
                if f["status"] in ("fail", "warn")]
@@ -88,6 +93,7 @@ def plan(facts, measurements, result, profile):
         if kind not in wanted:
             continue
         builder = _BUILDERS[kind]
+        context["overrides"] = overrides or {}
         step = builder(facts, measurements, wanted[kind], rules, profile,
                        context)
         if step:
@@ -99,6 +105,11 @@ def plan(facts, measurements, result, profile):
     # filtered stream cannot be copied.
     if steps and not any(s["kind"] == "encode" for s in steps):
         steps.append(_passthrough_encode(facts, profile))
+    elif not steps and (overrides or {}).get("force_encode"):
+        # A delivery may need a file re-encoded for no reason the file itself
+        # can see — to match the channel count the rest of the title uses.
+        steps.append(_encode(facts, measurements, [], rules, profile,
+                             {"overrides": overrides}))
 
     steps = _guard(steps, measurements, rules)
 
@@ -132,9 +143,15 @@ def _gain(facts, measurements, findings, rules, profile,
     Used for targets written in RMS — ACX is the one that matters — where
     loudnorm's LUFS model would answer a question nobody asked.
     """
-    rule = rules.get(findings[0]["id"])
-    measured = measurements.get("rms_dbfs")
-    aim = _target_band(rule)
+    rule = rules.get(findings[0]["id"]) or {}
+    overrides = (context or {}).get("overrides") or {}
+    metric = overrides.get("loudness_metric") or rule.get("metric") or "rms_dbfs"
+    measured = measurements.get(metric)
+    # A delivery names the level all of its files should share; a lone file
+    # aims at the middle of its own band.
+    aim = overrides.get("loudness_target")
+    if aim is None:
+        aim = _target_band(rule)
     if measured is None or aim is None:
         return None
     gain_db = round(aim - measured, 2)
@@ -151,13 +168,14 @@ def _gain(facts, measurements, findings, rules, profile,
                   f"scale, so a limiter has to take it back down. That is a "
                   f"lot of limiting; listen to the result before delivering "
                   f"it, and consider re-recording or re-mixing instead.")
+    unit = "LUFS" if metric == "integrated_lufs" else "dBFS"
     return {
         "id": "gain",
         "kind": "filter",
         "filters": [f"volume={gain_db:+g}dB"],
         "description": (
-            f"Apply {gain_db:+g} dB of gain, moving RMS from "
-            f"{measured:.2f} dBFS to about {aim:.2f} dBFS"
+            f"Apply {gain_db:+g} dB of gain, moving level from "
+            f"{measured:.2f} {unit} to about {aim:.2f} {unit}"
             + (f"; peak would land near {predicted:.2f} dBFS." if predicted
                is not None else ".")),
         "caveat": caveat,
@@ -448,6 +466,8 @@ def _encode(facts, measurements, findings, rules, profile,
     described = ([f"Re-encode the audio as {wanted_codec}"]
                  if wanted_codec != audio.get("codec")
                  else [f"Re-encode the audio, still as {wanted_codec}"])
+    # Decisions the delivery made, which a single file cannot see.
+    overrides = (context or {}).get("overrides") or {}
 
     bitrate_rule = rules.get("bitrate") or {}
     floor = bitrate_rule.get("min")
@@ -472,13 +492,23 @@ def _encode(facts, measurements, findings, rules, profile,
 
     rate_rule = rules.get("sample_rate") or {}
     allowed_rates = rate_rule.get("one_of") or []
-    if allowed_rates and audio.get("sample_rate") not in allowed_rates:
+    wanted_rate = overrides.get("sample_rate")
+    if wanted_rate and audio.get("sample_rate") != wanted_rate:
+        args += ["-ar", str(int(wanted_rate))]
+        described.append(f"resampled to {int(wanted_rate)} Hz to match the "
+                         f"rest of the delivery")
+    elif allowed_rates and audio.get("sample_rate") not in allowed_rates:
         args += ["-ar", str(int(allowed_rates[0]))]
         described.append(f"resampled to {int(allowed_rates[0])} Hz")
 
     channel_rule = rules.get("channels") or {}
     allowed_channels = channel_rule.get("one_of") or []
-    if allowed_channels and audio.get("channels") not in allowed_channels:
+    wanted_channels = overrides.get("channels")
+    if wanted_channels and audio.get("channels") != wanted_channels:
+        args += ["-ac", str(int(wanted_channels))]
+        described.append(f"as {int(wanted_channels)} channel(s), which is what "
+                         f"the rest of the delivery is")
+    elif allowed_channels and audio.get("channels") not in allowed_channels:
         args += ["-ac", str(int(allowed_channels[0]))]
         described.append(f"as {int(allowed_channels[0])} channel(s)")
 
@@ -821,33 +851,6 @@ def refine(steps, after_measurements, result_after, profile):
     """
     rules = {rule["id"]: rule for rule in profile.get("rules", [])}
 
-    # A lossy encoder can hand back peaks a little louder than it was given, so
-    # a limiter aimed at the ceiling can still land above it. Aim lower by
-    # exactly the overshoot and build again from the source.
-    over = [f for f in result_after["findings"]
-            if f["status"] == "fail" and f["metric"] in
-            ("peak_dbfs", "true_peak_dbfs")]
-    limiters = [s for s in steps if s["id"] == "limit_peak"]
-    if over:
-        finding = over[0]
-        ceiling = (rules.get(finding["id"]) or {}).get("max")
-        if ceiling is not None and finding["value"] is not None:
-            overshoot = finding["value"] - ceiling
-            margin = round((limiters[0].get("margin", 0.1) if limiters else 0.1)
-                           + overshoot + 0.1, 2)
-            replacement = _limiter_step(
-                ceiling, margin=margin,
-                reason=(f"Aimed {margin:g} dB under the ceiling because the "
-                        f"first corrected copy came back {overshoot:+.2f} dB "
-                        f"over it — a lossy encoder can hand back peaks a "
-                        f"little louder than it was given."))
-            if limiters:
-                out = [replacement if s["id"] == "limit_peak" else s
-                       for s in steps]
-            else:
-                out = in_order(list(steps) + [replacement])
-            return out, f"limiter aimed {margin:g} dB under the ceiling"
-
     gain_steps = [s for s in steps if s["id"] == "gain"]
     if not gain_steps:
         return None, "no gain step to adjust"
@@ -855,11 +858,45 @@ def refine(steps, after_measurements, result_after, profile):
     still_failing = [f for f in result_after["findings"]
                      if f["status"] == "fail" and f.get("fix") == "gain"]
     if not still_failing:
+        # Only now is a peak that is still over worth chasing on its own. A
+        # file that is too loud peaks too high *because* it is too loud, and
+        # lowering the level lowers the peak — the reverse is not true, so
+        # adjusting the limiter first would leave the level wrong for ever.
+        # A lossy encoder can hand back peaks a little louder than it was given, so
+        # a limiter aimed at the ceiling can still land above it. Aim lower by
+        # exactly the overshoot and build again from the source.
+        over = [f for f in result_after["findings"]
+                if f["status"] == "fail" and f["metric"] in
+                ("peak_dbfs", "true_peak_dbfs")]
+        limiters = [s for s in steps if s["id"] == "limit_peak"]
+        if over:
+            finding = over[0]
+            ceiling = (rules.get(finding["id"]) or {}).get("max")
+            if ceiling is not None and finding["value"] is not None:
+                overshoot = finding["value"] - ceiling
+                margin = round((limiters[0].get("margin", 0.1) if limiters else 0.1)
+                               + overshoot + 0.1, 2)
+                replacement = _limiter_step(
+                    ceiling, margin=margin,
+                    reason=(f"Aimed {margin:g} dB under the ceiling because the "
+                            f"first corrected copy came back {overshoot:+.2f} dB "
+                            f"over it — a lossy encoder can hand back peaks a "
+                            f"little louder than it was given."))
+                if limiters:
+                    out = [replacement if s["id"] == "limit_peak" else s
+                           for s in steps]
+                else:
+                    out = in_order(list(steps) + [replacement])
+                return out, f"limiter aimed {margin:g} dB under the ceiling"
         return None, "nothing a different gain would fix"
 
     rule = rules.get(still_failing[0]["id"]) or {}
+    # Read the quantity the rule is written in, not whichever one happens to
+    # be handy: a LUFS target refined against an RMS reading would chase a
+    # number several decibels from the one it is trying to hit.
+    metric = rule.get("metric") or "rms_dbfs"
     aim = _target_band(rule)
-    measured = after_measurements.get("rms_dbfs")
+    measured = after_measurements.get(metric)
     if aim is None or measured is None:
         return None, "the corrected copy could not be measured"
 

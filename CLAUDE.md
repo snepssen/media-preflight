@@ -83,7 +83,7 @@ Do not add a third without a reason of that kind.
 `video.analyse` does the same for the picture:
 
 ```
-blackdetect -> freezedetect -> signalstats -> metadata(print)
+blackdetect -> freezedetect -> idet -> signalstats -> metadata(print)
 ```
 
 It is a **separate** decode, deliberately. The two read different streams, and
@@ -166,6 +166,31 @@ rejected on submission.
   something somebody has to re-sort in their head.
 - **One unreadable file is reported, not fatal.** Only a delivery where
   *nothing* could be read raises.
+
+### Correcting one
+
+`batch.correct` is plan → write → measure → rebuild, and **both front ends call
+it**, so the window and the command line cannot drift apart on the promise. A
+test asserts that both files mention it.
+
+- **A file breaking no rule of its own still gets corrected.** That is the
+  point: every chapter inside ACX's band, four decibels apart, is a delivery
+  fault and no file's fault. `batch._set_derived_findings` synthesises findings
+  in the ordinary shape so the existing planner handles them — guards,
+  ordering, caveats and all — and `corrections.plan` takes an `overrides` dict
+  for the decisions only a set can make (a per-file rule allows mono *or*
+  stereo; only the delivery knows this title is mono).
+- **The majority decides format; the target decides level.** Bringing four
+  quiet chapters up to meet a loud fifth would satisfy the set rule by making
+  every file wrong.
+- **Rebuilding is not optional here.** A stereo chapter downmixed to mono
+  returns at a level nothing could have predicted — how much a downmix costs
+  depends on how alike the channels were. Measured, not assumed, and rebuilt
+  from the source.
+- **`corrections.refine` fixes level before peak.** A file corrected to the
+  wrong level peaks too high *because* it is too loud; chasing the limiter
+  never fixes that, and lowering the level lowers the peak. Getting this
+  backwards cost two wasted rebuild rounds and a file that never converged.
 
 ## Drawing what was measured
 
@@ -311,7 +336,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 242 checks, about fourteen seconds
+python3 -m unittest discover -s tests    # 259 checks, about twenty-five seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
@@ -349,8 +374,6 @@ Three questions decide the rest:
 Nothing in the original three-week plan. Candidates, in rough order of how
 often they would earn their place:
 
-- **Batch corrections** — `fix` works on one file; a delivery whose files are
-  three decibels apart wants one pass that brings them together.
 - **A caption view** — cues are measured and reported as a list; seeing them
   against the loudness timeline would locate a reading-speed problem the way
   the chart locates a loudness one.

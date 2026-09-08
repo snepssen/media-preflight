@@ -38,7 +38,7 @@
   <div class="headmeta">
     <span><b>7</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
-    <span><b>242</b> checks passing</span>
+    <span><b>259</b> checks passing</span>
     <span><b>0</b> uploads, accounts, credits</span>
     <span><b>Local-first.</b> Nothing leaves the machine</span>
   </div>
@@ -193,6 +193,9 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
       <p>A folder checked twice would otherwise start checking the corrected copies it wrote the first time, and a corrected copy of a corrected copy is nobody's delivery.</p>
       <h3 style="margin-top:26px">One bad file is not fatal</h3>
       <p>A file that cannot be read is reported and the rest are checked. One broken file in thirty should not cost you the other twenty-nine.</p>
+      <h3 style="margin-top:26px">And it can correct one</h3>
+      <p>Correcting each file on its own is exactly what does not fix a set — every chapter above is inside ACX's band. So the delivery decides what its files should agree on: the majority settles the format questions, because a title is almost never wrong in the majority, and the <em>level</em> is settled by the target's band rather than the majority, since bringing four quiet chapters up to meet a loud fifth would satisfy the set rule by making every file wrong.</p>
+      <p>A stereo chapter downmixed to mono then comes back at a level nothing could have predicted, because how much a downmix costs depends on how alike the two channels were. So the delivery is measured and the files that landed off target are built again <em>from their sources</em> — however many rounds it takes, the number of lossy encodes stays at one.</p>
     </div>
   </div>
 </section>
@@ -367,6 +370,7 @@ python3 app.py
 <span class="c"># the command line</span>
 python3 preflight.py check finished.mp3 --target acx
 python3 preflight.py batch chapters/    --target acx
+python3 preflight.py batch chapters/    --target acx --fix
 python3 preflight.py fix   finished.mp3 --target acx --dry-run
 python3 preflight.py fix   finished.mp3 --target acx</pre>
 

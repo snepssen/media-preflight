@@ -167,7 +167,25 @@
     <div id="setFindings"></div>
     <h3 class="subhead-sm">Files</h3>
     <div id="setFiles"></div>
+    <div class="row">
+      <button id="fixDelivery">Correct the delivery</button>
+      <span class="note" id="deliveryWrote"></span>
+    </div>
     <p class="meta" id="setSource"></p>
+  </section>
+
+  <section class="panel hidden" id="deliveryPlanPanel">
+    <p class="verdict">Proposed corrections</p>
+    <p class="counts">Nothing has been written yet. Not one of these source
+      files is touched by any of it.</p>
+    <ul class="steps" id="deliveryReasons"></ul>
+    <div id="deliveryPlan"></div>
+    <p class="note" id="deliveryUntouched"></p>
+    <p class="note" id="deliveryUnaddressed"></p>
+    <div class="row">
+      <button class="primary" id="applyDelivery">Write the corrected copies</button>
+      <button id="cancelDelivery">Cancel</button>
+    </div>
   </section>
 
   <section class="panel hidden" id="reportPanel">
@@ -459,6 +477,9 @@ let delivery = null;
 
 function renderDelivery(envelope) {
   delivery = envelope;
+  deliveryPaths = envelope.files.map((f) => f.path);
+  $("deliveryWrote").textContent = "";
+  $("fixDelivery").disabled = envelope.verdict === "pass";
   $("deliveryPanel").classList.remove("hidden");
   $("reportPanel").classList.add("hidden");
   $("planPanel").classList.add("hidden");
@@ -562,6 +583,58 @@ async function openFile(file) {
   } catch (error) { busy(false); fail(error.message); }
 }
 
+let deliveryPaths = [];
+
+$("fixDelivery").addEventListener("click", async () => {
+  if (!delivery) return;
+  try {
+    const plan = await api("/delivery_plan", { paths: deliveryPaths,
+                                               target: $("target").value });
+    $("deliveryReasons").innerHTML = (plan.consensus.reasons || [])
+      .map((r) => `<li>${esc(r)}</li>`).join("");
+    $("deliveryPlan").innerHTML = plan.files.map((f) => `
+      <div class="setfinding">
+        <span class="mark ${f.because_of_the_set.length ? "warn" : "pass"}">·</span>
+        <span class="name">${esc(f.name)}${f.because_of_the_set.length
+          ? " — because of the delivery" : ""}</span>
+        <span></span>
+        <div class="who" style="font-family:inherit">${f.steps.map((s) =>
+          esc(s.description) + (s.caveat
+            ? `<span class="caveat">⚠ ${esc(s.caveat)}</span>` : "")
+        ).join("<br>")}</div>
+      </div>`).join("");
+    $("deliveryUntouched").textContent = plan.untouched.length
+      ? "Left alone: " + plan.untouched.join(", ") : "";
+    $("deliveryUnaddressed").textContent = plan.unaddressed.length
+      ? "Not corrected by this tool: " + plan.unaddressed
+          .map((u) => `${u.label} — ${u.detail}`).join("; ") : "";
+    $("deliveryPlanPanel").classList.remove("hidden");
+    $("deliveryPlanPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) { fail(error.message); }
+});
+
+$("cancelDelivery").addEventListener("click",
+  () => $("deliveryPlanPanel").classList.add("hidden"));
+
+$("applyDelivery").addEventListener("click", async () => {
+  $("deliveryPlanPanel").classList.add("hidden");
+  busy(true);
+  try {
+    const { job } = await api("/delivery_fix", { paths: deliveryPaths,
+                                                 target: $("target").value,
+                                                 overwrite: true });
+    poll(job, (result) => {
+      busy(false);
+      deliveryPaths = result.after.files.map((f) => f.path);
+      renderDelivery(result.after);
+      $("deliveryWrote").textContent =
+        `Wrote ${result.written.length} corrected `
+        + `${result.written.length === 1 ? "copy" : "copies"} — measured again `
+        + `from scratch, and this is that measurement.`;
+    });
+  } catch (error) { busy(false); fail(error.message); }
+});
+
 $("backToDelivery").addEventListener("click", () => {
   if (!delivery) return;
   $("reportPanel").classList.add("hidden");
@@ -581,7 +654,11 @@ $("runFolder").addEventListener("click", async () => {
     busy(true);
     const { job } = await api("/batch", { path: folder,
                                           target: $("target").value });
-    poll(job, (envelope) => { busy(false); renderDelivery(envelope); });
+    poll(job, (envelope) => {
+      busy(false);
+      $("deliveryPlanPanel").classList.add("hidden");
+      renderDelivery(envelope);
+    });
   } catch (error) { busy(false); fail(error.message); }
 });
 

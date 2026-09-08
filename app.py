@@ -164,6 +164,8 @@ def batch_job(paths, target, recursive=False):
 
         result = batch.run(paths, target, recursive=recursive,
                            on_file=on_file)
+        _remember_delivery([entry["path"] for entry in result["files"]],
+                           target, result)
         update(phase="target", stage="comparing the delivery", progress=0.98)
         envelope = report.set_envelope(result)
         envelope["kind"] = "delivery"
@@ -174,6 +176,92 @@ def batch_job(paths, target, recursive=False):
                 "result": entry["result"], "profile": result["profile"],
                 "envelope": entry["envelope"]})
         return envelope
+    return start_job(work)
+
+
+# The last delivery this session measured, kept so that planning and then
+# correcting it does not measure every file a second time.
+_delivery = {}
+_delivery_lock = threading.Lock()
+
+
+def _remember_delivery(paths, target, result):
+    with _delivery_lock:
+        _delivery.clear()
+        _delivery["key"] = (tuple(sorted(paths)), target)
+        _delivery["result"] = result
+
+
+def _recall_delivery(paths, target):
+    with _delivery_lock:
+        if _delivery.get("key") == (tuple(sorted(paths)), target):
+            return _delivery.get("result")
+    return None
+
+
+def delivery_plan(paths, target):
+    """What it would take to make this delivery pass, in sentences."""
+    result = _recall_delivery(paths, target)
+    if result is None:
+        raise preflight.PreflightError(
+            "Check the delivery before correcting it.")
+    planned = batch.plan(result)
+    return {
+        "consensus": planned["consensus"],
+        "files": [{"name": entry["name"],
+                   "because_of_the_set": entry["because_of_the_set"],
+                   "steps": [{"description": step["description"],
+                              "caveat": step.get("caveat")}
+                             for step in entry["steps"]]}
+                  for entry in planned["files"]],
+        "untouched": planned["untouched"],
+        "unaddressed": [{"label": f["label"], "detail": f["detail"]}
+                        for f in planned["unaddressed"]],
+    }
+
+
+def delivery_fix_job(paths, target, overwrite=False):
+    """Correct a delivery, then measure the delivery that came out.
+
+    The work itself is batch.correct, which the command line calls too — the
+    rebuilding it does when a file lands off target is part of the promise,
+    and a window that skipped it would be quietly making a weaker one.
+    """
+    def work(update):
+        result = _recall_delivery(paths, target)
+        if result is None:
+            raise preflight.PreflightError(
+                "Check the delivery before correcting it.")
+
+        def on_file(index, total, name):
+            update(phase="audio", progress=0.1 + 0.6 * index / max(1, total),
+                   stage=f"{name} — {index + 1} of {total}")
+
+        def say(message):
+            update(phase="target", stage=message, progress=0.75)
+
+        done = batch.correct(result, target, overwrite=overwrite,
+                             on_file=on_file, on_stage=say)
+        if not done["after"]:
+            raise preflight.PreflightError(
+                "No failing check here has a safe automatic fix."
+                if not done["planned"]["files"]
+                else "No corrected copy could be written.")
+
+        after = report.set_envelope(done["after"])
+        after["kind"] = "delivery"
+        after["chart"] = report.set_chart_svg(done["after"], theme="auto")
+        _remember_delivery(done["outputs"], target, done["after"])
+        for entry in done["after"]["files"]:
+            _remember(entry["path"], target, {
+                "facts": entry["facts"], "measurements": entry["measurements"],
+                "result": entry["result"],
+                "profile": done["after"]["profile"],
+                "envelope": entry["envelope"]})
+        return {"after": after,
+                "written": [entry["output"]
+                            for entry in done["written"]["written"]],
+                "failed": done["written"]["failed"]}
     return start_job(work)
 
 
@@ -385,6 +473,19 @@ class Handler(BaseHTTPRequestHandler):
                 path = self._require_file(body)
                 return self._json({"job": fix_job(
                     path, body.get("target", "web"),
+                    bool(body.get("overwrite")))})
+
+            if url.path == "/api/delivery_plan":
+                paths = [os.path.expanduser(p) for p in
+                         (body.get("paths") or [])]
+                return self._json(delivery_plan(paths,
+                                                body.get("target", "web")))
+
+            if url.path == "/api/delivery_fix":
+                paths = [os.path.expanduser(p) for p in
+                         (body.get("paths") or [])]
+                return self._json({"job": delivery_fix_job(
+                    paths, body.get("target", "web"),
                     bool(body.get("overwrite")))})
 
             if url.path == "/api/export":

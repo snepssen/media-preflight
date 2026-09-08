@@ -296,6 +296,9 @@ def command_batch(args):
                        progress=None, on_file=_file_progress(args))
     envelope = report.set_envelope(result)
 
+    if args.fix:
+        return _correct_delivery(args, result, envelope)
+
     if args.json:
         _write(args.json, report.data(envelope))
     if args.markdown:
@@ -310,6 +313,114 @@ def command_batch(args):
         sys.stdout.write(report.set_text(envelope,
                                          show_passes=args.show_passes))
     return _exit_code(envelope, args.strict)
+
+
+def _correct_delivery(args, result, before):
+    """Correct a whole delivery, then measure the delivery it produced."""
+    planned = batch.plan(result)
+    if not planned["files"]:
+        if not args.quiet:
+            sys.stdout.write(report.set_text(before,
+                                             show_passes=args.show_passes))
+            sys.stdout.write("\nNothing to correct: no failing check here "
+                             "has a safe automatic fix.\n")
+        return _exit_code(before, args.strict)
+
+    if not args.quiet:
+        sys.stdout.write(_delivery_preview(planned))
+    if args.dry_run:
+        return 0
+    if not args.yes and sys.stdin.isatty():
+        answer = input("\nWrite the corrected copies? [y/N] ").strip().lower()
+        if answer not in ("y", "yes"):
+            sys.stdout.write("Nothing was written.\n")
+            return 0
+
+    def say(message):
+        if not args.quiet:
+            sys.stdout.write(f"  {message}\n")
+
+    done = batch.correct(result, args.target, overwrite=args.overwrite,
+                         directory=args.directory,
+                         on_file=_file_progress(args), on_stage=say)
+    written = done["written"]
+    for failure in (written or {}).get("failed", []):
+        sys.stderr.write(f"  {failure['name']}: {failure['error']}\n")
+    if not done["after"]:
+        raise PreflightError("No corrected copy could be written.")
+
+    after = report.set_envelope(done["after"])
+    if not args.quiet:
+        count = len(written["written"])
+        sys.stdout.write(f"\nWrote {count} corrected "
+                         f"{'copy' if count == 1 else 'copies'}\n")
+        sys.stdout.write("\n" + _delivery_verification(before, after))
+        sys.stdout.write("\n" + report.set_text(
+            after, show_passes=args.show_passes))
+
+    if args.recipe:
+        _write(args.recipe, report.data({
+            "schema": 1, "tool": report.NAME,
+            "target": before["target"],
+            "consensus": done["planned"]["consensus"],
+            "files": [{"source": entry["source"], "output": entry["output"],
+                       "operations": [{"id": step["id"],
+                                       "description": step["description"]}
+                                      for step in entry["steps"]],
+                       "command": entry["command"]}
+                      for entry in written["written"]],
+        }))
+        sys.stdout.write(f"Recipe written to {args.recipe}\n")
+    return _exit_code(after, args.strict)
+
+
+def _delivery_preview(planned):
+    lines = ["", "Proposed corrections — nothing has been written yet.", ""]
+    for reason in planned["consensus"]["reasons"]:
+        lines.append(f"  · {reason}")
+    lines.append("")
+    for entry in planned["files"]:
+        because = (" (because of the delivery)" if entry["because_of_the_set"]
+                   else "")
+        lines.append(f"  {entry['name']}{because}")
+        for step in entry["steps"]:
+            lines.append(f"      {step['description']}")
+            if step.get("caveat"):
+                lines.append(f"      ⚠ {step['caveat']}")
+    if planned["untouched"]:
+        lines.append("")
+        lines.append("  Left alone: " + ", ".join(planned["untouched"]))
+    if planned["unaddressed"]:
+        lines.append("")
+        lines.append("  Not corrected by this tool:")
+        for finding in planned["unaddressed"]:
+            lines.append(f"    · {finding['label']} — {finding['detail']}")
+    lines.append("")
+    lines.append("  Sources: unchanged")
+    return "\n".join(lines) + "\n"
+
+
+def _delivery_verification(before, after):
+    """What changed about the delivery, which is not what changed about a file."""
+    was = {f["id"]: f for f in before["set"]["findings"]}
+    lines = ["Verification — the corrected delivery, measured from scratch:", ""]
+    changed = False
+    for finding in after["set"]["findings"]:
+        previous = was.get(finding["id"])
+        if not previous or (previous["status"] == finding["status"] == "pass"):
+            continue
+        if previous["status"] == finding["status"] and \
+                previous["actual"] == finding["actual"]:
+            continue
+        changed = True
+        arrow = (f"{report.MARK[previous['status']]} → "
+                 f"{report.MARK[finding['status']]}")
+        lines.append(f"  {arrow}  {finding['label']}: "
+                     f"{previous['actual']} → {finding['actual']}")
+    if not changed:
+        lines.append("  Nothing measurable changed about the delivery.")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _file_progress(args):
@@ -497,6 +608,21 @@ def build_parser():
     batch_command.add_argument("--strict", action="store_true",
                                help="treat warnings as failures in the exit "
                                     "code")
+    batch_command.add_argument("--fix", action="store_true",
+                               help="write corrected copies of the files that "
+                                    "need them, including for faults only the "
+                                    "delivery has")
+    batch_command.add_argument("--dry-run", action="store_true",
+                               help="with --fix: show the plan, write nothing")
+    batch_command.add_argument("--yes", "-y", action="store_true",
+                               help="with --fix: do not ask before writing")
+    batch_command.add_argument("--overwrite", action="store_true",
+                               help="replace corrected copies that exist")
+    batch_command.add_argument("--directory", "-d",
+                               help="write the corrected copies into this "
+                                    "folder")
+    batch_command.add_argument("--recipe",
+                               help="with --fix: write the JSON recipe here")
     batch_command.set_defaults(handler=command_batch)
 
     targets = subparsers.add_parser("targets", help="list delivery targets")

@@ -315,6 +315,52 @@ Files it cannot read are reported rather than fatal — one broken file in thirt
 should not cost you the other twenty-nine — and the window has the same view,
 where clicking a row opens that file's own report.
 
+### Correcting a delivery
+
+```sh
+python3 preflight.py batch chapters/ --target acx --fix
+```
+
+Correcting each file on its own is exactly what does not fix a set. Every
+chapter above is inside ACX's band; run the single-file `fix` over all five and
+nothing happens, because nothing is wrong with any of them.
+
+So the delivery decides what its files should agree on, and each file is
+corrected to that:
+
+```
+  · 4 of 5 files are 1 channels; the rest are brought to match.
+  · Every file is brought to -20.5 dBFS RMS, the middle of what this target
+    asks for — not to the average of the files, which would satisfy the set
+    and fail the target.
+```
+
+The majority decides the format questions, because a title is almost never
+wrong in the majority — one chapter exported with the wrong preset is the shape
+this fault actually takes. The **level** is decided by the target's band rather
+than by the majority: bringing four quiet chapters up to meet a loud fifth would
+satisfy the set rule by making every file wrong.
+
+Then the same four promises as a single file, applied to a set:
+
+```
+Verification — the corrected delivery, measured from scratch:
+
+  ✕ → ✓  Channel count across the title: 2 different: 1, 2 → 1
+  ⚠ → ✓  Loudness spread across the title: 4 dB → 0.27 dB
+```
+
+The rebuilding matters more here than it does for one file. A stereo chapter
+downmixed to mono comes back at a level the plan could not have predicted,
+because how much a downmix costs depends on how alike the two channels were.
+The tool measures what it wrote, finds that chapter off target, and builds it
+again **from its source** — so however many rounds it takes, the number of
+lossy encodes stays at one.
+
+The window does the same thing through the same function, because a window that
+quietly skipped the rebuilding would be making a weaker promise than the
+command line.
+
 ## What costs a decode
 
 The audio measurements come out of one pass. The picture measurements come out
@@ -390,7 +436,7 @@ audiobook would be doing something its owner did not ask for.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests     # 242 checks, about fourteen seconds
+python3 -m unittest discover -s tests     # 259 checks, about twenty-five seconds
 python3 scripts/make_fixtures.py          # build the test media from ffmpeg
 ./build.sh                                # the double-clickable builds
 ```

@@ -21,6 +21,7 @@ import os
 import re
 
 import checks
+import corrections
 import platform_support
 import preflight
 import profiles
@@ -279,3 +280,260 @@ def odd_ones_out(grouped):
     largest = max(grouped.values(), key=len)
     return sorted(name for names in grouped.values() if names is not largest
                   for name in names)
+
+
+# --------------------------------------------------------------- correcting
+
+# How far a file may sit from the delivery's common level before it is worth
+# moving. Below this the correction is inaudible and the re-encode is not.
+LEVEL_TOLERANCE_DB = 0.3
+
+
+def consensus(result, profile):
+    """What the files of this delivery should agree on, and at what level.
+
+    The majority decides the format questions, because a title is almost never
+    wrong in the majority — one chapter exported with the wrong preset is the
+    shape this fault actually takes. The level is decided by the target's own
+    band rather than by the majority: bringing four quiet chapters up to meet
+    a fifth would satisfy the set rule by making every file wrong.
+    """
+    measurements = result["set_measurements"]
+    groups = measurements.get("groups") or {}
+    out = {"channels": None, "sample_rate": None, "loudness_target": None,
+           "loudness_metric": None, "reasons": []}
+
+    for name in ("channels", "sample_rate"):
+        grouped = groups.get(name) or {}
+        if len(grouped) < 2:
+            continue
+        largest = max(grouped.values(), key=len)
+        sizes = sorted((len(files) for files in grouped.values()), reverse=True)
+        if sizes[0] == sizes[1]:
+            out["reasons"].append(
+                f"The delivery is evenly split on {name.replace('_', ' ')}, so "
+                f"there is no majority to follow and nothing is changed. "
+                f"Choose one and run again with a profile that states it.")
+            continue
+        value = next(key for key, files in grouped.items() if files is largest)
+        out[name] = int(value)
+        out["reasons"].append(
+            f"{len(largest)} of {measurements['file_count']} files are "
+            f"{value} {name.replace('_', ' ')}; the rest are brought to match.")
+
+    loudness = measurements.get("loudness") or {}
+    metric = loudness.get("metric")
+    rule = _loudness_rule(profile, metric)
+    if metric and rule is not None:
+        target = corrections._target_band(rule)
+        if target is not None:
+            out["loudness_metric"] = metric
+            out["loudness_target"] = target
+            unit = loudness.get("unit", "dB")
+            out["reasons"].append(
+                f"Every file is brought to {target:g} {unit}, the middle of "
+                f"what this target asks for — not to the average of the files, "
+                f"which would satisfy the set and fail the target.")
+    return out
+
+
+def _loudness_rule(profile, metric):
+    for rule in profile.get("rules", []):
+        if rule["metric"] == metric:
+            return rule
+    return None
+
+
+def plan(result, profile=None):
+    """What it would take to make this delivery pass, file by file."""
+    profile = profile or result["profile"]
+    agreed = consensus(result, profile)
+    set_findings = {f["id"]: f for f in result["set_result"]["findings"]}
+
+    files, unfixable = [], []
+    for entry in result["files"]:
+        extra = _set_derived_findings(entry, agreed, profile, set_findings)
+        findings = list(entry["result"]["findings"]) + extra
+        overrides = _overrides_for(entry, agreed, extra)
+        planned = corrections.plan(entry["facts"], entry["measurements"],
+                                   {"findings": findings}, profile, overrides)
+        files.append({
+            "path": entry["path"],
+            "name": entry["name"],
+            "steps": planned["steps"],
+            "because_of_the_set": [f["id"] for f in extra],
+            "unfixable": planned["unfixable"],
+        })
+        unfixable.extend(planned["unfixable"])
+
+    return {
+        "consensus": agreed,
+        "files": [f for f in files if f["steps"]],
+        "untouched": [f["name"] for f in files if not f["steps"]],
+        "unfixable": unfixable,
+        "unaddressed": [f for f in result["set_result"]["findings"]
+                        if f["status"] == "fail"
+                        and f["metric"] not in _ADDRESSABLE],
+    }
+
+
+# The cross-file faults a correction can actually do something about.
+_ADDRESSABLE = {"set_channels_distinct", "set_sample_rate_distinct",
+                "set_loudness_spread_db"}
+
+
+def _set_derived_findings(entry, agreed, profile, set_findings):
+    """Faults this file does not have, which the delivery does.
+
+    These are synthesised in the shape of ordinary findings so that the
+    existing planner handles them — guards, ordering, caveats and all. A file
+    four decibels above its neighbours has broken no per-file rule; it is the
+    set that is wrong, and this is how the set says so about one member.
+    """
+    out = []
+    audio = entry["facts"].get("audio") or {}
+
+    if agreed.get("channels") and audio.get("channels") != agreed["channels"]:
+        out.append({
+            "id": "channels", "label": "Channel count across the delivery",
+            "metric": "channels", "status": "fail", "fix": "encode",
+            "note": "", "intervals": [], "timestamps": [],
+            "actual": str(audio.get("channels")),
+            "required": str(agreed["channels"]),
+        })
+
+    if agreed.get("sample_rate") and \
+            audio.get("sample_rate") != agreed["sample_rate"]:
+        out.append({
+            "id": "sample_rate", "label": "Sample rate across the delivery",
+            "metric": "sample_rate", "status": "fail", "fix": "encode",
+            "note": "", "intervals": [], "timestamps": [],
+            "actual": str(audio.get("sample_rate")),
+            "required": str(agreed["sample_rate"]),
+        })
+
+    spread = set_findings.get("loudness") or set_findings.get("set_loudness")
+    if agreed.get("loudness_target") is not None and spread and \
+            spread["status"] in ("fail", "warn"):
+        metric = agreed["loudness_metric"]
+        measured = entry["measurements"].get(metric)
+        if isinstance(measured, (int, float)) and \
+                abs(measured - agreed["loudness_target"]) > LEVEL_TOLERANCE_DB:
+            rule = _loudness_rule(profile, metric)
+            out.append({
+                "id": rule["id"] if rule else "integrated",
+                "label": "Level across the delivery", "metric": metric,
+                "status": "fail", "fix": "gain", "note": "",
+                "intervals": [], "timestamps": [],
+                "actual": f"{measured:.2f}",
+                "required": f"{agreed['loudness_target']:g}",
+            })
+    return out
+
+
+def _overrides_for(entry, agreed, extra):
+    ids = {f["id"] for f in extra}
+    overrides = {}
+    if "channels" in ids:
+        overrides["channels"] = agreed["channels"]
+    if "sample_rate" in ids:
+        overrides["sample_rate"] = agreed["sample_rate"]
+    if agreed.get("loudness_target") is not None:
+        overrides["loudness_target"] = agreed["loudness_target"]
+        overrides["loudness_metric"] = agreed["loudness_metric"]
+    if ids & {"channels", "sample_rate"}:
+        overrides["force_encode"] = True
+    return overrides
+
+
+def correct(result, target, ffmpeg=None, overwrite=False, directory=None,
+            on_file=None, on_stage=None, rounds=2):
+    """Plan, write, measure, and where necessary rebuild — the whole promise.
+
+    This is one function rather than two so that the window and the command
+    line cannot drift apart on it. The rebuilding is not an optimisation: a
+    stereo chapter downmixed to mono comes back at a level the plan could not
+    have predicted, because how much a downmix costs depends on how alike the
+    two channels were. So the delivery is measured and the files that landed
+    off target are built again **from their sources**, never from the copies,
+    which keeps the number of lossy encodes at one however many rounds it
+    takes.
+    """
+    if ffmpeg is None:
+        ffmpeg, _ = platform_support.require_tools()
+    say = on_stage or (lambda message: None)
+
+    planned = plan(result)
+    if not planned["files"]:
+        return {"planned": planned, "written": None, "after": None,
+                "outputs": []}
+
+    facts = {entry["path"]: entry["facts"] for entry in result["files"]}
+    written = apply(planned, facts, ffmpeg=ffmpeg, overwrite=overwrite,
+                    directory=directory, on_file=on_file)
+    if not written["written"]:
+        return {"planned": planned, "written": written, "after": None,
+                "outputs": []}
+
+    untouched = [entry["path"] for entry in result["files"]
+                 if entry["name"] in planned["untouched"]]
+    outputs = [entry["output"] for entry in written["written"]]
+
+    say("measuring the corrected delivery")
+    after = run(outputs + untouched, target, ffmpeg, on_file=on_file)
+    for _ in range(rounds):
+        if after["verdict"] != "fail":
+            break
+        if not refine(result, written, after, ffmpeg, say):
+            break
+        say("measuring the rebuilt delivery")
+        after = run(outputs + untouched, target, ffmpeg, on_file=on_file)
+
+    return {"planned": planned, "written": written, "after": after,
+            "outputs": outputs + untouched}
+
+
+def refine(result, written, after, ffmpeg, say=None):
+    """Rebuild, from their sources, the files that landed off target."""
+    say = say or (lambda message: None)
+    profile = result["profile"]
+    after_by_path = {entry["path"]: entry for entry in after["files"]}
+    facts = {entry["path"]: entry["facts"] for entry in result["files"]}
+    rebuilt = 0
+    for entry in written["written"]:
+        measured = after_by_path.get(entry["output"])
+        if not measured or measured["result"]["verdict"] != "fail":
+            continue
+        adjusted, why = corrections.refine(
+            entry["steps"], measured["measurements"], measured["result"],
+            profile)
+        if not adjusted:
+            continue
+        say(f"rebuilding {entry['name']} from the source: {why}")
+        _, command, steps = corrections.apply(
+            entry["source"], adjusted, facts[entry["source"]],
+            destination=entry["output"], ffmpeg=ffmpeg, overwrite=True)
+        entry["command"], entry["steps"] = command, steps
+        rebuilt += 1
+    return rebuilt
+
+
+def apply(planned, facts_by_path, ffmpeg=None, overwrite=False,
+          directory=None, on_file=None):
+    """Write a corrected copy of every file that needs one."""
+    if ffmpeg is None:
+        ffmpeg, _ = platform_support.require_tools()
+    written, failed = [], []
+    for index, entry in enumerate(planned["files"]):
+        if on_file:
+            on_file(index, len(planned["files"]), entry["name"])
+        try:
+            path, command, steps = corrections.apply(
+                entry["path"], entry["steps"], facts_by_path[entry["path"]],
+                ffmpeg=ffmpeg, overwrite=overwrite, directory=directory)
+        except corrections.CorrectionError as error:
+            failed.append({"name": entry["name"], "error": str(error)})
+            continue
+        written.append({"name": entry["name"], "source": entry["path"],
+                        "output": path, "command": command, "steps": steps})
+    return {"written": written, "failed": failed}

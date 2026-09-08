@@ -463,8 +463,11 @@ class DeliveryTests(unittest.TestCase):
     ROOM = "0.00018*(1-2*random(2))"
 
     def _chapter(self, folder, name, amplitude, channels=1):
+        # A second and a half of room tone at the head and three at the tail,
+        # both inside the one-to-five seconds ACX's page asks for — so that
+        # what these chapters demonstrate is the fault the *set* has.
         expression = (f"{self.ROOM} + {amplitude}*({SPEECH})"
-                      f"*between(t\\,0.75\\,8)")
+                      f"*between(t\\,1.5\\,8)")
         source = expression if channels == 1 else f"{expression}|{expression}"
         path = os.path.join(folder, name)
         subprocess.run(
@@ -476,8 +479,8 @@ class DeliveryTests(unittest.TestCase):
     def test_a_title_of_valid_files_can_still_be_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             for name in ("chapter-01.mp3", "chapter-02.mp3"):
-                self._chapter(folder, name, 0.392)
-            self._chapter(folder, "chapter-09.mp3", 0.392, channels=2)
+                self._chapter(folder, name, 0.435)
+            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
             result = batch.run([folder], "acx", FFMPEG, FFPROBE)
 
             self.assertEqual(len(result["files"]), 3)
@@ -488,7 +491,7 @@ class DeliveryTests(unittest.TestCase):
 
     def test_the_corrected_copies_of_a_folder_are_not_checked_next_time(self):
         with tempfile.TemporaryDirectory() as folder:
-            self._chapter(folder, "chapter-01.mp3", 0.392)
+            self._chapter(folder, "chapter-01.mp3", 0.435)
             Path(os.path.join(folder,
                               "chapter-01.preflight.mp3")).write_bytes(b"x")
             found = batch.collect([folder])
@@ -497,7 +500,7 @@ class DeliveryTests(unittest.TestCase):
 
     def test_a_file_that_cannot_be_read_is_reported_not_fatal(self):
         with tempfile.TemporaryDirectory() as folder:
-            self._chapter(folder, "chapter-01.mp3", 0.392)
+            self._chapter(folder, "chapter-01.mp3", 0.435)
             Path(os.path.join(folder, "broken.wav")).write_bytes(b"not audio")
             result = batch.run([folder], "acx", FFMPEG, FFPROBE)
             self.assertEqual(len(result["files"]), 1)
@@ -514,8 +517,8 @@ class DeliveryTests(unittest.TestCase):
 
     def test_the_delivery_report_and_its_chart_are_written(self):
         with tempfile.TemporaryDirectory() as folder:
-            self._chapter(folder, "chapter-01.mp3", 0.392)
-            self._chapter(folder, "chapter-02.mp3", 0.621)
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-02.mp3", 0.689)
             out = os.path.join(folder, "delivery.md")
             code = preflight.main(["batch", folder, "--target", "acx",
                                    "--quiet", "--markdown", out])
@@ -526,10 +529,128 @@ class DeliveryTests(unittest.TestCase):
             drawing = os.path.join(folder, "delivery.loudness.svg")
             self.assertTrue(os.path.isfile(drawing))
 
+    def test_a_delivery_of_valid_files_is_corrected_into_a_valid_delivery(self):
+        """The whole point, end to end: nothing fails on its own, the set
+        does, and correcting each file separately is what would not fix it."""
+        with tempfile.TemporaryDirectory() as folder:
+            for name in ("chapter-01.mp3", "chapter-02.mp3"):
+                self._chapter(folder, name, 0.435)
+            self._chapter(folder, "chapter-03.mp3", 0.689)
+            before = batch.run([folder], "acx", FFMPEG, FFPROBE)
+            self.assertEqual(
+                [f["result"]["verdict"] for f in before["files"]],
+                ["pass"] * 3, "every file passes on its own")
+            self.assertEqual(before["set_result"]["verdict"], "warn")
+
+            planned = batch.plan(before)
+            self.assertEqual(len(planned["files"]), 3,
+                             "all three move, though none is at fault")
+            facts = {e["path"]: e["facts"] for e in before["files"]}
+            written = batch.apply(planned, facts, ffmpeg=FFMPEG)
+            self.assertEqual(len(written["written"]), 3)
+
+            after = batch.run([e["output"] for e in written["written"]],
+                              "acx", FFMPEG, FFPROBE)
+            spread = after["set_measurements"]["loudness"]["spread"]
+            self.assertLess(spread, 1.0,
+                            f"four decibels apart should not survive: {spread}")
+
+    def test_correcting_a_delivery_leaves_every_source_untouched(self):
+        with tempfile.TemporaryDirectory() as folder:
+            paths = [self._chapter(folder, "chapter-01.mp3", 0.435),
+                     self._chapter(folder, "chapter-02.mp3", 0.689)]
+            before_bytes = {p: Path(p).read_bytes() for p in paths}
+            result = batch.run([folder], "acx", FFMPEG, FFPROBE)
+            planned = batch.plan(result)
+            facts = {e["path"]: e["facts"] for e in result["files"]}
+            batch.apply(planned, facts, ffmpeg=FFMPEG)
+            for path, original in before_bytes.items():
+                self.assertEqual(Path(path).read_bytes(), original,
+                                 os.path.basename(path))
+
+    def test_the_odd_file_out_is_brought_to_the_majority_format(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-02.mp3", 0.435)
+            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            result = batch.run([folder], "acx", FFMPEG, FFPROBE)
+            planned = batch.plan(result)
+            facts = {e["path"]: e["facts"] for e in result["files"]}
+            written = batch.apply(planned, facts, ffmpeg=FFMPEG)
+            after = batch.run([e["output"] for e in written["written"]],
+                              "acx", FFMPEG, FFPROBE)
+            self.assertEqual(after["set_measurements"]["channels_distinct"], 1)
+
+    def test_correct_rebuilds_a_file_that_landed_off_target(self):
+        """A stereo chapter downmixed to mono comes back at a level the plan
+        could not predict, because how much a downmix costs depends on how
+        alike the two channels were. The tool measures rather than predicts."""
+        with tempfile.TemporaryDirectory() as folder:
+            # A majority to follow, a level to correct to, and a stereo
+            # chapter whose downmix will move it off whatever the plan aimed
+            # at — which is the whole reason the rebuild exists.
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-02.mp3", 0.435)
+            self._chapter(folder, "chapter-03.mp3", 0.689)
+            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            said = []
+            result = batch.run([folder], "acx", FFMPEG, FFPROBE)
+            done = batch.correct(result, "acx", ffmpeg=FFMPEG,
+                                 on_stage=said.append)
+
+            self.assertIsNotNone(done["after"])
+            self.assertEqual(done["after"]["verdict"], "pass",
+                             report.set_text(
+                                 report.set_envelope(done["after"])))
+            self.assertTrue(any("rebuilding" in message for message in said),
+                            f"expected a rebuild; stages were {said}")
+
+    def test_a_rebuild_starts_from_the_source_not_from_the_copy(self):
+        """However many rounds it takes, the number of lossy encodes is one."""
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-02.mp3", 0.435)
+            self._chapter(folder, "chapter-03.mp3", 0.689)
+            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
+            result = batch.run([folder], "acx", FFMPEG, FFPROBE)
+            done = batch.correct(result, "acx", ffmpeg=FFMPEG)
+            self.assertTrue(done["written"]["written"], "nothing was written")
+            for entry in done["written"]["written"]:
+                self.assertNotIn(".preflight.", entry["source"],
+                                 "a rebuild must not compound an encode")
+
+    def test_the_shared_path_is_what_both_front_ends_call(self):
+        """The window and the command line must not drift apart on this."""
+        import app
+        self.assertIn("batch.correct", Path(
+            TOOL / "app.py").read_text(encoding="utf-8"))
+        self.assertIn("batch.correct", Path(
+            TOOL / "preflight.py").read_text(encoding="utf-8"))
+
+    def test_the_command_line_corrects_and_then_measures_what_it_wrote(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-02.mp3", 0.689)
+            code = preflight.main(["batch", folder, "--target", "acx",
+                                   "--fix", "--yes", "--quiet"])
+            self.assertEqual(code, 0, "the corrected delivery should pass")
+            corrected = sorted(p for p in os.listdir(folder)
+                               if ".preflight." in p)
+            self.assertEqual(len(corrected), 2)
+
+    def test_a_dry_run_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-02.mp3", 0.689)
+            preflight.main(["batch", folder, "--target", "acx", "--fix",
+                            "--dry-run", "--quiet"])
+            self.assertEqual([p for p in os.listdir(folder)
+                              if ".preflight." in p], [])
+
     def test_the_command_line_exit_code_reports_the_delivery(self):
         with tempfile.TemporaryDirectory() as folder:
-            self._chapter(folder, "chapter-01.mp3", 0.392)
-            self._chapter(folder, "chapter-09.mp3", 0.392, channels=2)
+            self._chapter(folder, "chapter-01.mp3", 0.435)
+            self._chapter(folder, "chapter-09.mp3", 0.435, channels=2)
             self.assertEqual(
                 preflight.main(["batch", folder, "--target", "acx",
                                 "--quiet"]), 1,

@@ -29,7 +29,7 @@ def entry(name, channels=1, sample_rate=44100, codec="mp3", rms=-20.0,
         "measurements": {"rms_dbfs": rms, "peak_dbfs": peak,
                          "integrated_lufs": rms + 3.0,
                          "duration_s": duration, "bitrate_mode": mode},
-        "result": {"verdict": verdict},
+        "result": {"verdict": verdict, "findings": []},
         "envelope": {"verdict": verdict,
                      "counts": {"fail": 0, "warn": 0, "pass": 1, "skip": 0},
                      "file": {"duration_s": duration, "audio": {}},
@@ -226,3 +226,97 @@ class SetReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConsensusTests(unittest.TestCase):
+    """What a delivery decides its files should agree on."""
+
+    def test_the_majority_decides_the_format(self):
+        files = [entry("a.mp3"), entry("b.mp3"), entry("c.mp3", channels=2)]
+        agreed = batch.consensus(
+            _result(files, profiles.get("acx")), profiles.get("acx"))
+        self.assertEqual(agreed["channels"], 1)
+
+    def test_an_even_split_changes_nothing_and_says_why(self):
+        files = [entry("a.mp3"), entry("b.mp3", channels=2)]
+        agreed = batch.consensus(
+            _result(files, profiles.get("acx")), profiles.get("acx"))
+        self.assertIsNone(agreed["channels"])
+        self.assertTrue(any("evenly split" in r for r in agreed["reasons"]))
+
+    def test_the_level_comes_from_the_target_not_from_the_files(self):
+        """Bringing four quiet chapters up to meet a loud fifth would satisfy
+        the set rule by making every file wrong."""
+        files = [entry(f"c{i}.mp3", rms=-30.0) for i in range(4)]
+        files.append(entry("loud.mp3", rms=-19.0))
+        agreed = batch.consensus(
+            _result(files, profiles.get("acx")), profiles.get("acx"))
+        self.assertEqual(agreed["loudness_metric"], "rms_dbfs")
+        self.assertAlmostEqual(agreed["loudness_target"], -20.5,
+                               msg="the middle of ACX's band, not the median")
+
+    def test_a_target_with_no_loudness_rule_names_no_level(self):
+        bare = profiles.with_universal(
+            {"id": "x", "label": "X", "rules": [
+                {"id": "codec", "metric": "audio_codec", "label": "Codec",
+                 "one_of": ["mp3"]}]})
+        agreed = batch.consensus(_result([entry("a.mp3")], bare), bare)
+        self.assertIsNone(agreed["loudness_target"])
+
+
+def _result(files, profile):
+    measurements = batch.measure_set(files, profile)
+    return {"profile": profile, "files": files, "unreadable": [],
+            "set_measurements": measurements,
+            "set_result": checks.evaluate_set(measurements, profile),
+            "verdict": "fail"}
+
+
+class DeliveryPlanTests(unittest.TestCase):
+    def _planned(self):
+        profile = profiles.get("acx")
+        files = [entry("chapter-01.mp3", rms=-22.5),
+                 entry("chapter-02.mp3", rms=-22.5),
+                 entry("chapter-03.mp3", rms=-18.5),
+                 entry("chapter-09.mp3", rms=-22.5, channels=2)]
+        return batch.plan(_result(files, profile), profile)
+
+    def test_a_file_breaking_no_rule_of_its_own_is_still_corrected(self):
+        """Every one of these passes ACX individually; the set does not."""
+        planned = self._planned()
+        names = [f["name"] for f in planned["files"]]
+        self.assertIn("chapter-01.mp3", names)
+        first = next(f for f in planned["files"]
+                     if f["name"] == "chapter-01.mp3")
+        self.assertTrue(first["because_of_the_set"])
+
+    def test_the_odd_file_is_converted_to_the_majority(self):
+        entry_09 = next(f for f in self._planned()["files"]
+                        if f["name"] == "chapter-09.mp3")
+        encode = next(s for s in entry_09["steps"] if s["id"] == "encode")
+        self.assertIn("-ac", encode["args"])
+        self.assertEqual(encode["args"][encode["args"].index("-ac") + 1], "1")
+
+    def test_the_loud_file_is_brought_down_and_the_quiet_ones_up(self):
+        planned = self._planned()
+        gains = {}
+        for entry_file in planned["files"]:
+            step = next((s for s in entry_file["steps"] if s["id"] == "gain"),
+                        None)
+            if step:
+                gains[entry_file["name"]] = float(
+                    step["filters"][0].split("=")[1].rstrip("dB"))
+        self.assertLess(gains["chapter-03.mp3"], 0, "the loud one comes down")
+        self.assertGreater(gains["chapter-01.mp3"], 0, "the quiet ones go up")
+
+    def test_a_file_already_at_the_target_is_left_alone(self):
+        profile = profiles.get("acx")
+        files = [entry(f"c{i}.mp3", rms=-20.5) for i in range(3)]
+        planned = batch.plan(_result(files, profile), profile)
+        self.assertEqual(planned["files"], [])
+        self.assertEqual(len(planned["untouched"]), 3)
+
+    def test_every_step_carries_a_sentence_before_anything_runs(self):
+        for entry_file in self._planned()["files"]:
+            for step in entry_file["steps"]:
+                self.assertTrue(step["description"].strip(), step["id"])

@@ -307,11 +307,11 @@ def build_title(folder, ffmpeg):
     title = os.path.join(folder, "title")
     os.makedirs(title, exist_ok=True)
     for name, amplitude, channels in TITLE_CHAPTERS:
-        # Room tone under everything, speech between 0.75 s and 11 s: three
-        # quarters of a second of tone at the head and three at the tail, which
-        # is what ACX asks for.
+        # Room tone under everything, speech between 1.5 s and 11 s: a second
+        # and a half of tone at the head and three at the tail, both inside
+        # the one-to-five seconds ACX's page asks for.
         expression = (f"{_room_tone()} + {amplitude}*({SPEECH})"
-                      f"*between(t\\,0.75\\,11)")
+                      f"*between(t\\,1.5\\,11)")
         # Two channels are generated as two expressions rather than upmixed
         # from one: ffmpeg's mono-to-stereo matrix attenuates, which would make
         # the stereo chapter three decibels quieter and confuse the very
