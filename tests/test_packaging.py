@@ -15,6 +15,7 @@ sys.path.insert(0, str(TOOL))
 sys.path.insert(0, str(TOOL / "tools"))
 
 import icon  # noqa: E402
+import make_icns  # noqa: E402
 
 
 class PngTests(unittest.TestCase):
@@ -66,6 +67,43 @@ class PngTests(unittest.TestCase):
     def test_the_large_sizes_are_oversampled_less(self):
         self.assertGreater(icon.supersample_for(32),
                            icon.supersample_for(1024))
+
+
+class IcnsTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.iconset = Path(self.temporary.name)
+        by_size = {}
+        for _, name in make_icns.CHUNKS:
+            match = re.search(r"_(\d+)x\d+(@2x)?", name)
+            points = int(match.group(1))
+            size = points * (2 if match.group(2) else 1)
+            if size not in by_size:
+                by_size[size] = icon.render(size)
+            (self.iconset / name).write_bytes(by_size[size])
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def test_fallback_contains_every_named_png_representation(self):
+        data = make_icns.pack(self.iconset)
+        self.assertEqual(data[:4], b"icns")
+        self.assertEqual(struct.unpack(">I", data[4:8])[0], len(data))
+
+        offset, seen = 8, []
+        while offset < len(data):
+            kind, length = struct.unpack(">4sI", data[offset:offset + 8])
+            payload = data[offset + 8:offset + length]
+            self.assertTrue(payload.startswith(b"\x89PNG\r\n\x1a\n"))
+            seen.append(kind.decode("ascii"))
+            offset += length
+        self.assertEqual(seen, [kind for kind, _ in make_icns.CHUNKS])
+
+    def test_fallback_refuses_a_non_png_representation(self):
+        _, name = make_icns.CHUNKS[0]
+        (self.iconset / name).write_text("not an image", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "is not a PNG"):
+            make_icns.pack(self.iconset)
 
 
 class DrawingTests(unittest.TestCase):
@@ -143,6 +181,24 @@ class BuildTests(unittest.TestCase):
     def test_the_version_is_a_version(self):
         version = (TOOL / "VERSION").read_text(encoding="utf-8").strip()
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+
+
+class ProjectPageTests(unittest.TestCase):
+    def setUp(self):
+        self.page = (TOOL / "docs" / "index.html").read_text(encoding="utf-8")
+
+    def test_the_current_window_workflow_is_on_the_project_page(self):
+        for promise in ("Guided", "Professional", "Measured progress",
+                        "Portable targets"):
+            self.assertIn(promise, self.page)
+        self.assertIn('href="#workflow"', self.page)
+        self.assertIn('id="workflow"', self.page)
+
+    def test_the_public_check_count_matches_the_suite(self):
+        loader = unittest.TestLoader()
+        suite = loader.discover(str(TOOL / "tests"))
+        self.assertIn(f"<b>{suite.countTestCases()}</b> checks passing",
+                      self.page)
 
 
 @unittest.skipUnless(sys.platform == "darwin", "the .app is macOS only")

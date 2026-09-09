@@ -111,7 +111,14 @@ build_icon() {
     cp "$BUILD/icons/icon_$((size * 2)).png" \
        "$iconset/icon_${size}x${size}@2x.png"
   done
-  iconutil --convert icns "$iconset" --output "$target"
+  # macOS 27 beta's iconutil rejects the same conventional ten-file iconset
+  # that earlier versions accept. Keep Apple's validator as the first choice,
+  # then pack those PNG representations directly as an ICNS chunk container.
+  if ! iconutil --convert icns "$iconset" --output "$target" 2>/dev/null; then
+    say "note: iconutil rejected the iconset; using the ICNS fallback"
+    python3 "$ROOT/tools/make_icns.py" "$iconset" "$target"
+  fi
+  [ -s "$target" ] || { echo "the application icon was not built" >&2; exit 1; }
   rm -rf "$iconset" "$BUILD/icons"
 }
 

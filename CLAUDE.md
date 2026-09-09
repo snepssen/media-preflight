@@ -314,6 +314,13 @@ terminal, and the reduced points themselves in the JSON.
 `.desktop` file, and verifies each — the .pyz is executed and asked to list
 targets before the build calls itself finished.
 
+Apple's `iconutil` is the preferred ICNS writer. macOS 27 beta rejects the
+same conventional ten-file iconset accepted by earlier releases, so
+`tools/make_icns.py` is the standard-library fallback: it packs the already
+rendered PNG representations as ICNS chunks and performs no image conversion.
+The packaging tests verify the container length, every representation and the
+PNG signature before a release can depend on it.
+
 **It bundles neither Python nor ffmpeg, deliberately.** Bundling Python means a
 build-time dependency (PyInstaller, py2app) on a tool whose claim is that it
 needs nothing installed; bundling ffmpeg means eighty megabytes and somebody
@@ -525,7 +532,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 406 checks, about thirty seconds
+python3 -m unittest discover -s tests    # 410 checks, about forty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
