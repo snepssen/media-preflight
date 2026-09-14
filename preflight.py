@@ -20,6 +20,7 @@ Exit codes: 0 the file passes, 1 it fails, 2 the tool could not run.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -34,6 +35,7 @@ import platform_support
 import probe
 import profiles
 import report
+import survey
 import video
 
 
@@ -266,6 +268,12 @@ def _add_clipping(path, facts, measurements, ffmpeg):
 # ----------------------------------------------------------------- commands
 
 def command_check(args):
+    # No --target is not a missing argument, it is a different question:
+    # "where does this stand?" rather than "does this meet X?". It used to
+    # default to the generic web profile, which on a WAV skipped sixteen
+    # checks and printed a green tick.
+    if getattr(args, "target", None) is None:
+        return command_survey(args)
     check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
@@ -281,12 +289,38 @@ def command_check(args):
     return _exit_code(envelope, args.strict)
 
 
+def command_survey(args):
+    """Measure once, and say where the file stands against every target."""
+    if not args.quiet:
+        try:
+            ahead = survey.plan(args.file)
+            if ahead["seconds"] >= 30:
+                sys.stderr.write(
+                    "Comparing against %d targets: roughly %s.\n"
+                    % (len(ahead["targets"]), _duration(ahead["seconds"])))
+        except (survey.SurveyError, probe.ProbeError, ValueError):
+            pass
+
+    out = survey.run(args.file, progress=_progress(args),
+                     caption_path=args.captions, depth=args.picture)
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as handle:
+            json.dump(report.jsonable(out), handle, indent=2)
+        sys.stdout.write(f"JSON written to {args.json}\n")
+    if not args.quiet:
+        sys.stdout.write(report.survey_text(out))
+    # Nothing failed anywhere is the only unambiguous success; a file that is
+    # ready for one target and not another is not a pass or a failure, it is
+    # the answer to the question that was asked.
+    return 0
+
+
 def command_fix(args):
     check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
     facts, measurements, result, profile = run(
-        args.file, args.target, progress=_progress(args),
+        args.file, args.target or "web", progress=_progress(args),
         caption_path=args.captions, depth=args.picture,
         width_divide=args.width_divide)
     envelope = report.envelope(facts, measurements, result, profile)
@@ -762,8 +796,10 @@ def build_parser():
 
     def shared(sub):
         sub.add_argument("file")
-        sub.add_argument("--target", "-t", default="web",
-                         help="target profile id, or a path to a JSON profile")
+        sub.add_argument("--target", "-t", default=None,
+                         help="target profile id, or a path to a JSON "
+                              "profile. Leave it out and the file is "
+                              "compared against every target that applies.")
         sub.add_argument("--json", help="write the machine-readable report here")
         sub.add_argument("--markdown",
                          help="write the client-facing report here")

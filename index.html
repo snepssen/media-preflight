@@ -188,6 +188,20 @@
                  justify-content: space-between; gap: 14px; }
   .wiz-sum div span:last-child { color: var(--quiet); }
   .clash { color: var(--fail); font-size: 13px; margin: 4px 0; }
+
+  .numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+             gap: 10px 22px; margin: 4px 0 6px; }
+  .numbers div { display: flex; justify-content: space-between; gap: 12px;
+                 font-size: 13.5px; border-bottom: 1px solid var(--line);
+                 padding-bottom: 5px; }
+  .numbers span:first-child { color: var(--quiet); }
+  .numbers span:last-child { font-variant-numeric: tabular-nums; }
+  .dest { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px;
+          align-items: start; padding: 11px 0; border-top: 1px solid var(--line); }
+  .dest:first-of-type { border-top: none; }
+  .dest b { font-weight: 500; display: block; }
+  .dest .why { color: var(--quiet); font-size: 12.5px; margin-top: 2px; }
+  .dest .acts { display: flex; gap: 8px; align-items: center; }
 </style>
 
 <main>
@@ -213,8 +227,10 @@
              spellcheck="false" autocomplete="off">
     </div>
     <div class="row">
-      <label for="target">Target</label>
-      <select id="target"></select>
+      <span id="targetRow" style="display:contents">
+        <label for="target">Target</label>
+        <select id="target"></select>
+      </span>
       <button class="primary" id="run">Run</button>
       <button id="runFolder" title="Check a folder as one delivery">Check a folder…</button>
       <button id="sortFolder" title="Sort a folder into audio, video and captions">Sort a folder…</button>
@@ -230,6 +246,16 @@
     </div>
     <p class="note hidden" id="pictureNote"></p>
     <p class="error hidden" id="toolError"></p>
+  </section>
+
+  <section class="panel hidden" id="surveyPanel">
+    <p class="verdict" id="surveyVerdict"></p>
+    <p class="counts" id="surveyFile"></p>
+    <h3 class="subhead-sm">What it is</h3>
+    <div class="numbers" id="surveyNumbers"></div>
+    <div id="surveyReady"></div>
+    <div id="surveyNotReady"></div>
+    <p class="meta" id="surveyNote"></p>
   </section>
 
   <section class="panel hidden" id="wizardPanel">
@@ -737,11 +763,137 @@ function setMode(next) {
   document.body.classList.toggle("pro", next === "pro");
   $("pictureRow").classList.toggle("hidden", next !== "pro" || !lastPicturePlan);
   $("newProfile").classList.toggle("hidden", next !== "pro");
+  // The target dropdown is the question Guided exists not to ask. It stays in
+  // the DOM because the correction flow reads it, and it is simply not shown.
+  $("targetRow").style.display = next === "pro" ? "contents" : "none";
+  $("targetNote").classList.toggle("hidden", next !== "pro");
+  $("run").textContent = next === "pro" ? "Run" : "Check it";
   if (queue) renderQueue();
 }
 
 $("modeGuided").addEventListener("click", () => setMode("guided"));
 $("modePro").addEventListener("click", () => setMode("pro"));
+
+// ------------------------------------------------------------ the survey
+//
+// Guided mode does not ask where the file is going, because that is the
+// question somebody holding a finished song cannot answer — and the tool used
+// to insist on it before saying anything at all. It measures the file once and
+// reports where it stands against every target that applies, which is an
+// answer rather than a form.
+//
+// Each row carries the correction for that destination, so "not ready for a
+// podcast" and "fix it for a podcast" are the same click.
+
+let survey = null;
+
+const SURVEY_NUMBERS = [
+  ["integrated_lufs", "Loudness", "LUFS"],
+  ["true_peak_dbfs", "True peak", "dBTP"],
+  ["rms_dbfs", "RMS level", "dBFS"],
+  ["loudness_range_lu", "Loudness range", "LU"],
+  ["clipping_seconds", "Clipped", "s"],
+  // Length is deliberately absent: the file line above already says 03:05,
+  // and "185.88 s" is the same fact told worse.
+];
+
+async function runSurvey(path) {
+  busy(true);
+  try {
+    const { job } = await api("/survey", { path, depth: depth() });
+    poll(job, (result) => {
+      busy(false);
+      survey = result;
+      renderSurvey(result);
+      $("reportPanel").classList.add("hidden");
+      $("queuePanel").classList.add("hidden");
+      $("deliveryPanel").classList.add("hidden");
+      $("surveyPanel").classList.remove("hidden");
+      $("surveyPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  } catch (error) { busy(false); fail(error.message); }
+}
+
+function tidyNumber(value) {
+  if (typeof value !== "number") return String(value);
+  return (Math.round(value * 100) / 100).toString();
+}
+
+function renderSurvey(result) {
+  const ready = result.targets.filter((t) => t.verdict === "pass");
+  const other = result.targets.filter((t) => t.verdict !== "pass");
+
+  $("surveyVerdict").textContent = ready.length
+    ? `${MARK.pass} Ready for ${ready.length} of ${result.targets.length} destinations.`
+    : `${MARK.warn} Not ready as it stands — every destination wants something changed.`;
+  $("surveyVerdict").className = "verdict " + (ready.length ? "pass" : "warn");
+  $("surveyFile").textContent = describeFile(result.file);
+
+  // An infinite noise floor is a real measurement and reads as a broken field,
+  // so it stays on the detailed report where there is room to explain it.
+  const m = result.measurements || {};
+  $("surveyNumbers").innerHTML = SURVEY_NUMBERS
+    .filter(([key]) => m[key] !== null && m[key] !== undefined
+                        && m[key] !== "-inf" && m[key] !== "+inf")
+    .map(([key, label, unit]) =>
+      `<div><span>${esc(label)}</span><span>${esc(tidyNumber(m[key]))}${
+        unit ? " " + esc(unit) : ""}</span></div>`).join("");
+
+  $("surveyReady").innerHTML = ready.length
+    ? `<h3 class="subhead-sm">Ready to deliver</h3>` + ready.map(destRow).join("")
+    : "";
+  $("surveyNotReady").innerHTML = other.length
+    ? `<h3 class="subhead-sm">Wants something changed</h3>` + other.map(destRow).join("")
+    : `<p class="note">Nothing here needs correcting.</p>`;
+
+  $("surveyNote").textContent = result.kind === "video"
+    ? "Every picture question was asked once and shared between the targets."
+    : "Measured once; compared against every target that applies to this file.";
+
+  wireSurvey(result);
+}
+
+function destRow(target, index) {
+  const id = target.target.id;
+  return `<div class="dest">
+    <span class="mark ${target.verdict}">${MARK[target.verdict]}</span>
+    <span><b>${esc(target.target.label)}</b>
+      <span class="why">${esc(target.headline)}</span></span>
+    <span class="acts">
+      ${target.fixable
+        ? `<button class="primary" data-fix="${esc(id)}">Prepare corrected copy</button>`
+        : ""}
+      <button class="toggle" data-detail="${esc(id)}">details</button>
+    </span>
+  </div>`;
+}
+
+function wireSurvey(result) {
+  const find = (id) => result.targets.find((t) => t.target.id === id);
+
+  $("surveyPanel").querySelectorAll("button[data-detail]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = find(button.dataset.detail);
+      if (!target) return;
+      // The measurement is already here; showing the full report is a render,
+      // not a second pass over the file.
+      renderReport(target);
+      $("reportPanel").classList.remove("hidden");
+      $("reportPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  $("surveyPanel").querySelectorAll("button[data-fix]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      // Straight into the existing preview. Guided still means automatic
+      // planning and not automatic consent: nothing is written until the
+      // plan has been read and approved.
+      $("target").value = button.dataset.fix;
+      describeTarget();
+      $("fix").click();
+    });
+  });
+}
 
 // ------------------------------------------------------------ the wizard
 //
@@ -1674,6 +1826,7 @@ $("runFolder").addEventListener("click", async () => {
 $("run").addEventListener("click", async () => {
   const path = $("path").value.trim();
   if (!path) return fail("Choose a file first.");
+  if (mode === "guided") return runSurvey(path);
   busy(true);
   try {
     const { job } = await api("/check", { path, target: $("target").value,

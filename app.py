@@ -39,6 +39,7 @@ import preflight
 import probe
 import profiles
 import report
+import survey
 import video
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -275,6 +276,28 @@ def _refuse_mismatch(path, target, ffprobe=None):
             "%s is %s, and %s is a target for %s."
             % (os.path.basename(path), WORD.get(kind, "a " + kind + " file"),
                profile.get("label", target), for_kinds))
+
+
+def survey_job(path, depth="selective"):
+    """Where this file stands, without anybody being asked where it is going.
+
+    Each target's envelope is cached under its own id on the way out, so
+    clicking through to a full report — or straight to a correction — is a
+    lookup rather than a second measurement of the same file.
+    """
+    def work(update):
+        update(stage="reading the container", phase="container", progress=0.02)
+
+        def progress(fraction):
+            update(progress=0.05 + fraction * 0.9)
+
+        out = survey.run(path, progress=progress, depth=depth)
+        update(stage="comparing against every target", phase="target",
+               progress=0.97)
+        for envelope in out["targets"]:
+            envelope["chart"] = report.chart_svg(envelope, theme="auto")
+        return out
+    return start_job(work)
 
 
 def check_job(path, target, depth="selective"):
@@ -639,6 +662,10 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/estimate":
                 return self._json(estimate_run(body.get("intake"),
                                                body.get("assignments")))
+
+            if url.path == "/api/survey":
+                path = self._require_file(body)
+                return self._json({"job": survey_job(path, _depth(body))})
 
             if url.path == "/api/check":
                 path = self._require_file(body)

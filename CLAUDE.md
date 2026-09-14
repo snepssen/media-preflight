@@ -394,6 +394,51 @@ interrupt, so `/api/quit` shuts the server down and the page offers it.
   depth is part of both single-file and delivery keys so a selective pass can
   never stand in for a full one.
 
+## Being asked nothing
+
+`survey.py` answers "where does this stand?" — the question somebody holding a
+finished song actually has. Every other entry point began by demanding a
+target, which is the right question for a person with a delivery spec open in
+another window and the wrong one for everybody else. Their honest answer is "I
+don't know, that's what I'm asking you", and the tool had no way to hear it.
+
+It was worse than a missing feature. The window defaulted to `web` — *Generic
+web video* — so dropping in a WAV and pressing Run hit `_refuse_mismatch` and
+produced an error about video targets. The command line took the same default
+and printed **"✓ Ready to deliver, 0 failed, 16 not checked"**: a green tick
+built on sixteen skipped checks, which is worse than the error because it
+looks like an answer.
+
+`--target` now has no default. Its absence is a different question, not a
+missing argument, and it routes to the survey.
+
+**The survey is affordable because the measurement does not depend on the
+target.** `analysis.analyse` reads the file, `checks.evaluate` compares numbers
+to a profile; judging against seven profiles instead of one is seven
+dictionary walks. The only thing a profile changes about *measuring* is its
+`options` — ACX alone moves the silence threshold — so targets are grouped by
+options and measured once per group. Three passes, about four seconds, on a
+three-minute track.
+
+Picture is the exception and is not free: surveying a video asks every
+target's picture question, which is the full pass. `survey.plan` says so
+before anything starts.
+
+**A song had nowhere to go.** The audio targets were an audiobook spec, a
+broadcast spec and a podcast spec, and the tool's own −14 LUFS figure was
+sitting inside the podcast profile with a note explaining that it is really a
+*music* number. `music_streaming` is where that number belongs. It differs
+from every other target in one way that matters: **loudness never fails
+there.** Streaming platforms normalise — they measure the file and turn it
+down — so failing a record for being loud would be this tool inventing a rule
+nobody enforces. Loudness warns at the edges and explains itself; true peak
+fails, because that is what actually distorts after a lossy encode.
+
+Guided mode is built on the survey and shows no target control at all. The
+dropdown stays in the DOM because the correction flow reads it, and is simply
+not displayed — `display: contents` on a wrapper, so hiding it does not
+collapse the row holding the buttons. (It did, the first time.)
+
 ## Guided and Professional
 
 One page, two amounts of exposed decision. The mode is a presentation
@@ -532,7 +577,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 410 checks, about forty seconds
+python3 -m unittest discover -s tests    # 419 checks, about forty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media

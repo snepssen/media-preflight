@@ -200,6 +200,15 @@ class ProjectPageTests(unittest.TestCase):
         self.assertIn(f"<b>{suite.countTestCases()}</b> checks passing",
                       self.page)
 
+    def test_the_public_target_count_matches_the_targets(self):
+        # Every number the front page states about itself has now gone stale
+        # at least once — the check count three times, the project count on
+        # tools-core, and this one when the music target was added. A number
+        # on a page nobody re-counts is a number that will be wrong.
+        import profiles
+        self.assertIn(f"<b>{len(profiles.BUILT_IN)}</b> delivery targets",
+                      self.page)
+
 
 @unittest.skipUnless(sys.platform == "darwin", "the .app is macOS only")
 class BundleTests(unittest.TestCase):

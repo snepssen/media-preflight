@@ -512,6 +512,80 @@ UNIVERSAL = [
 ]
 
 
+# A song had nowhere to go. The audio targets were an audiobook spec, a
+# broadcast spec and a podcast spec, so somebody dropping in a finished track
+# was asked to pick between three wrong answers — and the tool's own -14 LUFS
+# figure was sitting in the podcast profile with a note explaining that it is
+# really a *music* number. This is where that number belongs.
+#
+# The important difference from every other target here: **nothing about the
+# loudness of a music master gets rejected.** Streaming platforms normalise —
+# they measure the file and turn it down. So loudness is reported and reasoned
+# about, and it warns at the edges, but it never fails, because failing a
+# record for being loud would be this tool inventing a rule that nobody
+# enforces. What genuinely does damage is peak level, and that fails.
+MUSIC_STREAMING = {
+    "id": "music_streaming",
+    "label": "Music — streaming master",
+    "summary": "A finished track for Spotify, Apple Music, YouTube Music and "
+               "the rest. Peak-safe first; loudness is normalised on playback, "
+               "not rejected.",
+    "source": "Spotify loudness normalisation (published); the other platforms "
+              "publish targets but no delivery requirement",
+    "checked": "2026-09",
+    "confidence": "informal",
+    "rules": [
+        {"id": "true_peak", "metric": "true_peak_dbfs", "label": "True peak",
+         "unit": "dBTP", "max": -1.0, "warn_max": -2.0, "severity": "fail",
+         "basis": "published", "fix": "limit_peak",
+         "note": "Spotify's own page: keep true peak below -1 dBTP, and below "
+                 "-2 dBTP if the master is louder than -14 LUFS, to avoid "
+                 "extra distortion. This is the rule that matters — a lossy "
+                 "encode overshoots the peaks it was given, so a master that "
+                 "only just fits will clip on somebody's phone."},
+        {"id": "loudness", "metric": "integrated_lufs",
+         "label": "Integrated loudness", "unit": "LUFS",
+         "min": -20.0, "max": -9.0, "severity": "warn", "basis": "observed",
+         "note": "Spotify, YouTube, Tidal and Amazon normalise to about -14 "
+                 "LUFS and Apple Music to about -16; all of them turn a loud "
+                 "master down rather than refusing it. So this band is not a "
+                 "gate, it is the range within which the decision is yours. "
+                 "Louder than -9 buys nothing on a normalising platform — the "
+                 "gain is taken straight back off and you keep only the "
+                 "dynamic range you spent. Quieter than -20 and the track "
+                 "will sit meekly beside everything else."},
+        {"id": "range", "metric": "loudness_range_lu", "label": "Loudness range",
+         "unit": "LU", "min": 1.0, "severity": "warn", "basis": "house",
+         "note": "Almost no variation between the loud and quiet passages, "
+                 "which on music usually means the limiter did the arranging."},
+        {"id": "sample_rate", "metric": "sample_rate", "label": "Sample rate",
+         "unit": "Hz", "one_of": [44100, 48000, 88200, 96000, 176400, 192000],
+         "severity": "warn", "basis": "observed",
+         "note": "Distributors take 44.1 kHz and upwards. Anything below it "
+                 "is a file that has already been somewhere it should not."},
+        {"id": "bit_depth", "metric": "bit_depth", "label": "Bit depth",
+         "min": 16.0, "severity": "warn", "basis": "observed",
+         "note": "16-bit is the floor for delivery; 24-bit is what a "
+                 "distributor would rather have if the master has it."},
+    ],
+    "set_rules": [
+        {"id": "loudness", "metric": "set_loudness_spread_db",
+         "label": "Loudness across the record", "unit": "dB", "max": 4.0,
+         "severity": "warn", "basis": "house",
+         "note": "Track-by-track normalisation is off by default on most "
+                 "platforms for album playback, so the spread you deliver is "
+                 "the spread a listener hears between one song and the next."},
+        {"id": "set_sample_rate", "metric": "set_sample_rate_distinct",
+         "label": "Sample rate across the record", "max": 1.0,
+         "severity": "warn", "basis": "house"},
+        {"id": "set_numbering", "metric": "set_missing_files",
+         "label": "Gaps in the numbering", "max": 0.0, "severity": "warn",
+         "basis": "house"},
+    ],
+    "options": {},
+}
+
+
 SUBTITLES = {
     "id": "subtitles",
     "label": "Subtitles — readability",
@@ -579,8 +653,8 @@ UNIVERSAL_SET = [
 ]
 
 
-BUILT_IN = [ACX, EBU_R128, SPOTIFY_PODCAST, YOUTUBE, SOCIAL_VERTICAL,
-            GENERIC_WEB, SUBTITLES]
+BUILT_IN = [MUSIC_STREAMING, ACX, EBU_R128, SPOTIFY_PODCAST, YOUTUBE,
+            SOCIAL_VERTICAL, GENERIC_WEB, SUBTITLES]
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Two places, and the difference matters once this is installed rather than

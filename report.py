@@ -311,6 +311,79 @@ def text(report, width=68, show_passes=True):
     return "\n".join(lines) + "\n"
 
 
+# The handful of numbers somebody would read out loud about a file, in the
+# order they would say them. The full list is on the per-target reports; this
+# is the "what is it" that comes before "where can it go".
+SURVEY_NUMBERS = (
+    ("integrated_lufs", "Loudness", "LUFS"),
+    ("true_peak_dbfs", "True peak", "dBTP"),
+    ("rms_dbfs", "RMS level", "dBFS"),
+    ("loudness_range_lu", "Loudness range", "LU"),
+    ("noise_floor_dbfs", "Noise floor", "dBFS"),
+    ("clipping_seconds", "Clipped", "s"),
+)
+
+
+def survey_number(value):
+    """A measurement as somebody would say it, not as it was stored.
+
+    Two decimal places is the most anybody reads off a meter; -17.2155 dBFS
+    is six digits of precision about a number that moves when the room does.
+    """
+    if isinstance(value, float):
+        return ("%.2f" % value).rstrip("0").rstrip(".")
+    return str(value)
+
+
+def survey_text(survey, width=68):
+    """Where the file stands everywhere, for somebody who never picked a target."""
+    lines = []
+    file_info = survey["file"]
+    lines.append(file_info["name"])
+    lines.append(_stream_line(file_info))
+    lines.append("")
+
+    measured = survey.get("measurements") or {}
+    rows = [(label, survey_number(measured[key]), unit)
+            for key, label, unit in SURVEY_NUMBERS
+            if measured.get(key) is not None
+            # An infinite noise floor is a true measurement — there was no
+            # silent passage to measure one in — but printed as "-inf" it
+            # reads as a broken field. It belongs on the detailed report,
+            # which explains it, and not in a list of six plain numbers.
+            and measured[key] not in ("-inf", "+inf")]
+    if rows:
+        lines.append("What it is")
+        for label, shown, unit in rows:
+            lines.append("  %-22s %s%s" % (label, shown,
+                                           f" {unit}" if unit else ""))
+        lines.append("")
+
+    ready = [t for t in survey["targets"] if t["verdict"] == "pass"]
+    other = [t for t in survey["targets"] if t["verdict"] != "pass"]
+
+    if ready:
+        lines.append("Ready to deliver")
+        for target in ready:
+            lines.append("  %s %s" % (MARK["pass"], target["target"]["label"]))
+        lines.append("")
+
+    if other:
+        lines.append("Not ready")
+        for target in other:
+            lines.append("  %s %s" % (MARK[target["verdict"]],
+                                      target["target"]["label"]))
+            lines.append("      " + _wrap(target["headline"], width, 6))
+            if target.get("fixable"):
+                lines.append("      can be corrected: preflight fix <file> "
+                             "--target " + target["target"]["id"])
+        lines.append("")
+
+    if not other:
+        lines.append("Nothing here needs correcting.")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def _chapter_lines(chapters, width):
     """Loudest short-term per chapter — the column that finds the odd one out."""
     lines = ["Chapters, by loudest short-term loudness:"]

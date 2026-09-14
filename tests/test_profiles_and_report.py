@@ -15,6 +15,7 @@ import probe  # noqa: E402
 import profiles  # noqa: E402
 import preflight  # noqa: E402
 import report  # noqa: E402
+import survey  # noqa: E402
 import video  # noqa: E402
 from test_checks import facts, measurements  # noqa: E402
 
@@ -622,3 +623,62 @@ class TheSuiteDoesNotReadSomebodysOwnProfiles(unittest.TestCase):
                     del os.environ["MEDIA_PREFLIGHT_CONFIG"]
                 else:
                     os.environ["MEDIA_PREFLIGHT_CONFIG"] = previous
+
+
+class WhereDoesThisStand(unittest.TestCase):
+    """The survey answers without being asked where the file is going."""
+
+    def test_a_song_has_somewhere_to_go(self):
+        # The audio targets used to be an audiobook spec, a broadcast spec and
+        # a podcast spec. Somebody holding a finished track was asked to pick
+        # between three wrong answers.
+        ids = [p["id"] for p in survey.applicable("audio")]
+        self.assertIn("music_streaming", ids)
+
+    def test_loudness_never_fails_a_music_master(self):
+        # Streaming platforms normalise: they measure the file and turn it
+        # down. Failing a record for being loud would be inventing a rule
+        # nobody enforces.
+        music = profiles.get("music_streaming")
+        loudness = next(r for r in music["rules"]
+                        if r["metric"] == "integrated_lufs")
+        self.assertEqual(loudness["severity"], "warn")
+
+    def test_peak_does_fail_it(self):
+        music = profiles.get("music_streaming")
+        peak = next(r for r in music["rules"]
+                    if r["metric"] == "true_peak_dbfs")
+        self.assertEqual(peak["severity"], "fail")
+
+    def test_the_union_carries_every_rule_in_its_group(self):
+        group = [profiles.get("music_streaming"), profiles.get("ebu_r128")]
+        union = survey._union(group, "audio")
+        metrics = {r["metric"] for r in union["rules"]}
+        for profile in group:
+            for rule in profile["rules"]:
+                self.assertIn(rule["metric"], metrics)
+
+    def test_targets_are_grouped_by_what_they_change_about_measuring(self):
+        # Only `options` changes the measuring, so only `options` may cause a
+        # second pass. Grouping by anything else would measure the same file
+        # five times to get five identical numbers.
+        keys = {survey._options_key(p) for p in survey.applicable("audio")}
+        self.assertLess(len(keys), len(survey.applicable("audio")))
+
+    def test_the_headline_keeps_an_acronym_intact(self):
+        envelope = {"findings": [
+            {"status": "fail", "label": "RMS level", "actual": "-17 dBFS",
+             "required": "-23 to -18 dBFS"}]}
+        self.assertTrue(survey.headline(envelope).startswith("RMS level"))
+
+    def test_a_clean_file_says_so_in_one_sentence(self):
+        self.assertEqual(survey.headline({"findings": [
+            {"status": "pass", "label": "Anything", "actual": "", "required": ""}]}),
+            "Ready to deliver.")
+
+    def test_the_headline_counts_what_it_did_not_name(self):
+        envelope = {"findings": [
+            {"status": "fail", "label": "Codec", "actual": "wav", "required": "mp3"},
+            {"status": "fail", "label": "Rate", "actual": "1", "required": "2"},
+            {"status": "warn", "label": "Level", "actual": "3", "required": "4"}]}
+        self.assertIn("2 others", survey.headline(envelope))
