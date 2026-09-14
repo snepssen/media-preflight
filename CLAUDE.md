@@ -155,6 +155,25 @@ Captions cost no decode at all unless they are embedded, in which case one
 sound nobody captioned, a constant offset, and cues over silence — and they
 are the ones that actually save somebody an afternoon.
 
+- **A repaint is not a reading.** Karaoke does not re-write a line per
+  syllable, it repaints it: a lyric video's file holds the whole line once per
+  highlight step, so "Close your eyes" appears four times in 2.32 seconds, one
+  of them for 0.16 s. Measured per cue that is 360 characters a second and a
+  shortest cue of 0.05 s — both facts about the animation and neither about
+  anything anybody read. `captions.displays` merges runs of the same text in
+  the same place into the span a reader actually had; the same file now
+  measures 14 characters a second. Three metrics are computed over displays
+  rather than cues — reading speed, shortest and longest — and `offending_cues`
+  must use displays for those too, or the report names a cue whose number
+  appears nowhere in the finding.
+- **`_slot` is for overlaps, `_place` is for readings.** The slot includes the
+  style, because two styles in one place are two things coexisting, which is
+  what an overlap test needs. A reading needs the opposite: karaoke moves a
+  line from Active to Inactive when the singing passes it, and keyed on the
+  slot that reads as the line leaving and a different line arriving. It is
+  also why the merge tracks a last display *per place* rather than comparing
+  against the previous cue — a lyric video interleaves its two lines, so the
+  cue before any repaint belongs to the other one.
 - **Gaps within a run, not runs as a whole.** `_gaps_in` subtracts the cues
   from each stretch of sound. Judging a whole passage as covered or not was the
   first attempt and it hid a twelve-second passage with three seconds of
@@ -577,7 +596,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 427 checks, about forty seconds
+python3 -m unittest discover -s tests    # 434 checks, about forty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media

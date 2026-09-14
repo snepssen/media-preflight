@@ -419,3 +419,73 @@ class DriftConfidenceTests(unittest.TestCase):
 
     def test_the_threshold_is_a_measurement_option(self):
         self.assertIn("drift_confidence_min", captions.ALIGNMENT_DEFAULTS)
+
+
+class KaraokeRepaintsAreOneReading(unittest.TestCase):
+    """A lyric line repainted per syllable is one thing to read, not four."""
+
+    ASS = """[Script Info]
+ScriptType: v4.00+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Text
+Dialogue: 0,0:00:00.00,0:00:00.16,Active,,0,0,0,{\\an5\\pos(540,1360)}Close your eyes
+Dialogue: 0,0:00:00.00,0:00:00.16,Inactive,,0,0,0,{\\an5\\pos(540,1450)}What do you see
+Dialogue: 0,0:00:00.16,0:00:00.56,Active,,0,0,0,{\\an5\\pos(540,1360)}{\\c&H00D4FF&}Close{\\c&HFFFFFF&} your eyes
+Dialogue: 0,0:00:00.16,0:00:00.56,Inactive,,0,0,0,{\\an5\\pos(540,1450)}What do you see
+Dialogue: 0,0:00:00.56,0:00:00.80,Active,,0,0,0,{\\an5\\pos(540,1360)}Close {\\c&H00D4FF&}your{\\c&HFFFFFF&} eyes
+Dialogue: 0,0:00:00.56,0:00:00.80,Inactive,,0,0,0,{\\an5\\pos(540,1450)}What do you see
+Dialogue: 0,0:00:00.80,0:00:02.32,Active,,0,0,0,{\\an5\\pos(540,1360)}Close your {\\c&H00D4FF&}eyes{\\c&HFFFFFF&}
+Dialogue: 0,0:00:00.80,0:00:02.32,Inactive,,0,0,0,{\\an5\\pos(540,1450)}What do you see
+"""
+
+    def track(self):
+        return captions.parse_ass(self.ASS)
+
+    def test_four_repaints_become_one_display(self):
+        cues = self.track()["cues"]
+        self.assertEqual(len(cues), 8, "two lines, four repaints each")
+        shown = captions.displays(cues)
+        self.assertEqual(len(shown), 2, "one display per line on screen")
+
+    def test_the_reader_gets_the_whole_span(self):
+        shown = captions.displays(self.track()["cues"])
+        line = next(d for d in shown if d["text"] == "Close your eyes")
+        self.assertAlmostEqual(line["start"], 0.0)
+        self.assertAlmostEqual(line["end"], 2.32)
+        self.assertEqual(line["span"], 4)
+
+    def test_the_reading_speed_stops_being_nonsense(self):
+        # Measured per cue this file reported 360 characters a second, which
+        # is a fact about the animation and not about anything anybody read.
+        measured = captions.measure(self.track(), 10.0)
+        self.assertLess(measured["caption_max_cps"], 25)
+
+    def test_a_repaint_is_not_a_cue_that_flashes_too_briefly(self):
+        measured = captions.measure(self.track(), 10.0)
+        self.assertGreater(measured["caption_shortest_cue_s"], 1.0)
+
+    def test_a_style_change_in_the_same_place_does_not_split_it(self):
+        # Karaoke moves a line from Active to Inactive when the singing
+        # passes it. Keyed on the slot that reads as the line leaving and a
+        # different one arriving; keyed on the place it is one line staying.
+        cues = self.track()["cues"]
+        active = next(c for c in cues if c["text"] == "Close your eyes")
+        moved = dict(active, slot=active["slot"].replace("Active", "Inactive"),
+                     index=99, start=2.32, end=4.72)
+        shown = captions.displays(sorted(cues + [moved],
+                                         key=lambda c: c["start"]))
+        line = next(d for d in shown if d["text"] == "Close your eyes")
+        self.assertAlmostEqual(line["end"], 4.72)
+
+    def test_the_same_line_after_a_gap_is_read_twice(self):
+        cues = self.track()["cues"]
+        again = dict(cues[0], index=98, start=30.0, end=32.0)
+        shown = captions.displays(cues + [again])
+        matching = [d for d in shown if d["text"] == "Close your eyes"]
+        self.assertEqual(len(matching), 2, "it left the screen and came back")
+
+    def test_an_ordinary_file_is_untouched(self):
+        srt = ("1\n00:00:01,000 --> 00:00:03,000\nOne line.\n\n"
+               "2\n00:00:03,500 --> 00:00:06,000\nAnother line.\n")
+        cues = captions.parse_srt(srt)["cues"]
+        self.assertEqual(len(captions.displays(cues)), len(cues))

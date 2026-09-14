@@ -217,7 +217,8 @@ def parse_ass(text):
         fonts.update(_ASS_FONT.findall(body))
         cue = _cue(len(cues) + 1, _timestamp(row.get("Start")),
                    _timestamp(row.get("End")), body,
-                   slot=_slot(row.get("Layer"), row.get("Style"), body))
+                   slot=_slot(row.get("Layer"), row.get("Style"), body),
+                   place=_place(row.get("Layer"), body))
         if cue:
             cues.append(cue)
 
@@ -240,17 +241,30 @@ def _slot(layer, style, body):
     are designed to coexist, and calling that an overlap would be reporting
     the format working as intended.
     """
+    return "|".join([(style or "").strip(), _place(layer, body)])
+
+
+def _place(layer, body):
+    """Where on screen, ignoring which style is painting it.
+
+    `_slot` includes the style because two styles in one place are two things
+    coexisting, which is what an overlap test needs to know. A *reading* needs
+    the opposite: a karaoke line changes style when the singing moves on —
+    Active to Inactive — while sitting in exactly the same place. Keyed on the
+    slot it looks like the line left and a different line arrived; keyed on
+    the place it is what it looks like on screen, which is one line staying
+    put.
+    """
     position = _ASS_POS.search(body)
     align = _ASS_ALIGN.search(body)
     return "|".join([
         (layer or "0").strip(),
-        (style or "").strip(),
         position.group(1).strip() if position else "",
         align.group(1) if align else "",
     ])
 
 
-def _cue(index, start, end, body, slot=""):
+def _cue(index, start, end, body, slot="", place=""):
     if start is None or end is None:
         return None
     text = clean(body)
@@ -260,6 +274,7 @@ def _cue(index, start, end, body, slot=""):
     return {
         "index": index,
         "slot": slot,
+        "place": place,
         "start": start,
         "end": end,
         "duration": duration,
@@ -272,6 +287,56 @@ def _cue(index, start, end, body, slot=""):
         # cue nobody can see is not a meaningful number anyway.
         "cps": (characters / duration) if duration > 0 else None,
     }
+
+
+def displays(cues):
+    """Runs of cues showing the same text in the same place, as one reading.
+
+    Karaoke does not re-write the line for each syllable, it repaints it. A
+    lyric video's file holds the whole line once per highlight step:
+
+        0:00.00 - 0:00.16  Close your eyes
+        0:00.16 - 0:00.56  Close your eyes     (Close lit)
+        0:00.56 - 0:00.80  Close your eyes     (your lit)
+        0:00.80 - 0:02.32  Close your eyes     (eyes lit)
+
+    Every one of those is the same fifteen characters, and a reader had the
+    whole 2.32 seconds to read them. Measured per cue it is four separate
+    subtitles, one of which flashes fifteen characters up for 0.16 s — which
+    is how a perfectly ordinary lyric video reported 360 characters a second
+    and a shortest cue of 0.05 s. Both numbers were about the animation, not
+    about anything anybody had to read.
+
+    `clean` has already removed the override tags that differ, so the repaints
+    are textually identical by the time they arrive here. A genuine
+    re-display — the same line appearing again after a gap — is not merged,
+    because that really is something to read twice.
+    """
+    # Tracked per place rather than against the previous cue: a lyric video
+    # interleaves the two lines it shows, so the cue before any given repaint
+    # belongs to the other line.
+    out, open_at = [], {}
+    for cue in cues or []:
+        key = (cue.get("place", ""), cue["text"])
+        last = open_at.get(key)
+        # Contiguous, or overlapping. A real gap means it left the screen and
+        # came back, which is something to read twice.
+        if last is not None and cue["start"] <= last["end"] + _REPAINT_GAP_S:
+            last["end"] = max(last["end"], cue["end"])
+            last["duration"] = last["end"] - last["start"]
+            last["cps"] = (last["characters"] / last["duration"]
+                           if last["duration"] > 0 else None)
+            last["span"] += 1
+            continue
+        fresh = dict(cue, span=1)
+        out.append(fresh)
+        open_at[key] = fresh
+    return out
+
+
+# Frame-accurate repaints can round apart by a hundredth of a second, which
+# should not count as the line leaving the screen and coming back.
+_REPAINT_GAP_S = 0.05
 
 
 def clean(body):
@@ -325,7 +390,8 @@ def measure(track, duration_s=None):
             previous = cue
     overlaps.sort(key=lambda item: item["start"])
 
-    speeds = [c["cps"] for c in cues if c["cps"] is not None]
+    shown = displays(cues)
+    speeds = [c["cps"] for c in shown if c["cps"] is not None]
     past_end = 0.0
     if duration_s:
         # A cue that *starts* after the last frame is past the end even when
@@ -336,8 +402,9 @@ def measure(track, duration_s=None):
     out.update({
         "caption_overlaps": len(overlaps),
         "caption_overlap_intervals": overlaps,
-        "caption_shortest_cue_s": round(min(c["duration"] for c in cues), 3),
-        "caption_longest_cue_s": round(max(c["duration"] for c in cues), 3),
+        "caption_shortest_cue_s": round(min(c["duration"] for c in shown), 3),
+        "caption_longest_cue_s": round(max(c["duration"] for c in shown), 3),
+        "displays": shown,
         "caption_max_cps": round(max(speeds), 2) if speeds else None,
         "caption_max_line_length": max(c["longest_line"] for c in cues),
         "caption_max_lines": max(c["line_count"] for c in cues),
@@ -376,24 +443,41 @@ OFFENDERS = {
     "caption_bad_timing": lambda cue, rule: cue["duration"] <= 0,
 }
 
+def _which(cue):
+    """One cue, or the run of repaints that were read as one."""
+    span = cue.get("span", 1)
+    if span <= 1:
+        return f"cue {cue['index']}"
+    return f"cues {cue['index']}-{cue['index'] + span - 1}"
+
+
 DETAIL = {
-    "caption_max_cps": lambda cue: f"cue {cue['index']}, "
+    "caption_max_cps": lambda cue: f"{_which(cue)}, "
                                    f"{cue['cps']:.1f} characters a second",
     "caption_max_line_length": lambda cue: f"cue {cue['index']}, "
                                            f"{cue['longest_line']} characters",
     "caption_max_lines": lambda cue: f"cue {cue['index']}, "
                                      f"{cue['line_count']} lines",
-    "caption_shortest_cue_s": lambda cue: f"cue {cue['index']}, "
+    "caption_shortest_cue_s": lambda cue: f"{_which(cue)}, "
                                           f"{cue['duration']:.2f} s",
-    "caption_longest_cue_s": lambda cue: f"cue {cue['index']}, "
+    "caption_longest_cue_s": lambda cue: f"{_which(cue)}, "
                                          f"{cue['duration']:.2f} s",
     "caption_empty_cues": lambda cue: f"cue {cue['index']} is empty",
     "caption_bad_timing": lambda cue: f"cue {cue['index']} ends before it starts",
 }
 
 
-def offending_cues(metric, rule, cues, limit=200):
+# Measured over displays rather than cues, so the offenders must be too:
+# naming cue 3 for a reading speed computed across cues 1-4 would point at a
+# number the report does not show anywhere.
+BY_DISPLAY = {"caption_max_cps", "caption_shortest_cue_s",
+              "caption_longest_cue_s"}
+
+
+def offending_cues(metric, rule, cues, limit=200, shown=None):
     """The cues that break one rule, as intervals the report can print."""
+    if metric in BY_DISPLAY:
+        cues = shown if shown is not None else displays(cues)
     test = OFFENDERS.get(metric)
     if test is None:
         return []

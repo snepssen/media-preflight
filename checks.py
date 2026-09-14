@@ -506,7 +506,8 @@ def locate(rule, value, facts, measurements, locator=None):
         # Which cues are at fault depends on the rule's own threshold, so the
         # test lives beside the cues rather than here.
         return captions.offending_cues(rule["metric"], rule,
-                                       measurements.get("cues"))
+                                       measurements.get("cues"),
+                                       shown=measurements.get("displays"))
 
     if kind == "silence":
         wanted = {"lead_silence_s": "head", "tail_silence_s": "tail",
