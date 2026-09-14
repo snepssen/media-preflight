@@ -151,6 +151,7 @@ otherwise report the previous chapter's level as this one's.
 
 | id | what it is | thresholds |
 | --- | --- | --- |
+| `music_streaming` | A finished track for streaming | **informal** |
 | `acx` | Audiobook, ACX retail delivery | published |
 | `ebu_r128` | Broadcast, EBU R 128 | published |
 | `spotify_podcast` | Podcast delivery to Spotify | published |
@@ -158,6 +159,7 @@ otherwise report the previous chapter's level as this one's.
 | `social_vertical` | Instagram / TikTok | **informal** |
 | `web` | Generic web video | **informal** |
 | `subtitles` | Caption readability, on its own | **informal** |
+| `lyrics` | Lyric and karaoke captions, on their own | **informal** |
 
 `spotify_podcast` is **informal** for the reason given below, despite its
 number being a published one.

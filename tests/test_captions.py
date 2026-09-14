@@ -489,3 +489,78 @@ Dialogue: 0,0:00:00.80,0:00:02.32,Inactive,,0,0,0,{\\an5\\pos(540,1450)}What do 
                "2\n00:00:03,500 --> 00:00:06,000\nAnother line.\n")
         cues = captions.parse_srt(srt)["cues"]
         self.assertEqual(len(captions.displays(cues)), len(cues))
+
+
+class LyricsAreNotSubtitles(unittest.TestCase):
+    """The song sets the timing, so the reading budget does not apply."""
+
+    HEAD = ("[Script Info]\nScriptType: v4.00+\n[Events]\nFormat: Layer, "
+            "Start, End, Style, Name, MarginL, MarginR, MarginV, Text\n")
+
+    def track(self, *rows):
+        return captions.parse_ass(self.HEAD + "".join(rows))
+
+    def row(self, start, end, text):
+        return ("Dialogue: 0,%s,%s,A,,0,0,0,{\\an5\\pos(540,1360)}%s\n"
+                % (start, end, text))
+
+    def verdict(self, track):
+        import checks
+        import profiles
+        measured = captions.measure(track, 200.0)
+        return checks.evaluate({"captions": {}}, measured,
+                               profiles.get("lyrics"))
+
+    def status_of(self, result, label):
+        return next(f["status"] for f in result["findings"]
+                    if f["label"] == label)
+
+    def test_a_fast_patter_line_is_not_a_fault(self):
+        # Real material: seventeen characters on screen for 0.30 s, in a
+        # passage where the lines genuinely change that fast. Subtitling
+        # thresholds call this a failure; the singing calls it a bar.
+        track = self.track(self.row("0:00:01.00", "0:00:01.30",
+                                    "Everybody's got a"))
+        self.assertEqual(self.status_of(self.verdict(track),
+                                        "Reading speed"), "pass")
+
+    def test_a_line_held_through_an_instrumental_is_not_a_fault(self):
+        track = self.track(self.row("0:00:01.00", "0:00:22.00", "Held"))
+        self.assertEqual(self.status_of(self.verdict(track),
+                                        "Longest line"), "pass")
+
+    def test_a_flash_is_still_a_fault(self):
+        track = self.track(self.row("0:00:01.00", "0:00:01.10", "Too brief"))
+        self.assertEqual(self.status_of(self.verdict(track),
+                                        "Briefest line"), "warn")
+
+    def test_a_line_left_behind_is_still_a_fault(self):
+        track = self.track(self.row("0:00:01.00", "0:01:40.00", "Stuck"))
+        self.assertEqual(self.status_of(self.verdict(track),
+                                        "Longest line"), "warn")
+
+    def test_text_too_wide_for_the_frame_is_still_a_fault(self):
+        track = self.track(self.row(
+            "0:00:01.00", "0:00:06.00",
+            "This single line of lyric text is far too wide to fit a frame"))
+        self.assertEqual(self.status_of(self.verdict(track),
+                                        "Longest line of text"), "warn")
+
+    def test_an_empty_cue_still_fails(self):
+        track = self.track(self.row("0:00:01.00", "0:00:05.00", ""),
+                           self.row("0:00:06.00", "0:00:09.00", "Real words"))
+        self.assertEqual(self.status_of(self.verdict(track),
+                                        "Empty cues"), "fail")
+
+    def test_the_same_file_can_fail_as_subtitles_and_pass_as_lyrics(self):
+        import checks
+        import profiles
+        track = self.track(self.row("0:00:01.00", "0:00:01.80", "A quick line"),
+                           self.row("0:00:02.00", "0:00:14.00", "A held line"))
+        measured = captions.measure(track, 200.0)
+        facts = {"captions": {}}
+        as_lyrics = checks.evaluate(facts, measured, profiles.get("lyrics"))
+        as_subtitles = checks.evaluate(facts, measured,
+                                       profiles.get("subtitles"))
+        self.assertEqual(as_lyrics["verdict"], "pass")
+        self.assertNotEqual(as_subtitles["verdict"], "pass")

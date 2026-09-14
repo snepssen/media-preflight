@@ -200,6 +200,18 @@ class ProjectPageTests(unittest.TestCase):
         self.assertIn(f"<b>{suite.countTestCases()}</b> checks passing",
                       self.page)
 
+    def test_every_target_is_named_on_the_page_and_in_the_readme(self):
+        # The count alone was not enough: music_streaming and lyrics were
+        # both added without reaching either table, so the number was right
+        # and the list was short. Naming each one is the check that holds.
+        import profiles
+        readme = (TOOL / "README.md").read_text(encoding="utf-8")
+        for profile in profiles.BUILT_IN:
+            self.assertIn(f"<code>{profile['id']}</code>", self.page,
+                          f"{profile['id']} is missing from the page")
+            self.assertIn(f"`{profile['id']}`", readme,
+                          f"{profile['id']} is missing from the README")
+
     def test_the_public_target_count_matches_the_targets(self):
         # Every number the front page states about itself has now gone stale
         # at least once — the check count three times, the project count on

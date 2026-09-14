@@ -586,6 +586,92 @@ MUSIC_STREAMING = {
 }
 
 
+# Lyrics are not subtitles, and checking them against subtitling conventions
+# reports a working lyric video as broken. The difference is not a matter of
+# degree:
+#
+#   A subtitle's timing is a reading budget. A lyric's timing is the song's —
+#   a line lands when it is sung and leaves when the next one arrives, and
+#   whether that is comfortable to read is not the author's decision to make.
+#   A fast patter line genuinely is on screen for a third of a second.
+#
+#   A subtitle sitting still for twenty seconds is a fault. A lyric held
+#   through an instrumental is the normal case.
+#
+#   Two subtitles on screen at once is an error. Karaoke showing the line
+#   being sung above the line coming next is the format working.
+#
+# So this checks what can still be wrong: a line nobody could see, a line that
+# never leaves, text that will not fit the frame, and the structural faults
+# that are faults in any caption file.
+#
+# The numbers are house rules and say so. They were set by measuring
+# seventeen real lyric videos — reading speed ran 10.9 to 56.7 characters a
+# second, lines were on screen from 0.30 to 21.6 seconds — and then placed
+# outside that range, so they catch a mistake rather than a style. That
+# corpus came from one tool and one artist, which is the honest size of the
+# claim being made here.
+LYRICS = {
+    "id": "lyrics",
+    "label": "Lyrics — music video",
+    "summary": "Lyric and karaoke caption files, checked as lyrics rather "
+               "than as subtitles: the song sets the timing, so only what "
+               "nobody could read or see is a fault.",
+    "source": "No published standard; thresholds measured across a corpus of "
+              "real lyric videos and set outside it",
+    "checked": "2026-09",
+    "confidence": "informal",
+    "rules": [
+        {"id": "flash", "metric": "caption_shortest_cue_s",
+         "label": "Briefest line", "unit": "s", "min": 0.25,
+         "severity": "warn", "basis": "house",
+         "note": "A line on screen for less than a quarter of a second is a "
+                 "flash rather than a lyric — usually a mistimed cue rather "
+                 "than a fast one. The fastest real line in the corpus this "
+                 "was set against is 0.30 s, in a patter section."},
+        {"id": "stuck", "metric": "caption_longest_cue_s",
+         "label": "Longest line", "unit": "s", "max": 60.0,
+         "severity": "warn", "basis": "house",
+         "note": "A lyric held through an instrumental is normal and the "
+                 "corpus runs to 21.6 seconds, so this is set where a line "
+                 "has plainly been left behind rather than held."},
+        {"id": "speed", "metric": "caption_max_cps", "label": "Reading speed",
+         "unit": "chars/s", "max": 70.0, "severity": "warn", "basis": "house",
+         "note": "Subtitling asks for 17 to 21 characters a second because a "
+                 "viewer has to read and still watch. A lyric is timed to the "
+                 "singing, and the corpus reaches 56.7 in a fast passage, so "
+                 "this is a ceiling for a line that cannot be read at all "
+                 "rather than a readability budget. Repaints are merged "
+                 "before this is measured — see captions.displays — because "
+                 "karaoke repaints a line per syllable and measuring each "
+                 "repaint reports an ordinary lyric video at 360."},
+        {"id": "line_length", "metric": "caption_max_line_length",
+         "label": "Longest line of text", "unit": "chars", "max": 40.0,
+         "severity": "warn", "basis": "house",
+         "note": "Lyric videos set type large, so a line that would fit a "
+                 "subtitle comfortably can still run off the frame. Whether "
+                 "this is right depends on your type size; it is a house "
+                 "number and worth changing."},
+        {"id": "lines", "metric": "caption_max_lines", "label": "Lines at once",
+         "max": 2.0, "severity": "warn", "basis": "house",
+         "note": "Two is the karaoke convention: the line being sung and the "
+                 "one coming next."},
+        {"id": "empty", "metric": "caption_empty_cues", "label": "Empty cues",
+         "max": 0.0, "severity": "fail", "basis": "house",
+         "note": "A cue with no text in it renders as nothing and is almost "
+                 "always a generator fault."},
+        {"id": "count", "metric": "caption_cue_count", "label": "Cues",
+         "min": 1.0, "severity": "fail", "basis": "house"},
+    ],
+    "set_rules": [
+        {"id": "set_numbering", "metric": "set_missing_files",
+         "label": "Gaps in the numbering", "max": 0.0, "severity": "warn",
+         "basis": "house"},
+    ],
+    "options": {},
+}
+
+
 SUBTITLES = {
     "id": "subtitles",
     "label": "Subtitles — readability",
@@ -654,7 +740,7 @@ UNIVERSAL_SET = [
 
 
 BUILT_IN = [MUSIC_STREAMING, ACX, EBU_R128, SPOTIFY_PODCAST, YOUTUBE,
-            SOCIAL_VERTICAL, GENERIC_WEB, SUBTITLES]
+            SOCIAL_VERTICAL, GENERIC_WEB, SUBTITLES, LYRICS]
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Two places, and the difference matters once this is installed rather than

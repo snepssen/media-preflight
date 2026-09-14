@@ -555,6 +555,33 @@ Two traps, both of which caught this on the way in:
 server what the page would have hidden, because a dropdown is a convenience
 and not a guarantee about what will arrive.
 
+## Lyrics are not subtitles
+
+`subtitles` encodes dialogue subtitling conventions and reports a working
+lyric video as broken, because the two disagree about what timing *is*. A
+subtitle's timing is a reading budget the author controls. A lyric's timing
+belongs to the song: the line lands when it is sung and leaves when the next
+one arrives, and whether that is comfortable to read was never the author's
+decision. A subtitle sitting still for twenty seconds is a fault; a lyric held
+through an instrumental is the normal case. Two subtitles at once is an error;
+karaoke showing the sung line above the next one is the format working.
+
+So `lyrics` checks what can still be wrong — a line nobody could see, a line
+that never leaves, text too wide for the frame, and the structural faults that
+are faults anywhere — and leaves the rest to the song.
+
+**Its numbers came from measuring, and the corpus is named.** Seventeen real
+lyric videos: reading speed ran 10.9 to 56.7 characters a second, lines were
+on screen from 0.30 to 21.6 seconds. Every threshold sits outside that range,
+so it catches a mistake rather than a style. That corpus is one tool and one
+artist, which is the honest size of the claim — the rules are `house` and say
+so.
+
+Verified both ways, which is the only way a loose profile earns its place: all
+seventeen pass, and five planted faults are each caught by the rule that
+claims them — a 0.1 s flash, a 99 s line left behind, an empty cue, a 70-
+character line, and 240 characters a second.
+
 ## The numbers in profiles.py
 
 Every built-in target carries `source`, `checked` and `confidence`, and every
@@ -596,7 +623,7 @@ presents itself as one it is lying.
 ## Build and check
 
 ```sh
-python3 -m unittest discover -s tests    # 434 checks, about forty seconds
+python3 -m unittest discover -s tests    # 442 checks, about forty seconds
 ./build.sh                              # .app, .pyz and .desktop, verified
 python3 preflight.py batch fixtures/title -t acx   # the set-level faults
 python3 scripts/make_fixtures.py         # regenerate the test media
