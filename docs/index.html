@@ -34,7 +34,7 @@
 <header id="top">
   <span class="badge"><span class="dot"></span>macOS · Windows · Linux · MIT</span>
   <h1>Media Preflight</h1>
-  <p class="subhead">Drop in a finished file — sound, picture, captions — pick where it is going, and find out whether it will be accepted, with the exact timestamp of everything that is wrong. Then, if you want, a corrected copy that is measured again from scratch before it claims to be fixed.</p>
+  <p class="subhead">Drop in a finished file — sound, picture, captions — and find out where it stands. Not against one target you had to name first, but against every one that applies, with the exact timestamp of everything that is wrong. Then, if you want, a corrected copy that is measured again from scratch before it claims to be fixed.</p>
   <div class="headmeta">
     <span><b>9</b> delivery targets, and your own</span>
     <span><b>1</b> decode per stream, every measurement</span>
@@ -205,13 +205,13 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
 <section id="workflow">
   <p class="eyebrow">One engine, two ways in</p>
   <h2>Guided when you want the answer. Professional when you know the handoff.</h2>
-  <p class="lede">Drop files or a whole delivery. Media Preflight sorts audio, video and subtitles before asking what each kind is for, estimates the real work, and then runs one visible queue. The verdicts do not change with the mode — only how many decisions are exposed.</p>
+  <p class="lede">Drop one file and Guided asks nothing at all: it measures once and reports where the file stands against every target that applies. Drop a folder and it sorts audio, video and subtitles, estimates the real work, and runs one visible queue. The verdicts do not change with the mode — only how many decisions are exposed.</p>
 
   <div class="cards">
     <div class="card">
-      <span class="num">Guided / One target per kind</span>
-      <h3>Sort first, decide once</h3>
-      <p>Audio, video and subtitle files are identified and grouped. Pick one compatible target for each group, review what will run, then start. A subtitle file is never offered a video target and never enters the picture pipeline.</p>
+      <span class="num">Guided / Nothing to choose</span>
+      <h3>Drop it and press go</h3>
+      <p>One file needs no target: the measurement never depended on one, so it is taken once and compared against everything that applies. A folder is sorted into audio, video and subtitles and given one target per kind. A subtitle file is never offered a video target and never enters the picture pipeline.</p>
     </div>
     <div class="card">
       <span class="num">Professional / One target per file</span>
@@ -282,7 +282,7 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
 
 <section id="targets">
   <p class="eyebrow">Where it is going</p>
-  <h2>Seven targets, and the one you write</h2>
+  <h2>Nine targets, and the one you write</h2>
   <p class="lede">Each carries the source its thresholds came from and the month they were read. The report prints both, every time.</p>
 
   <table>
@@ -301,7 +301,42 @@ Problems occur at <span class="r-head">03:42, 18:07, 41:16</span>
   </table>
 
   <div class="note">
-    <p><strong>Four of these are marked informal because there is no published specification to point at.</strong> Two are platforms that document nothing; the third is a set of subtitling conventions reasonable people disagree about — seventeen characters a second is comfortable for an adult viewer in English and far too fast for a children's programme; and the fourth is Spotify, whose −14 LUFS figure is published for <em>music playback normalisation</em> rather than as a podcast delivery requirement, which Spotify does not publish at all. Their thresholds are offered as a sanity check you should adjust, not as a promise about what anybody requires today. This tool measures your file exactly and compares it against a number you can see and change. It is not, and cannot be, an oracle for somebody else's current ingest rules, and the moment it presents itself as one it is lying to you.</p>
+    <p><strong>Six of these are marked informal because there is no published specification to point at.</strong> Two are platforms that document nothing; one is a set of subtitling conventions reasonable people disagree about — seventeen characters a second is comfortable for an adult viewer in English and far too fast for a children's programme; one is Spotify, whose −14 LUFS figure is published for <em>music playback normalisation</em> rather than as a podcast delivery requirement, which Spotify does not publish at all; and the last two are the music and lyric targets below, whose numbers were measured rather than quoted. Their thresholds are offered as a sanity check you should adjust, not as a promise about what anybody requires today. This tool measures your file exactly and compares it against a number you can see and change. It is not, and cannot be, an oracle for somebody else's current ingest rules, and the moment it presents itself as one it is lying to you.</p>
+  </div>
+
+  <h3 style="margin-top:36px">You do not have to know where it is going</h3>
+  <p>Every other way into this tool begins by asking for a target. That is the right question for somebody with a delivery specification open in another window and the wrong one for everybody else, whose honest answer is <em>I don't know, that's what I'm asking you</em>. Drop a file in without naming one and it measures once and reports where the file stands everywhere at once.</p>
+  <p>It is affordable because the measurement never depended on the target. Reading the file and comparing numbers to a profile are separate jobs, and only a target's own <span class="mono" style="font-size:14px">options</span> change the reading — so the targets are grouped by those and measured once per group. Three passes, about four seconds, on a three-minute track.</p>
+
+  <div class="diagram" style="padding:22px 24px">
+    <pre class="mono" style="margin:0;font-size:13.5px;line-height:1.75;overflow-x:auto">A03 Green Aura.wav
+03:05  wav  pcm_s16le 48 kHz stereo
+
+<b>What it is</b>
+  Loudness               -14.9 LUFS
+  True peak              -3.9 dBTP
+
+<b>Ready to deliver</b>
+  ✓ Music — streaming master
+
+<b>Not ready</b>
+  ✕ Audiobook — ACX        RMS level is -17.22 dBFS, wanted -23 to -18, and 4 others.
+  ✕ Broadcast — EBU R128   Integrated loudness is -14.9 LUFS, wanted -24 to -22.
+  ✕ Podcast — Spotify      Codec is pcm_s16le, wanted mp3 or aac.</pre>
+  </div>
+  <p class="caption">Each line that is not ready carries the correction for that destination, so “not ready for a podcast” and “fix it for a podcast” are the same click.</p>
+
+  <div class="two" style="margin-top:36px">
+    <div>
+      <h3>A song had nowhere to go</h3>
+      <p>The audio targets were an audiobook specification, a broadcast specification and a podcast specification. Somebody holding a finished track was asked to choose between three wrong answers — and the −14 LUFS figure everybody wanted was sitting inside the <em>podcast</em> profile with a note explaining that it is really a music number.</p>
+      <p><strong>Loudness does not fail a music master.</strong> Streaming platforms normalise: they measure the file and turn it down. Failing a record for being loud would be this tool inventing a rule nobody enforces, so loudness warns at the edges and explains why, while true peak fails — because that is the one that distorts after a lossy encode.</p>
+    </div>
+    <div>
+      <h3>Lyrics are not subtitles</h3>
+      <p>A subtitle's timing is a reading budget its author controls. A lyric's belongs to the song: the line lands when it is sung and leaves when the next arrives. A subtitle still on screen after twenty seconds is a fault; a lyric held through an instrumental is the normal case.</p>
+      <p>So the lyric target checks what can still be wrong — a line nobody could see, a line that never leaves, text too wide for the frame — and leaves the timing alone. Its numbers were set by measuring seventeen real lyric videos and placing every threshold outside the range they occupy, so it catches a mistake rather than a style. That corpus is one tool and one artist, which is the honest size of the claim.</p>
+    </div>
   </div>
 
   <h3 style="margin-top:36px">Provenance sits on the rule, not the target</h3>
