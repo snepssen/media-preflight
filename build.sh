@@ -49,12 +49,18 @@ build_pyz() {
 
   # A build nobody ran is a build that does not work. Prove the archive
   # executes and answers before calling it finished.
+  #
+  # It counts the targets rather than checking which one comes first. Pinning
+  # the first line to "acx" broke the build the day a target was added that
+  # sorts ahead of it — a green build turning red because the tool grew.
   local listed
-  listed="$("$BUILD/media-preflight.pyz" targets | head -1)"
-  case "$listed" in
-    acx*) say "media-preflight.pyz  ($(du -h "$BUILD/media-preflight.pyz" | cut -f1)) — runs, lists targets" ;;
-    *) echo "the .pyz did not answer 'targets' as expected: $listed" >&2; exit 1 ;;
-  esac
+  listed="$("$BUILD/media-preflight.pyz" targets | grep -c . || true)"
+  if [ "${listed:-0}" -ge 5 ]; then
+    say "media-preflight.pyz  ($(du -h "$BUILD/media-preflight.pyz" | cut -f1)) — runs, lists $listed targets"
+  else
+    echo "the .pyz did not answer 'targets' as expected: $listed lines" >&2
+    exit 1
+  fi
 }
 
 build_app() {

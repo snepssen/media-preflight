@@ -682,3 +682,66 @@ class WhereDoesThisStand(unittest.TestCase):
             {"status": "fail", "label": "Rate", "actual": "1", "required": "2"},
             {"status": "warn", "label": "Level", "actual": "3", "required": "4"}]}
         self.assertIn("2 others", survey.headline(envelope))
+
+
+class AWarningInsideTheBand(unittest.TestCase):
+    """A sentence must not argue with its own numbers."""
+
+    def rule(self):
+        return {"id": "l", "metric": "integrated_lufs", "unit": "LUFS",
+                "label": "Integrated loudness", "min": -16.0, "max": -12.0,
+                "warn_min": -15.0, "severity": "warn"}
+
+    def test_the_inner_band_is_marked_where_it_is_decided(self):
+        status, detail = checks.judge(self.rule(), -15.3)
+        self.assertEqual(status, "warn")
+        self.assertTrue(detail.endswith(checks.INNER))
+
+    def test_a_real_breach_is_not_marked(self):
+        status, detail = checks.judge(self.rule(), -20.0)
+        self.assertFalse(detail.endswith(checks.INNER))
+
+    def test_the_marker_never_reaches_a_finding(self):
+        finding = checks.check(self.rule(), {}, {"integrated_lufs": -15.3})
+        self.assertNotIn("\x00", finding["detail"])
+        self.assertTrue(finding["inner_band"])
+
+    def test_the_headline_does_not_quote_a_range_the_value_satisfies(self):
+        # "-15.3 LUFS, wanted -16 to -12 LUFS" is a sentence whose own
+        # numbers contradict it: -15.3 is inside that range.
+        finding = checks.check(self.rule(), {}, {"integrated_lufs": -15.3})
+        said = survey.headline({"findings": [finding]})
+        self.assertNotIn("wanted", said)
+        self.assertIn("inside the band", said)
+
+    def test_a_plain_failure_still_states_what_was_wanted(self):
+        finding = checks.check(
+            {"id": "c", "metric": "audio_codec", "label": "Codec",
+             "one_of": ["mp3", "aac"]},
+            {"audio": {"codec": "pcm_s16le"}}, {})
+        said = survey.headline({"findings": [finding]})
+        self.assertIn("wanted mp3 or aac", said)
+
+
+class CorrectingNeedsSomewhereToCorrectTo(unittest.TestCase):
+    """Measuring can answer without a target; correcting cannot."""
+
+    def args(self, target=None):
+        import argparse
+        return argparse.Namespace(target=target)
+
+    def test_fix_refuses_and_says_what_to_do(self):
+        with self.assertRaises(preflight.PreflightError) as caught:
+            preflight.require_target(self.args(), "fix")
+        self.assertIn("preflight check", str(caught.exception))
+
+    def test_it_is_satisfied_by_a_target(self):
+        preflight.require_target(self.args("acx"), "fix")
+
+    def test_neither_subcommand_defaults_to_a_target_any_more(self):
+        # Both used to default to the generic web profile, which on a WAV
+        # printed a green tick standing on sixteen skipped checks.
+        parser = preflight.build_parser()
+        for argv in (["check", "f.wav"], ["fix", "f.wav"],
+                     ["batch", "folder"]):
+            self.assertIsNone(parser.parse_args(argv).target, argv[0])

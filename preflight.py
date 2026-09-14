@@ -289,6 +289,25 @@ def command_check(args):
     return _exit_code(envelope, args.strict)
 
 
+def require_target(args, verb, doing="correct towards"):
+    """Correcting needs a destination; measuring does not.
+
+    `check` can answer "where does this stand?" without being told anything.
+    `fix` and `batch --fix` cannot: correcting towards nowhere in particular
+    is not a smaller version of the job, it is a different one. They used to
+    fall back to the generic web profile, which on a folder of WAVs printed a
+    green tick against a video target.
+    """
+    if getattr(args, "target", None):
+        return
+    raise PreflightError(
+        "%s needs to know what to %s.\n"
+        "  See where the file stands first:  preflight check <file>\n"
+        "  Then pick one:                    preflight %s <file> --target <id>\n"
+        "  The list of targets:              preflight targets"
+        % (verb, doing, verb))
+
+
 def command_survey(args):
     """Measure once, and say where the file stands against every target."""
     if not args.quiet:
@@ -316,11 +335,12 @@ def command_survey(args):
 
 
 def command_fix(args):
+    require_target(args, "fix")
     check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_picture_notice(args.file, args.target, args.picture))
     facts, measurements, result, profile = run(
-        args.file, args.target or "web", progress=_progress(args),
+        args.file, args.target, progress=_progress(args),
         caption_path=args.captions, depth=args.picture,
         width_divide=args.width_divide)
     envelope = report.envelope(facts, measurements, result, profile)
@@ -400,6 +420,7 @@ def command_fix(args):
 
 def command_batch(args):
     """Check a folder, or a list of files, as one delivery."""
+    require_target(args, "batch", "check the delivery against")
     check_picture_flags(args)
     if not args.quiet:
         sys.stderr.write(_delivery_notice(args))
@@ -839,7 +860,7 @@ def build_parser():
         "batch", help="check a folder, or several files, as one delivery")
     batch_command.add_argument("files", nargs="+",
                                help="files and/or folders to check")
-    batch_command.add_argument("--target", "-t", default="web",
+    batch_command.add_argument("--target", "-t", default=None,
                                help="target profile id, or a path to a JSON "
                                     "profile")
     batch_command.add_argument("--recursive", "-r", action="store_true",

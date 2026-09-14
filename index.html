@@ -741,7 +741,10 @@ $("depth").addEventListener("change", () => {
 
 $("path").addEventListener("input", () => {
   clearTimeout(planTimer);
-  planTimer = setTimeout(refreshPicturePlan, 400);
+  planTimer = setTimeout(() => {
+    refreshPicturePlan();
+    refreshSurveyPlan();
+  }, 400);
 });
 let planTimer = null;
 
@@ -768,6 +771,7 @@ function setMode(next) {
   $("targetRow").style.display = next === "pro" ? "contents" : "none";
   $("targetNote").classList.toggle("hidden", next !== "pro");
   $("run").textContent = next === "pro" ? "Run" : "Check it";
+  if (next === "guided") refreshSurveyPlan();
   if (queue) renderQueue();
 }
 
@@ -786,6 +790,7 @@ $("modePro").addEventListener("click", () => setMode("pro"));
 // podcast" and "fix it for a podcast" are the same click.
 
 let survey = null;
+let surveyPlan = null;
 
 const SURVEY_NUMBERS = [
   ["integrated_lufs", "Loudness", "LUFS"],
@@ -796,6 +801,27 @@ const SURVEY_NUMBERS = [
   // Length is deliberately absent: the file line above already says 03:05,
   // and "185.88 s" is the same fact told worse.
 ];
+
+// What it will cost, on the button, before it is pressed. The tool states
+// this everywhere else it takes real time; the one place it did not was the
+// mode built for people who would not know to expect it.
+async function refreshSurveyPlan() {
+  const path = $("path").value.trim();
+  const run = $("run");
+  surveyPlan = null;
+  if (mode !== "guided" || !path) {
+    if (mode === "guided") run.textContent = "Check it";
+    return;
+  }
+  try {
+    const plan = await api("/survey_plan", { path });
+    if (plan.error_note) { run.textContent = "Check it"; return; }
+    surveyPlan = plan;
+    run.textContent = plan.seconds >= 20
+      ? `Check it — about ${spell(plan.seconds)}`
+      : "Check it";
+  } catch (error) { run.textContent = "Check it"; }
+}
 
 async function runSurvey(path) {
   busy(true);
@@ -1613,6 +1639,7 @@ $("drop").addEventListener("click", async () => {
       $("path").value = path;
       $("dropTitle").textContent = path.split(/[\\/]/).pop();
       refreshPicturePlan();
+      refreshSurveyPlan();
     }
   } catch (error) { fail(error.message); }
 });

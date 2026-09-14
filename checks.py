@@ -375,6 +375,10 @@ def check(rule, facts, measurements, locator=None):
         return finding
 
     status, detail = judge(rule, value)
+    # The marker is a wire between judge and the finding, not something a
+    # reader should ever meet.
+    finding["inner_band"] = detail.endswith(INNER)
+    detail = detail[:-len(INNER)] if finding["inner_band"] else detail
     finding["status"] = status
     finding["detail"] = detail
     if status in (FAIL, WARN):
@@ -416,13 +420,22 @@ def judge(rule, value):
         return severity, f"Below the floor by {low - value:.2f}."
     if high is not None and value > high:
         return severity, f"Over the ceiling by {value - high:.2f}."
+    # These two are the *inner* band: the value satisfies the requirement and
+    # is close enough to its edge to be worth saying so. Anything quoting the
+    # requirement back at somebody here produces a sentence that argues with
+    # itself — "-15.3 LUFS, wanted -16 to -12 LUFS" — so the flag lets a
+    # renderer choose the detail instead. INNER is appended and stripped by
+    # `check`; it never reaches a report.
     if warn_low is not None and value < warn_low:
         return WARN, f"Inside the band, but {warn_low - value:.2f} under the "\
-                     "comfortable range."
+                     "comfortable range." + INNER
     if warn_high is not None and value > warn_high:
         return WARN, f"Inside the band, but {value - warn_high:.2f} over the "\
-                     "comfortable range."
+                     "comfortable range." + INNER
     return PASS, ""
+
+
+INNER = "\x00inner"
 
 
 def locate(rule, value, facts, measurements, locator=None):
@@ -633,6 +646,10 @@ def check_set(rule, set_measurements):
         return finding
 
     status, detail = judge(rule, value)
+    # The marker is a wire between judge and the finding, not something a
+    # reader should ever meet.
+    finding["inner_band"] = detail.endswith(INNER)
+    detail = detail[:-len(INNER)] if finding["inner_band"] else detail
     finding["status"] = status
     finding["detail"] = detail
     if status in (FAIL, WARN):

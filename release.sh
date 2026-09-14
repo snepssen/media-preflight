@@ -173,18 +173,20 @@ CHECK="$BUILD/verify"
 rm -rf "$CHECK"; mkdir -p "$CHECK"
 
 ( cd "$CHECK" && tar -xzf "$DIST/media-preflight-$VERSION-linux.tar.gz" )
-out="$( "$CHECK/media-preflight-$VERSION/media-preflight" targets | head -1 )"
-case "$out" in
-  acx*) say "linux tarball unpacks and runs" ;;
-  *) echo "the linux tarball did not answer 'targets': $out" >&2; exit 1 ;;
-esac
+out="$( "$CHECK/media-preflight-$VERSION/media-preflight" targets | grep -c . || true )"
+if [ "${out:-0}" -ge 5 ]; then
+  say "linux tarball unpacks and runs, listing $out targets"
+else
+  echo "the linux tarball did not answer 'targets': $out lines" >&2; exit 1
+fi
 
 ( cd "$CHECK" && unzip -qo "$DIST/media-preflight-$VERSION-windows.zip" )
-out="$( python3 "$CHECK/media-preflight-$VERSION/media-preflight.pyz" targets | head -1 )"
-case "$out" in
-  acx*) say "windows archive unpacks and runs" ;;
-  *) echo "the windows archive did not answer 'targets': $out" >&2; exit 1 ;;
-esac
+out="$( python3 "$CHECK/media-preflight-$VERSION/media-preflight.pyz" targets | grep -c . || true )"
+if [ "${out:-0}" -ge 5 ]; then
+  say "windows archive unpacks and runs, listing $out targets"
+else
+  echo "the windows archive did not answer 'targets': $out lines" >&2; exit 1
+fi
 
 if [ -f "$DIST/Media-Preflight-$VERSION-macOS.zip" ]; then
   ( cd "$CHECK" && ditto -x -k "$DIST/Media-Preflight-$VERSION-macOS.zip" mac )

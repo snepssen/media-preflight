@@ -663,6 +663,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(estimate_run(body.get("intake"),
                                                body.get("assignments")))
 
+            if url.path == "/api/survey_plan":
+                # Asked before the button is pressed, not after. A survey of a
+                # feature reads every frame for every target that asks about
+                # the picture, and the person Guided mode exists for is
+                # exactly the one who should not discover that by waiting.
+                path = self._require_file(body)
+                try:
+                    return self._json(survey.plan(path))
+                except (survey.SurveyError, probe.ProbeError) as error:
+                    return self._json({"error_note": str(error)})
+
             if url.path == "/api/survey":
                 path = self._require_file(body)
                 return self._json({"job": survey_job(path, _depth(body))})

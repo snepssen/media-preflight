@@ -158,7 +158,6 @@ def run(path, ffmpeg=None, ffprobe=None, progress=None, caption_path=None,
             sample_rate=audio.get("sample_rate") or 48000)
 
     envelopes, done = [], 0
-    first_measurements = None
     for group in groups.values():
         share = 1.0 / len(groups)
         facts, measurements, _, _ = preflight.run(
@@ -166,8 +165,6 @@ def run(path, ffmpeg=None, ffprobe=None, progress=None, caption_path=None,
             progress=preflight._scaled(progress, done, done + share),
             caption_path=caption_path, depth=depth)
         done += share
-        if first_measurements is None:
-            first_measurements = measurements
         for profile in group:
             result = checks.evaluate(facts, measurements, profile, locator)
             envelope = report.envelope(facts, measurements, result, profile)
@@ -215,8 +212,22 @@ def headline(envelope):
     # re-capitalising turns "RMS level" into "Rms level" and "DC offset" into
     # "Dc offset", which is the kind of small wrongness that makes a tool look
     # like it does not know what it is talking about.
-    said = "%s is %s, wanted %s" % (worst["label"], worst["actual"],
-                                    worst["required"])
+    #
+    # `detail` is preferred where the check wrote one, because it is the only
+    # thing that can explain a warning raised by an inner band. Quoting the
+    # failing range for those produced "-15.3 LUFS, wanted -16 to -12 LUFS" —
+    # a sentence whose own numbers contradict it, since -15.3 is inside that
+    # range. What the check actually meant is already written down: "inside
+    # the band, but 0.30 under the comfortable range."
+    detail = (worst.get("detail") or "").strip()
+    if worst.get("inner_band") and detail:
+        # The value satisfies the requirement; only the detail can say what
+        # is wrong with it without contradicting itself.
+        said = "%s is %s — %s" % (worst["label"], worst["actual"],
+                                  detail[:1].lower() + detail[1:].rstrip("."))
+    else:
+        said = "%s is %s, wanted %s" % (worst["label"], worst["actual"],
+                                        worst["required"])
     rest = len(bad) + len(warned) - 1
     if rest:
         said += ", and %d other%s" % (rest, "" if rest == 1 else "s")
