@@ -6,6 +6,7 @@
   --eco-protoke: #71e5d2;
   --eco-tools: #ff765f;
   --eco-preflight: #9ae66e;
+  --eco-siphon: #7aa7ff;
   --eco-current: var(--eco-protoke);
   --eco-copy: var(--ink, #f3f0e3);
   --eco-rail-h: 48px;
@@ -19,6 +20,7 @@ body[data-project="tools-core"] {
   --eco-copy: var(--chalk, #f3f0e3);
 }
 body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
+body[data-project="siphon"] { --eco-current: var(--eco-siphon); }
 
 /* The five accents above are built for a dark ground and fail badly on a
    light one — measured against the lightest surface these pages use, the
@@ -37,6 +39,7 @@ body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
     --eco-protoke: #157565;
     --eco-tools: #cd1d00;
     --eco-preflight: #387614;
+    --eco-siphon: #1f5fbf;
   }
 }
 :root[data-theme="light"] {
@@ -45,6 +48,7 @@ body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
   --eco-protoke: #157565;
   --eco-tools: #cd1d00;
   --eco-preflight: #387614;
+  --eco-siphon: #1f5fbf;
 }
 
 /* Wide diagrams and code samples own their scrolling inside their existing
@@ -150,6 +154,7 @@ body { overflow-x: clip; }
 .ecosystem-rail__links [data-project="protoke"] { --project-accent: var(--eco-protoke); }
 .ecosystem-rail__links [data-project="tools-core"] { --project-accent: var(--eco-tools); }
 .ecosystem-rail__links [data-project="media-preflight"] { --project-accent: var(--eco-preflight); }
+.ecosystem-rail__links [data-project="siphon"] { --project-accent: var(--eco-siphon); }
 
 /* Existing sticky section navigation sits below the shared rail. */
 .jump, .site-nav { top: var(--eco-rail-h) !important; }
