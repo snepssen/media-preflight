@@ -48,6 +48,16 @@ if [ "$SKIP_TESTS" -eq 0 ]; then
     python3 -m unittest discover -s tests -q 2>&1 | tail -20 >&2
     exit 1
   fi
+
+  # The project page is generated from docs/page.py and docs/ecosystem.json.
+  # A hand edit to docs/index.html would be silently undone by the next build,
+  # so a stale page stops the release rather than shipping and then vanishing.
+  if python3 docs/build.py --check >/dev/null; then
+    say "the project page matches its catalogue"
+  else
+    echo "docs/index.html is out of date — run python3 docs/build.py" >&2
+    exit 1
+  fi
 fi
 
 step "Build"
