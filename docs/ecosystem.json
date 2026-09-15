@@ -1,0 +1,68 @@
+{
+  "brand": {
+    "label": "snepssen / workshop",
+    "url": "https://snepssen.github.io/tools-core/"
+  },
+  "grid": {
+    "kicker": "The wider workshop",
+    "heading": "Five tools, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, lyric video, delivery validation, and the small field tools that support all of them."
+  },
+  "projects": [
+    {
+      "slug": "gateway-forge",
+      "name": "Gateway Forge",
+      "url": "https://snepssen.github.io/gateway-forge/",
+      "index": "JOURNEYS",
+      "platforms": "macOS · Windows · Linux",
+      "glyph": "F10 ── F27",
+      "blurb": "Assemble guided sessions and keep published maps beside what was actually found."
+    },
+    {
+      "slug": "voice-forge",
+      "name": "Voice Forge",
+      "url": "https://snepssen.github.io/voice-forge/",
+      "index": "SPEECH",
+      "platforms": "macOS · Windows · Linux",
+      "glyph": "⌁ / həˈləʊ /",
+      "blurb": "A transparent Piper workbench for timing, pronunciation, and honest audio export."
+    },
+    {
+      "slug": "protoke",
+      "name": "Protoke",
+      "url": "https://snepssen.github.io/protoke/",
+      "index": "VIDEO",
+      "platforms": "macOS · Windows · Linux",
+      "glyph": "◤ w ◥",
+      "blurb": "Karaoke and narration video with a vector visor face that mouths every word."
+    },
+    {
+      "slug": "media-preflight",
+      "name": "Media Preflight",
+      "url": "https://snepssen.github.io/media-preflight/",
+      "index": "DELIVERY",
+      "platforms": "macOS · Windows · Linux",
+      "glyph": "✓ ≤ -3 dB",
+      "blurb": "Check a finished file against where it is going, and correct it without touching the original."
+    },
+    {
+      "slug": "siphon",
+      "name": "siphon",
+      "url": "https://snepssen.github.io/siphon/",
+      "index": "INTAKE",
+      "platforms": "macOS · Windows · Linux",
+      "glyph": "webm ⟶ mp3",
+      "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to."
+    },
+    {
+      "slug": "tools-core",
+      "name": "tools-core",
+      "url": "https://snepssen.github.io/tools-core/",
+      "index": "FIELD TOOLS",
+      "platforms": "Python · shell",
+      "glyph": "[ measure → keep ]",
+      "blurb": "Small utilities for audio inspection, corpus work, authoring, and repeatable checks.",
+      "go": "Open the toolbox →"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+  <p class="lede">An audiobook is thirty chapters and ACX accepts or rejects the title. Some of what it asks for is a property of the delivery and of no file in it.</p>
+
+  <div class="report" role="img" aria-label="A delivery report for five audiobook chapters: every file passes, the title does not.">
+<span class="r-head">5 files — Audiobook — ACX</span>
+
+<span class="r-fail">✕ Not ready — the failures below would be rejected.</span>
+<span class="r-dim">  0 of 5 files fail, 0 warn; the delivery itself has 1 failure and 1 warning of its own.</span>
+
+<span class="r-head">Across the delivery</span>
+<span class="r-fail">  ✕ Channel count across the title: 2 different: 1, 2  Required: ≤ 1</span>
+<span class="r-dim">      chapter-04.mp3</span>
+<span class="r-warn">  ⚠ Loudness spread across the title: 4 dB          Required: ≤ 3 dB</span>
+<span class="r-dim">      chapter-03.mp3</span>
+
+<span class="r-head">Files</span>
+<span class="r-pass">  ✓ chapter-01.mp3                             00:14  -22.8 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-02.mp3                             00:14  -22.8 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-03.mp3                             00:14  -18.8 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-04.mp3                             00:14  -22.8 dBFS RMS</span>
+<span class="r-pass">  ✓ chapter-05.mp3                             00:14  -22.8 dBFS RMS</span>
+  </div>
+  <p class="caption">Every file passes. The title does not — one chapter is stereo where the rest are mono, which a rule written against one file cannot see. A per-file check would clear all thirty chapters of a real title and let it be rejected on submission.</p>
+
+  <div class="two" style="margin-top:38px">
+    <div>
+      <h3>It names the file to fix</h3>
+      <p>Not the two extremes. When four chapters agree and a fifth is four decibels up, the quietest of the four is not at fault — it is the reference. Files further from the middle of the set than half its spread are named; when that describes nobody, as in a smooth ramp, both ends are.</p>
+      <h3 style="margin-top:26px">Chapter 2 before chapter 10</h3>
+      <p>A delivery is ordered. A report that lists chapter 10 second is one somebody has to re-sort in their head before they can read it.</p>
+    </div>
+    <div>
+      <h3>A missing chapter is visible from the names</h3>
+      <p><span class="mono" style="font-size:14px">chapter-01, -02, -04</span> is a delivery short one file, and nothing about any file in it is wrong. Only what actually looks like a sequence is checked — three or more files sharing a prefix, a suffix and a digit width — because a folder of unrelated names has no sequence to be missing from, and inventing one would produce a finding about nothing.</p>
+      <h3 style="margin-top:26px">Its own output stays out</h3>
+      <p>A folder checked twice would otherwise start checking the corrected copies it wrote the first time, and a corrected copy of a corrected copy is nobody's delivery.</p>
+      <h3 style="margin-top:26px">One bad file is not fatal</h3>
+      <p>A file that cannot be read is reported and the rest are checked. One broken file in thirty should not cost you the other twenty-nine.</p>
+      <h3 style="margin-top:26px">And it can correct one</h3>
+      <p>Correcting each file on its own is exactly what does not fix a set — every chapter above is inside ACX's band. So the delivery decides what its files should agree on: the majority settles the format questions, because a title is almost never wrong in the majority, and the <em>level</em> is settled by the target's band rather than the majority, since bringing four quiet chapters up to meet a loud fifth would satisfy the set rule by making every file wrong.</p>
+      <p>A stereo chapter downmixed to mono then comes back at a level nothing could have predicted, because how much a downmix costs depends on how alike the two channels were. So the delivery is measured and the files that landed off target are built again <em>from their sources</em> — however many rounds it takes, the number of lossy encodes stays at one.</p>
+    </div>
+  </div>

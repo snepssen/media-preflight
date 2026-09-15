@@ -1,0 +1,26 @@
+  <p class="lede">Python 3.10 or newer, standard library only. ffmpeg and ffprobe are located at runtime rather than bundled, and their absence is reported as a sentence with the install line for your platform.</p>
+
+<pre class="code"><span class="c"># something to double-click: a .app, a .pyz, a .desktop</span>
+./build.sh</pre>
+
+  <p style="margin-top:22px">The build bundles neither Python nor ffmpeg, and that is a decision rather than an omission. Bundling Python would mean a build-time dependency on a tool whose whole claim is that it needs nothing installed; bundling ffmpeg means eighty megabytes and somebody else's licensing decision. So the bundle removes the terminal, not the prerequisites — it looks for both, and when one is missing it says which, and prints the command that installs it.</p>
+
+<pre class="code"><span class="c"># the window — a local server and a page in your browser</span>
+python3 app.py
+
+<span class="c"># the command line</span>
+python3 preflight.py check finished.mp3 --target acx
+python3 preflight.py batch chapters/    --target acx
+python3 preflight.py batch chapters/    --target acx --fix
+python3 preflight.py fix   finished.mp3 --target acx --dry-run
+python3 preflight.py fix   finished.mp3 --target acx</pre>
+
+  <p style="margin-top:26px"><span class="mono" style="font-size:14px">check</span> exits 0 when the file passes, 1 when it fails, and 2 when the tool itself could not run — so it drops into a build script without parsing anything.</p>
+
+  <p>The window listens on <span class="mono" style="font-size:14px">127.0.0.1</span> with a token minted at startup. Your file is never uploaded: a browser cannot tell a local program where a dropped file lives, so the page asks the tool to open your system's own file dialog and the path never leaves the machine. That is not a workaround — it is the point.</p>
+
+  <div class="contact">
+    <a href="https://github.com/snepssen/media-preflight">Source on GitHub</a>
+    <a href="https://github.com/snepssen/media-preflight/blob/main/README.md">Read the README</a>
+    <a href="https://github.com/snepssen/media-preflight/blob/main/PROFILES.md">Write a target</a>
+  </div>

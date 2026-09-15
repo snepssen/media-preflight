@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""Build a project page from a catalogue.
+
+    python3 docs/build.py            writes docs/index.html
+    python3 docs/build.py --check    fails if index.html is out of date
+
+The page used to be hand-written HTML, which meant every addition was an edit
+in the middle of a document — and it is exactly how siphon's jump navigation
+ended up as a `<p>` nested inside the header rather than the `<nav>` the rest
+of the family uses, which is why it did not stick to the top of the window
+while the others did. Chrome that is retyped per project drifts per project.
+
+So the chrome is generated and the content is data:
+
+  ecosystem.json   the projects, shared byte-identically across every repo.
+                   Adding a project is one entry and a rebuild of each page.
+  page.py          this project's own content: sections, prose, figures.
+                   Adding a section is one dict.
+
+A section may carry structured `blocks` or a `body` naming an HTML partial in
+`sections/`. Both exist because the pages differ honestly: siphon's content is
+prose, figures and cards, which are worth having as data. Media Preflight's is
+meters, waveforms and annotated windows — markup with no regular shape, which
+in a Python string would lose every bit of editor help and gain nothing. The
+chrome is what drifts between projects, so the chrome is what is generated;
+a hand-drawn diagram is not improved by being retyped as a dict.
+
+The jump navigation is derived from the sections rather than written beside
+them, so a new section cannot be forgotten in the nav — the commonest way a
+hand-written page of this shape goes stale.
+
+Content is authored HTML. The catalogue is written by whoever owns the
+repository, so a paragraph may contain a link or an `<em>`; nothing here comes
+from outside.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+
+
+def load_ecosystem():
+    return json.loads((HERE / "ecosystem.json").read_text(encoding="utf-8"))
+
+
+def load_page():
+    """The catalogue, as a module so prose can be written in triple quotes."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("page", HERE / "page.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.PAGE
+
+
+# ---------------------------------------------------------------------------
+# The chrome every page in the family shares
+# ---------------------------------------------------------------------------
+
+def head(page):
+    meta = page["meta"]
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{meta['title']}</title>
+<meta name="description" content="{meta['description']}">
+<meta property="og:title" content="{meta['title']}">
+<meta property="og:description" content="{meta['og_description']}">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{meta['fonts']}">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ecosystem.css">
+</head>
+<body data-project="{meta['slug']}">
+"""
+
+
+def rail(ecosystem, slug):
+    brand = ecosystem["brand"]
+    links = "\n".join(
+        f'      <a data-project="{p["slug"]}" href="{p["url"]}">{p["name"]}</a>'
+        for p in ecosystem["projects"]
+    )
+    return f"""
+<div class="ecosystem-progress" aria-hidden="true"><span></span></div>
+<nav class="ecosystem-rail" aria-label="Snepssen project network">
+  <div class="ecosystem-rail__inner">
+    <a class="ecosystem-rail__brand" href="{brand['url']}"><span>{brand['label']}</span></a>
+    <div class="ecosystem-rail__links">
+{links}
+    </div>
+  </div>
+</nav>
+"""
+
+
+def jump(page):
+    """Derived from the sections, so a new section cannot be left out of it.
+
+    A top-level `<nav>`, outside the wrap — `position: sticky` is measured
+    against the nearest scrolling ancestor, so one nested inside a header
+    scrolls away with that header instead of staying put.
+    """
+    items = "\n".join(
+        f'      <li><a href="#{section["id"]}">{section["jump"]}</a></li>'
+        for section in page["sections"] if section.get("jump")
+    )
+    return f"""
+<nav class="jump" aria-label="Jump to a section">
+  <div class="wrap">
+    <a class="mark" href="#top">{page['meta']['name']}</a>
+    <ul>
+{items}
+    </ul>
+  </div>
+</nav>
+"""
+
+
+def grid(ecosystem, slug):
+    """The closing grid, in the form the whole family uses.
+
+    `data-eco-reveal` is what ecosystem.js watches to fade the cards in; siphon
+    was hand-written without it and so its grid never animated. That is the
+    kind of difference a generated chrome exists to stop.
+    """
+    copy = ecosystem["grid"]
+    cards = []
+    for number, project in enumerate(ecosystem["projects"], start=1):
+        here = ' aria-current="page"' if project["slug"] == slug else ""
+        cards.append(f"""    <a class="ecosystem-card" data-project="{project['slug']}" href="{project['url']}"{here}>
+      <div class="ecosystem-card__index"><span>{number:02d} / {project['index']}</span><span>{project['platforms']}</span></div>
+      <div class="ecosystem-card__glyph" aria-hidden="true">{project['glyph']}</div>
+      <h3>{project['name']}</h3>
+      <p>{project['blurb']}</p>
+      <span class="ecosystem-card__go">{project.get('go', f"Explore {project['name']} →")}</span>
+    </a>""")
+    joined = "\n".join(cards)
+    return f"""
+<section class="ecosystem-more" aria-labelledby="ecosystem-heading" data-eco-reveal>
+  <div class="ecosystem-more__head">
+    <div>
+      <p class="ecosystem-kicker">{copy['kicker']}</p>
+      <h2 id="ecosystem-heading">{copy['heading']}</h2>
+    </div>
+    <p class="ecosystem-more__intro">{copy['intro']}</p>
+  </div>
+  <div class="ecosystem-grid">
+{joined}
+  </div>
+</section>
+"""
+
+
+# ---------------------------------------------------------------------------
+# Blocks
+# ---------------------------------------------------------------------------
+
+def block(item):
+    kind = item["kind"]
+    if kind == "prose":
+        css = f' class="{item["class"]}"' if item.get("class") else ""
+        return "\n".join(f"  <p{css}>{text}</p>" for text in item["text"])
+    if kind == "heading":
+        return f'  <h3>{item["text"]}</h3>'
+    if kind == "figure":
+        return figure(item)
+    if kind == "report":
+        caption = (f'\n<p class="caption">{item["caption"]}</p>'
+                   if item.get("caption") else "")
+        return (f'  <div class="figure">\n<pre class="report mono">'
+                f'{item["text"]}</pre>{caption}\n</div>')
+    if kind == "cards":
+        cards = "\n".join(
+            f'    <div class="card"><h3>{card["title"]}</h3>'
+            f'<p class="mono">{card["formats"]}</p><p>{card["note"]}</p></div>'
+            for card in item["cards"]
+        )
+        return f'  <div class="cards">\n{cards}\n  </div>'
+    if kind == "raw":
+        return item["html"]
+    raise SystemExit(f"build.py does not know the block kind {kind!r}")
+
+
+def figure(item):
+    """A screenshot, with the dark variant swapped in by the browser."""
+    dark = (f'\n      <source srcset="{item["dark"]}" '
+            f'media="(prefers-color-scheme: dark)">' if item.get("dark") else "")
+    return f"""  <figure class="shot">
+    <picture>{dark}
+      <img src="{item['light']}" alt="{item['alt']}" width="{item['width']}"
+           height="{item['height']}" loading="{item.get('loading', 'lazy')}"
+           decoding="async">
+    </picture>
+    <figcaption>{item['caption']}</figcaption>
+  </figure>"""
+
+
+def header(page):
+    meta = page["meta"]
+    stats = "\n".join(f"    <span>{stat}</span>" for stat in meta["stats"])
+    blocks = "\n".join(block(item) for item in page.get("header_blocks", []))
+    blocks = blocks + "\n" if blocks else ""
+    return f"""
+<div class="wrap">
+<header id="top">
+  <span class="badge"><span class="dot"></span>{meta['badge']}</span>
+  <h1>{meta['name']}</h1>
+  <p class="subhead">{meta['subhead']}</p>
+  <div class="headmeta">
+{stats}
+  </div>
+</header>
+</div>
+{jump(page)}
+<div class="wrap">
+{blocks}"""
+
+
+def section(item):
+    if item.get("body"):
+        # A partial: bespoke markup stays markup, in a file an editor
+        # understands, and the chrome around it is still generated.
+        path = HERE / "sections" / item["body"]
+        if not path.is_file():
+            raise SystemExit(f"build.py cannot find sections/{item['body']}")
+        blocks = path.read_text(encoding="utf-8").rstrip("\n")
+    else:
+        blocks = "\n".join(block(b) for b in item["blocks"])
+    identifier = f' id="{item["id"]}"' if item.get("id") else ""
+    identifier += f' {item["attrs"]}' if item.get("attrs") else ""
+    eyebrow = (f'  <p class="eyebrow">{item["eyebrow"]}</p>\n'
+               if item.get("eyebrow") else "")
+    title = f"  <h2>{item['heading']}</h2>\n" if item.get("heading") else ""
+    return f"""
+<section{identifier}>
+{eyebrow}{title}{blocks}
+</section>
+"""
+
+
+def footer(page):
+    """Plain `<footer>`, as the siblings have it.
+
+    Not `<footer class="contact">`: `.contact` is the flex row of link buttons
+    used inside a contact section, and siphon had picked it up by accident,
+    laying its two closing lines out side by side.
+    """
+    lines = page["footer"]
+    if len(lines) == 1:
+        body = f"  {lines[0]}"
+    else:
+        body = "\n".join(f"  <p>{line}</p>" for line in lines)
+    return f"""
+<footer>
+{body}
+</footer>
+
+</div>
+
+<script src="ecosystem.js"></script>
+</body>
+</html>
+"""
+
+
+def render():
+    page = load_page()
+    ecosystem = load_ecosystem()
+    slug = page["meta"]["slug"]
+    parts = [head(page), rail(ecosystem, slug), header(page)]
+    placed = False
+    for item in page["sections"]:
+        if item.get("grid"):          # the ecosystem grid, in its place
+            parts.append(grid(ecosystem, slug))
+            placed = True
+        else:
+            parts.append(section(item))
+    if not placed:                    # no marker: it closes the page
+        parts.append(grid(ecosystem, slug))
+    parts.append(footer(page))
+    return "".join(parts)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true",
+                        help="fail if index.html does not match the catalogue")
+    args = parser.parse_args()
+
+    built = render()
+    target = HERE / "index.html"
+
+    if args.check:
+        current = target.read_text(encoding="utf-8") if target.is_file() else ""
+        if current != built:
+            print("docs/index.html is out of date — run python3 docs/build.py",
+                  file=sys.stderr)
+            return 1
+        print("docs/index.html matches the catalogue.")
+        return 0
+
+    target.write_text(built, encoding="utf-8")
+    page = load_page()
+    print(f"docs/index.html — {len(built.splitlines())} lines, "
+          f"{len([s for s in page['sections'] if not s.get('grid')])} sections, "
+          f"{len(load_ecosystem()['projects'])} projects in the rail")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
