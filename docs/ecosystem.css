@@ -200,13 +200,6 @@ body { overflow-x: clip; }
   color: var(--muted, #999) !important;
   font-size: 16px;
 }
-.ecosystem-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 1px;
-  border: 1px solid var(--line, rgba(255,255,255,.14));
-  background: var(--line, rgba(255,255,255,.14));
-}
 .ecosystem-card {
   --card-accent: var(--eco-current);
   --mx: 50%;
@@ -277,42 +270,45 @@ body { overflow-x: clip; }
   font-size: 10px;
 }
 .ecosystem-card { container-type: inline-size; }
-/* A picture of the page, where a monospace glyph used to be. It sits at the
-   same place in the flow, pushed down by the auto margin so that titles and
-   blurbs stay aligned across cards whose text runs to different lengths.
-   The glyphs have not gone: each one is its picture's alt text, so a card
-   whose image does not arrive shows the mark it used to carry. That is what
-   the alt styling below is for. */
-.ecosystem-card__shot {
-  display: block;
-  margin: auto 0 20px;
-}
-.ecosystem-card__shot img {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 600 / 338;
-  object-fit: cover;
-  object-position: top center;
+/* Six cards, three across, two rows.
+
+   The column width is chosen to fit the glyph rather than the glyph being
+   squeezed into whatever column is left over. Five across gave each card
+   about 172px, and at 17cqw the type was 17% of that per line — eighteen
+   monospace characters of "[ measure → keep ]" want roughly 1.8 times the
+   card at that size, so it could not fit on one line at any window width and
+   came apart into four. Wrapping was not the bug; the width was.
+
+   auto-fit with a 300px floor gives three columns at full width and steps
+   down to two and then one, so the cards reflow into a new row instead of
+   the type reflowing inside a card. */
+.ecosystem-grid {
+  display: grid;
+  /* min() so a window narrower than one column shrinks the column instead of
+     overflowing the page, which bare minmax(300px, …) does. */
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 1px;
   border: 1px solid var(--line, rgba(255,255,255,.14));
-  background: var(--surface, #1e1f19);
-  opacity: .88;
-  /* Styling the alt text, for when there is no picture to draw: the glyph is
-     set the way it was set when it was the card's own mark. Only properties
-     that a loaded image ignores are used here. Laying the box out as a grid
-     and padding it does centre the alt text nicely, and also shrinks every
-     thumbnail that does arrive, which cost a set of captures to notice. */
+  background: var(--line, rgba(255,255,255,.14));
+}
+
+.ecosystem-card__glyph {
+  margin: auto 0 26px;
   color: var(--card-accent);
-  font: 400 clamp(15px, 9cqw, 26px)/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: -.04em;
-  text-align: center;
-  text-wrap: balance;
+  /* Sized against the card's own width, and set as large as the longest
+     glyph allows on one line. "[ measure → keep ]" is the one that decides
+     it: measured, it runs to about 10 times the font size, so 9cqw leaves
+     roughly 30px of slack in a three-column card and about 23px at the 19px
+     floor, which is where a 320px phone lands. */
+  font: 400 clamp(19px, 9cqw, 32px)/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: -.045em;
+  white-space: nowrap;
+  /* If a window is narrow enough that even one column cannot hold it, shrink
+     rather than break: a glyph split across lines is the thing being fixed. */
+  overflow: hidden;
+  text-overflow: clip;
 }
-.ecosystem-card:hover .ecosystem-card__shot img,
-.ecosystem-card:focus-visible .ecosystem-card__shot img { opacity: 1; }
-@media (prefers-reduced-motion: no-preference) {
-  .ecosystem-card__shot img { transition: opacity .22s ease; }
-}
+
 .ecosystem-card h3 {
   margin: 0 0 10px;
   color: inherit;
@@ -341,18 +337,13 @@ body { overflow-x: clip; }
   transform: none;
 }
 
-@media (max-width: 1180px) {
-  .ecosystem-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 900px) {
-  .ecosystem-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ecosystem-more__head { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .ecosystem-rail__inner { width: 100%; gap: 10px; padding-left: 14px; }
   .ecosystem-rail__brand span { display: none; }
   .ecosystem-rail__links a { padding-inline: 11px; }
-  .ecosystem-grid { grid-template-columns: 1fr; }
   .ecosystem-card { min-height: 245px; }
 }
 @media (prefers-reduced-motion: reduce) {
