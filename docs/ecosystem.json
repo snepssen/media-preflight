@@ -8,6 +8,24 @@
     "heading": "Five tools, one local-first practice.",
     "intro": "Move between guided-meditation authoring, measured speech, lyric video, delivery validation, and the small field tools that support all of them."
   },
+  "contact": {
+    "eyebrow": "Get in touch",
+    "heading": "If something looks wrong, say so",
+    "note": "There is no analytics here and no crash reporter, so a failure has no way of reaching me on its own.",
+    "issue_label": "Open an issue",
+    "channels": [
+      {
+        "label": "Telegram",
+        "detail": "@snepssen",
+        "href": "https://t.me/snepssen"
+      },
+      {
+        "label": "Email",
+        "detail": "snepssen@proton.me",
+        "href": "mailto:snepssen@proton.me"
+      }
+    ]
+  },
   "projects": [
     {
       "slug": "gateway-forge",
@@ -16,7 +34,8 @@
       "index": "JOURNEYS",
       "platforms": "macOS · Windows · Linux",
       "glyph": "F10 ── F27",
-      "blurb": "Assemble guided sessions and keep published maps beside what was actually found."
+      "blurb": "Assemble guided sessions and keep published maps beside what was actually found.",
+      "repo": "https://github.com/snepssen/gateway-forge"
     },
     {
       "slug": "voice-forge",
@@ -25,7 +44,8 @@
       "index": "SPEECH",
       "platforms": "macOS · Windows · Linux",
       "glyph": "⌁ / həˈləʊ /",
-      "blurb": "A transparent Piper workbench for timing, pronunciation, and honest audio export."
+      "blurb": "A transparent Piper workbench for timing, pronunciation, and honest audio export.",
+      "repo": "https://github.com/snepssen/voice-forge"
     },
     {
       "slug": "protoke",
@@ -34,7 +54,8 @@
       "index": "VIDEO",
       "platforms": "macOS · Windows · Linux",
       "glyph": "◤ w ◥",
-      "blurb": "Karaoke and narration video with a vector visor face that mouths every word."
+      "blurb": "Karaoke and narration video with a vector visor face that mouths every word.",
+      "repo": "https://github.com/snepssen/protoke"
     },
     {
       "slug": "media-preflight",
@@ -43,7 +64,8 @@
       "index": "DELIVERY",
       "platforms": "macOS · Windows · Linux",
       "glyph": "✓ ≤ -3 dB",
-      "blurb": "Check a finished file against where it is going, and correct it without touching the original."
+      "blurb": "Check a finished file against where it is going, and correct it without touching the original.",
+      "repo": "https://github.com/snepssen/media-preflight"
     },
     {
       "slug": "siphon",
@@ -52,7 +74,8 @@
       "index": "INTAKE",
       "platforms": "macOS · Windows · Linux",
       "glyph": "webm ⟶ mp3",
-      "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to."
+      "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to.",
+      "repo": "https://github.com/snepssen/siphon"
     },
     {
       "slug": "tools-core",
@@ -62,7 +85,8 @@
       "platforms": "Python · shell",
       "glyph": "[ measure → keep ]",
       "blurb": "Small utilities for audio inspection, corpus work, authoring, and repeatable checks.",
-      "go": "Open the toolbox →"
+      "go": "Open the toolbox →",
+      "repo": "https://github.com/snepssen/tools-core"
     }
   ]
 }

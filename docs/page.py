@@ -19,6 +19,7 @@ PAGE = {
         "fonts": "fonts.css",
         "description": "Local-first delivery validation for finished audio and video. Will this be accepted, and what exactly is wrong with it — with the timestamps, and a corrected copy that is measured again before it claims to be fixed.",
         "og_description": "Will this be accepted — and can you safely fix what is wrong? An inspector with carefully bounded, previewable transformations.",
+        "contact_note": 'A threshold that has moved, a target that has changed its rules, a measurement that disagrees with your own meter — all of those are worth an issue. The profiles carry the month they were read precisely so that they can be argued with.',
         "subhead": "Drop in a finished file — sound, picture, captions — and find out where it stands. Not against one target you had to name first, but against every one that applies, with the exact timestamp of everything that is wrong. Then, if you want, a corrected copy that is measured again from scratch before it claims to be fixed.",
         "stats": [
             "<b>9</b> delivery targets, and your own",
@@ -79,12 +80,6 @@ PAGE = {
         "body": "install.html",
     },
     {"grid": True},
-    {
-        "id": "contact",
-        "eyebrow": "If a number looks wrong",
-        "heading": "Say so",
-        "body": "contact.html",
-    },
     ],
     "footer": [
         "Media Preflight is MIT licensed. Your media stays on your machine and outside the repository; the test fixtures are generated from ffmpeg's own sources rather than committed.",

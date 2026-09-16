@@ -130,8 +130,9 @@ def jump(page):
     scrolls away with that header instead of staying put.
     """
     items = "\n".join(
-        f'      <li><a href="#{section["id"]}">{section["jump"]}</a></li>'
-        for section in page["sections"] if section.get("jump")
+        [f'      <li><a href="#{section["id"]}">{section["jump"]}</a></li>'
+         for section in page["sections"] if section.get("jump")]
+        + ['      <li><a href="#contact">Contact</a></li>']
     )
     return f"""
 <nav class="jump" aria-label="Jump to a section">
@@ -197,6 +198,47 @@ def grid(ecosystem, slug):
     return f"""
 <section class="ecosystem-more" aria-labelledby="ecosystem-heading" data-eco-reveal>
 {grid_inner(ecosystem, slug)}
+</section>
+"""
+
+
+def contact_inner(page, ecosystem):
+    """The same contact card on every page.
+
+    It had drifted further than anything else here: five pages, five eyebrows,
+    five headings and three different sets of links — issues and a profile on
+    two, Telegram and email on two others, all three with handles on the hub —
+    and siphon with no way to get in touch at all. None of that was a decision;
+    it is what writing the same section six times by hand produces.
+
+    So the wording and the channels come from ecosystem.json and are identical
+    everywhere. What stays the project's own is the one line underneath, which
+    is the only part that genuinely differs: Voice Forge has a Help sheet that
+    copies its version, Media Preflight's profiles carry the month they were
+    read. A project that has nothing particular to say gets the shared line.
+    """
+    meta = page["meta"]
+    copy = ecosystem["contact"]
+    project = next(p for p in ecosystem["projects"] if p["slug"] == meta["slug"])
+    links = [{"label": copy["issue_label"],
+              "detail": project["repo"].replace("https://", ""),
+              "href": f"{project['repo']}/issues"}] + copy["channels"]
+    rows = "\n".join(
+        f'    <a href="{link["href"]}">{link["label"]}'
+        f'<span>{link["detail"]} ↗</span></a>' for link in links)
+    return f"""  <p class="eyebrow">{copy['eyebrow']}</p>
+  <h2>{copy['heading']}</h2>
+  <p>{meta.get('contact_note') or copy['note']}</p>
+  <div class="contact-card">
+{rows}
+  </div>"""
+
+
+def contact(page, ecosystem):
+    """The card in its own section, for the pages render() builds."""
+    return f"""
+<section id="contact">
+{contact_inner(page, ecosystem)}
 </section>
 """
 
@@ -333,6 +375,7 @@ def render():
             parts.append(section(item))
     if not placed:                    # no marker: it closes the page
         parts.append(grid(ecosystem, slug))
+    parts.append(contact(page, ecosystem))
     parts.append(footer(page))
     return "".join(parts)
 

@@ -270,6 +270,52 @@ body { overflow-x: clip; }
   font-size: 10px;
 }
 .ecosystem-card { container-type: inline-size; }
+/* The contact card, shared so that it stops being re-invented.
+
+   It lives here rather than in each site's style.css for the same reason the
+   ecosystem grid does: a section written out six times drifts six ways, and
+   this one had — different headings, different links, and one page with no
+   contact section at all. The palette is still each site's own, through the
+   same variables with the same fallbacks used above.
+
+   Note this is not `.contact`, which every site already uses for its own row
+   of link buttons elsewhere on the page. */
+.contact-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 1px;
+  margin: 28px 0 0;
+  border: 1px solid var(--line, rgba(255,255,255,.14));
+  background: var(--line, rgba(255,255,255,.14));
+}
+.contact-card a {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 18px 20px;
+  background: var(--surface, #1e1f19);
+  color: var(--eco-copy) !important;
+  text-decoration: none !important;
+  font-weight: 600;
+  font-size: 15px;
+}
+.contact-card a span {
+  color: var(--muted, #999);
+  font-weight: 400;
+  font-size: 13px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* An address can be longer than the box it is in; break it rather than
+     letting it push the card wider than the page. */
+  overflow-wrap: anywhere;
+}
+.contact-card a:hover,
+.contact-card a:focus-visible { color: var(--eco-current) !important; }
+.contact-card a:hover span,
+.contact-card a:focus-visible span { color: var(--eco-current); }
+@media (prefers-reduced-motion: no-preference) {
+  .contact-card a { transition: color .16s ease; }
+}
+
 /* Six cards, three across, two rows.
 
    The column width is chosen to fit the glyph rather than the glyph being
