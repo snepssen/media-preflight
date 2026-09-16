@@ -59,8 +59,12 @@ def load_page():
 # The chrome every page in the family shares
 # ---------------------------------------------------------------------------
 
-def head(page):
+def head(page, ecosystem):
     meta = page["meta"]
+    # Open Graph wants absolute URLs, and the one place that knows this page's
+    # address is the catalogue every page already shares.
+    site = next(p["url"] for p in ecosystem["projects"]
+                if p["slug"] == meta["slug"])
     # Gateway Forge and Voice Forge never carried Open Graph tags; the
     # description they do have serves, rather than leaving a link preview bare.
     og = meta.get("og_description") or meta["description"]
@@ -85,6 +89,12 @@ def head(page):
 <meta property="og:title" content="{meta['title']}">
 <meta property="og:description" content="{og}">
 <meta property="og:type" content="website">
+<meta property="og:url" content="{site}">
+<meta property="og:image" content="{site}preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The {meta['name']} page">
+<meta name="twitter:card" content="summary_large_image">
 {preconnect}<link rel="stylesheet" href="{meta['fonts']}">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="ecosystem.css">
@@ -313,7 +323,7 @@ def render():
     page = load_page()
     ecosystem = load_ecosystem()
     slug = page["meta"]["slug"]
-    parts = [head(page), rail(ecosystem, slug), header(page)]
+    parts = [head(page, ecosystem), rail(ecosystem, slug), header(page)]
     placed = False
     for item in page["sections"]:
         if item.get("grid"):          # the ecosystem grid, in its place
