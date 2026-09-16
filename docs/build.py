@@ -157,11 +157,16 @@ def grid_inner(ecosystem, slug):
         # A picture of the page rather than a glyph, and keyed on the reader's
         # theme the same way siphon's figures are: a dark thumbnail on a light
         # page is the one thing that would look obviously wrong.
+        # The glyph is the alt text, which is also where it goes on looking
+        # like itself: alt is what a card shows when the picture does not
+        # arrive, so a reader with images off gets `webm ⟶ mp3` back, in the
+        # place the glyph used to occupy.
+        glyph = project["glyph"].replace('"', "&quot;")
         cards.append(f"""    <a class="ecosystem-card" data-project="{project['slug']}" href="{project['url']}"{here}>
       <div class="ecosystem-card__index"><span>{number:02d} / {project['index']}</span><span>{project['platforms']}</span></div>
       <picture class="ecosystem-card__shot">
         <source srcset="thumbs/{project['slug']}-dark.webp" media="(prefers-color-scheme: dark)">
-        <img src="thumbs/{project['slug']}-light.webp" alt="The {project['name']} page"
+        <img src="thumbs/{project['slug']}-light.webp" alt="{glyph}"
              width="600" height="338" loading="lazy" decoding="async">
       </picture>
       <h3>{project['name']}</h3>

@@ -280,8 +280,9 @@ body { overflow-x: clip; }
 /* A picture of the page, where a monospace glyph used to be. It sits at the
    same place in the flow, pushed down by the auto margin so that titles and
    blurbs stay aligned across cards whose text runs to different lengths.
-   The glyphs are still in ecosystem.json, and in the history, if they are
-   ever wanted back. */
+   The glyphs have not gone: each one is its picture's alt text, so a card
+   whose image does not arrive shows the mark it used to carry. That is what
+   the alt styling below is for. */
 .ecosystem-card__shot {
   display: block;
   margin: auto 0 20px;
@@ -296,6 +297,16 @@ body { overflow-x: clip; }
   border: 1px solid var(--line, rgba(255,255,255,.14));
   background: var(--surface, #1e1f19);
   opacity: .88;
+  /* Styling the alt text, for when there is no picture to draw: the glyph is
+     set the way it was set when it was the card's own mark. Only properties
+     that a loaded image ignores are used here. Laying the box out as a grid
+     and padding it does centre the alt text nicely, and also shrinks every
+     thumbnail that does arrive, which cost a set of captures to notice. */
+  color: var(--card-accent);
+  font: 400 clamp(15px, 9cqw, 26px)/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: -.04em;
+  text-align: center;
+  text-wrap: balance;
 }
 .ecosystem-card:hover .ecosystem-card__shot img,
 .ecosystem-card:focus-visible .ecosystem-card__shot img { opacity: 1; }
