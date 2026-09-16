@@ -35,7 +35,8 @@
       "platforms": "macOS · Windows · Linux",
       "glyph": "F10 ── F27",
       "blurb": "Assemble guided sessions and keep published maps beside what was actually found.",
-      "repo": "https://github.com/snepssen/gateway-forge"
+      "repo": "https://github.com/snepssen/gateway-forge",
+      "accent": "--eco-gateway"
     },
     {
       "slug": "voice-forge",
@@ -45,7 +46,8 @@
       "platforms": "macOS · Windows · Linux",
       "glyph": "⌁ / həˈləʊ /",
       "blurb": "A transparent Piper workbench for timing, pronunciation, and honest audio export.",
-      "repo": "https://github.com/snepssen/voice-forge"
+      "repo": "https://github.com/snepssen/voice-forge",
+      "accent": "--eco-voice"
     },
     {
       "slug": "protoke",
@@ -55,7 +57,8 @@
       "platforms": "macOS · Windows · Linux",
       "glyph": "◤ w ◥",
       "blurb": "Karaoke and narration video with a vector visor face that mouths every word.",
-      "repo": "https://github.com/snepssen/protoke"
+      "repo": "https://github.com/snepssen/protoke",
+      "accent": "--eco-protoke"
     },
     {
       "slug": "media-preflight",
@@ -65,7 +68,8 @@
       "platforms": "macOS · Windows · Linux",
       "glyph": "✓ ≤ -3 dB",
       "blurb": "Check a finished file against where it is going, and correct it without touching the original.",
-      "repo": "https://github.com/snepssen/media-preflight"
+      "repo": "https://github.com/snepssen/media-preflight",
+      "accent": "--eco-preflight"
     },
     {
       "slug": "siphon",
@@ -75,7 +79,8 @@
       "platforms": "macOS · Windows · Linux",
       "glyph": "webm ⟶ mp3",
       "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to.",
-      "repo": "https://github.com/snepssen/siphon"
+      "repo": "https://github.com/snepssen/siphon",
+      "accent": "--eco-siphon"
     },
     {
       "slug": "tools-core",
@@ -86,7 +91,8 @@
       "glyph": "[ measure → keep ]",
       "blurb": "Small utilities for audio inspection, corpus work, authoring, and repeatable checks.",
       "go": "Open the toolbox →",
-      "repo": "https://github.com/snepssen/tools-core"
+      "repo": "https://github.com/snepssen/tools-core",
+      "accent": "--eco-tools"
     }
   ]
 }

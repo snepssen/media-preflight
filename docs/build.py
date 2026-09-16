@@ -105,8 +105,12 @@ def head(page, ecosystem):
 
 def rail(ecosystem, slug):
     brand = ecosystem["brand"]
+    # The accent travels with the project, out of the catalogue, rather than
+    # from a list of selectors in the stylesheet that a new project has to be
+    # added to by hand. See grid_inner for what that cost.
     links = "\n".join(
-        f'      <a data-project="{p["slug"]}" href="{p["url"]}">{p["name"]}</a>'
+        f'      <a data-project="{p["slug"]}" style="--project-accent: var({p["accent"]})"'
+        f' href="{p["url"]}">{p["name"]}</a>'
         for p in ecosystem["projects"]
     )
     return f"""
@@ -156,6 +160,15 @@ def reindent(text, spaces):
 def grid_inner(ecosystem, slug):
     """The heading and the cards, without the section around them.
 
+    Each card carries its own accent, taken from the catalogue. It used to be
+    matched by a list of `.ecosystem-card[data-project="…"]` rules in the
+    stylesheet, and siphon was never added to that list — so its card fell
+    through to the default, which is the accent of whatever page is being
+    looked at. It was blue on siphon's own page and took on the colour of
+    every other page it appeared on, which is the one arrangement under which
+    nobody notices for weeks.
+
+
     tools-core is the hub, not a project page: its sections each carry their
     own .wrap and it has no jump navigation or masthead, so it does not go
     through render(). It does share these cards, though, and sharing them is
@@ -168,7 +181,7 @@ def grid_inner(ecosystem, slug):
         # A picture of the page rather than a glyph, and keyed on the reader's
         # theme the same way siphon's figures are: a dark thumbnail on a light
         # page is the one thing that would look obviously wrong.
-        cards.append(f"""    <a class="ecosystem-card" data-project="{project['slug']}" href="{project['url']}"{here}>
+        cards.append(f"""    <a class="ecosystem-card" data-project="{project['slug']}" style="--card-accent: var({project['accent']})" href="{project['url']}"{here}>
       <div class="ecosystem-card__index"><span>{number:02d} / {project['index']}</span><span>{project['platforms']}</span></div>
       <div class="ecosystem-card__glyph" aria-hidden="true">{project['glyph']}</div>
       <h3>{project['name']}</h3>

@@ -149,12 +149,10 @@ body { overflow-x: clip; }
 .ecosystem-rail__links a:hover::after,
 .ecosystem-rail__links a:focus-visible::after,
 .ecosystem-rail__links a[aria-current="page"]::after { transform: scaleX(1); }
-.ecosystem-rail__links [data-project="gateway-forge"] { --project-accent: var(--eco-gateway); }
-.ecosystem-rail__links [data-project="voice-forge"] { --project-accent: var(--eco-voice); }
-.ecosystem-rail__links [data-project="protoke"] { --project-accent: var(--eco-protoke); }
-.ecosystem-rail__links [data-project="tools-core"] { --project-accent: var(--eco-tools); }
-.ecosystem-rail__links [data-project="media-preflight"] { --project-accent: var(--eco-preflight); }
-.ecosystem-rail__links [data-project="siphon"] { --project-accent: var(--eco-siphon); }
+/* Each rail link and each card is given its accent inline, from the same
+   catalogue entry that gives it its name and its address. The list of
+   per-project selectors that used to live here had five of the six projects
+   in it, and the missing one showed the accent of whichever page it was on. */
 
 /* Existing sticky section navigation sits below the shared rail. */
 .jump, .site-nav { top: var(--eco-rail-h) !important; }
@@ -226,11 +224,6 @@ body { overflow-x: clip; }
 }
 .ecosystem-card:hover::before,
 .ecosystem-card:focus-visible::before { opacity: 1; }
-.ecosystem-card[data-project="gateway-forge"] { --card-accent: var(--eco-gateway); }
-.ecosystem-card[data-project="voice-forge"] { --card-accent: var(--eco-voice); }
-.ecosystem-card[data-project="protoke"] { --card-accent: var(--eco-protoke); }
-.ecosystem-card[data-project="tools-core"] { --card-accent: var(--eco-tools); }
-.ecosystem-card[data-project="media-preflight"] { --card-accent: var(--eco-preflight); }
 .ecosystem-card[aria-current="page"] {
   box-shadow: inset 0 3px 0 var(--card-accent);
 }
