@@ -276,22 +276,31 @@ body { overflow-x: clip; }
   letter-spacing: .02em;
   font-size: 10px;
 }
-/* The glyph is sized against the card, not the viewport.
-   It used to be clamp(34px, 4vw, 50px), and 4vw is a fifth of the wrong
-   number: five cards across mean each one is about a fifth of the page, so a
-   wider window grew the type without growing the box holding it. At 1280px
-   that is 50px of monospace inside a 139px column, and "[ measure -> keep ]"
-   came apart over four lines with the bracket alone on the last. cqw is the
-   same idea measured against the right thing. */
 .ecosystem-card { container-type: inline-size; }
-.ecosystem-card__glyph {
-  margin: auto 0 24px;
-  color: var(--card-accent);
-  font: 400 clamp(20px, 17cqw, 46px)/1.08 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: -.06em;
-  /* When it still has to wrap, wrap it evenly rather than filling the first
-     line and orphaning whatever is left. */
-  text-wrap: balance;
+/* A picture of the page, where a monospace glyph used to be. It sits at the
+   same place in the flow, pushed down by the auto margin so that titles and
+   blurbs stay aligned across cards whose text runs to different lengths.
+   The glyphs are still in ecosystem.json, and in the history, if they are
+   ever wanted back. */
+.ecosystem-card__shot {
+  display: block;
+  margin: auto 0 20px;
+}
+.ecosystem-card__shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 600 / 338;
+  object-fit: cover;
+  object-position: top center;
+  border: 1px solid var(--line, rgba(255,255,255,.14));
+  background: var(--surface, #1e1f19);
+  opacity: .88;
+}
+.ecosystem-card:hover .ecosystem-card__shot img,
+.ecosystem-card:focus-visible .ecosystem-card__shot img { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .ecosystem-card__shot img { transition: opacity .22s ease; }
 }
 .ecosystem-card h3 {
   margin: 0 0 10px;
