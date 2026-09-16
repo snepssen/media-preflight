@@ -16,7 +16,7 @@ PAGE = {
         "name": "Media Preflight",
         "title": "Media Preflight",
         "badge": "macOS · Windows · Linux · MIT",
-        "fonts": "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+        "fonts": "fonts.css",
         "description": "Local-first delivery validation for finished audio and video. Will this be accepted, and what exactly is wrong with it — with the timestamps, and a corrected copy that is measured again before it claims to be fixed.",
         "og_description": "Will this be accepted — and can you safely fix what is wrong? An inspector with carefully bounded, previewable transformations.",
         "subhead": "Drop in a finished file — sound, picture, captions — and find out where it stands. Not against one target you had to name first, but against every one that applies, with the exact timestamp of everything that is wrong. Then, if you want, a corrected copy that is measured again from scratch before it claims to be fixed.",

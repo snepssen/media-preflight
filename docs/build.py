@@ -64,6 +64,13 @@ def head(page):
     # Gateway Forge and Voice Forge never carried Open Graph tags; the
     # description they do have serves, rather than leaving a link preview bare.
     og = meta.get("og_description") or meta["description"]
+    # Only warm up a connection to a host the page actually uses. Self-hosted
+    # type leaves nothing to preconnect to, and a preconnect to Google would
+    # still hand it the visit even with the stylesheet gone.
+    remote_fonts = meta["fonts"].startswith("http")
+    preconnect = ('<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+                  '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+                  if remote_fonts else "")
     extra_styles = "".join(f'<link rel="stylesheet" href="{href}">\n'
                            for href in meta.get("styles", []))
     return f"""<!doctype html>
@@ -78,9 +85,7 @@ def head(page):
 <meta property="og:title" content="{meta['title']}">
 <meta property="og:description" content="{og}">
 <meta property="og:type" content="website">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="{meta['fonts']}">
+{preconnect}<link rel="stylesheet" href="{meta['fonts']}">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="ecosystem.css">
 {extra_styles}</head>
