@@ -104,7 +104,8 @@ def head(page, ecosystem):
 
 
 def rail(ecosystem, slug):
-    brand = ecosystem["brand"]
+    current = next(project for project in ecosystem["projects"]
+                   if project["slug"] == slug)
     # The accent travels with the project, out of the catalogue, rather than
     # from a list of selectors in the stylesheet that a new project has to be
     # added to by hand. See grid_inner for what that cost.
@@ -114,11 +115,87 @@ def rail(ecosystem, slug):
         for p in ecosystem["projects"]
     )
     return f"""
+<span class="ecosystem-page-top" id="page-top" aria-hidden="true"></span>
 <div class="ecosystem-progress" aria-hidden="true"><span></span></div>
 <nav class="ecosystem-rail" aria-label="Snepssen project network">
   <div class="ecosystem-rail__inner">
-    <a class="ecosystem-rail__brand" href="{brand['url']}"><span>{brand['label']}</span></a>
-    <div class="ecosystem-rail__links">
+    <button class="ecosystem-rail__brand" type="button" aria-expanded="false"
+            aria-controls="ecosystem-projects" aria-label="Open workshop projects">
+      <span class="ecosystem-mark" aria-hidden="true">
+        <!-- Flower of Life geometry adapted from Pd4u's CC0 Wikimedia SVG:
+             https://commons.wikimedia.org/wiki/File:Flower_of_Life_SVG.svg -->
+        <svg class="ecosystem-mark__wire" viewBox="-250 -250 500 500" focusable="false">
+          <defs>
+            <pattern id="ecosystem-flower-pattern" width="135.1" height="78" patternUnits="userSpaceOnUse">
+              <g class="ecosystem-mark__pattern-lines">
+                <circle r="78" />
+                <circle r="78" cx="135.1" />
+                <circle r="78" cy="78" />
+                <circle r="78" cx="135.1" cy="78" />
+                <path d="m0,0a78,78,0,0,1,0,78 78,78,0,0,1,135.1,0 78,78,0,0,1,0-78 78,78,0,0,1-135.1,0" />
+              </g>
+            </pattern>
+            <pattern id="ecosystem-flower-mask-pattern" width="135.1" height="78" patternUnits="userSpaceOnUse">
+              <g fill="none" stroke="#fff" stroke-width="8">
+                <circle r="78" />
+                <circle r="78" cx="135.1" />
+                <circle r="78" cy="78" />
+                <circle r="78" cx="135.1" cy="78" />
+                <path d="m0,0a78,78,0,0,1,0,78 78,78,0,0,1,135.1,0 78,78,0,0,1,0-78 78,78,0,0,1-135.1,0" />
+              </g>
+            </pattern>
+            <mask id="ecosystem-flower-mask" x="-250" y="-250" width="500" height="500" maskUnits="userSpaceOnUse">
+              <circle r="245.3" fill="none" stroke="#fff" stroke-width="8" />
+              <circle r="234" fill="none" stroke="#fff" stroke-width="8" />
+              <path fill="url(#ecosystem-flower-mask-pattern)" d="m0-234a78,78,0,0,1,67.55,39 78,78,0,0,1,67.55,39 78,78,0,0,1,67.55,117 78,78,0,0,1,0,78 78,78,0,0,1,-67.55,117 78,78,0,0,1,-67.55,39 78,78,0,0,1,-135.1,0 78,78,0,0,1,-67.55-39 78,78,0,0,1,-67.55-117 78,78,0,0,1,0-78 78,78,0,0,1,67.55-117 78,78,0,0,1,67.55-39 78,78,0,0,1,67.55-39z" />
+            </mask>
+            <clipPath id="ecosystem-flower-clip"><circle r="245.3" /></clipPath>
+            <radialGradient id="ecosystem-light-1">
+              <stop offset="0" stop-color="var(--eco-mark-c1)" />
+              <stop offset=".52" stop-color="var(--eco-mark-c1)" stop-opacity=".72" />
+              <stop offset="1" stop-color="var(--eco-mark-c1)" stop-opacity="0" />
+            </radialGradient>
+            <radialGradient id="ecosystem-light-2">
+              <stop offset="0" stop-color="var(--eco-mark-c2)" />
+              <stop offset=".46" stop-color="var(--eco-mark-c2)" stop-opacity=".66" />
+              <stop offset="1" stop-color="var(--eco-mark-c2)" stop-opacity="0" />
+            </radialGradient>
+            <radialGradient id="ecosystem-light-3">
+              <stop offset="0" stop-color="var(--eco-mark-c3)" />
+              <stop offset=".42" stop-color="var(--eco-mark-c3)" stop-opacity=".58" />
+              <stop offset="1" stop-color="var(--eco-mark-c3)" stop-opacity="0" />
+            </radialGradient>
+            <radialGradient id="ecosystem-light-4">
+              <stop offset="0" stop-color="var(--eco-mark-c4)" stop-opacity=".96" />
+              <stop offset=".34" stop-color="var(--eco-mark-c4)" stop-opacity=".42" />
+              <stop offset="1" stop-color="var(--eco-mark-c4)" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <g class="ecosystem-mark__base">
+            <circle r="245.3" />
+            <circle r="234" />
+            <path class="ecosystem-mark__field" fill="url(#ecosystem-flower-pattern)" d="m0-234a78,78,0,0,1,67.55,39 78,78,0,0,1,67.55,39 78,78,0,0,1,67.55,117 78,78,0,0,1,0,78 78,78,0,0,1,-67.55,117 78,78,0,0,1,-67.55,39 78,78,0,0,1,-135.1,0 78,78,0,0,1,-67.55-39 78,78,0,0,1,-67.55-117 78,78,0,0,1,0-78 78,78,0,0,1,67.55-117 78,78,0,0,1,67.55-39 78,78,0,0,1,67.55-39z" />
+          </g>
+          <g class="ecosystem-mark__colour" mask="url(#ecosystem-flower-mask)" clip-path="url(#ecosystem-flower-clip)">
+            <g class="ecosystem-mark__light-field">
+              <circle r="260" fill="var(--eco-mark-c0)" />
+              <ellipse cx="-112" cy="-92" rx="238" ry="182" fill="url(#ecosystem-light-1)" transform="rotate(-18 -112 -92)" />
+              <ellipse cx="118" cy="-42" rx="198" ry="144" fill="url(#ecosystem-light-2)" transform="rotate(31 118 -42)" />
+              <ellipse cx="-38" cy="132" rx="218" ry="158" fill="url(#ecosystem-light-3)" transform="rotate(47 -38 132)" />
+              <ellipse cx="58" cy="38" rx="116" ry="88" fill="url(#ecosystem-light-4)" transform="rotate(-36 58 38)" />
+            </g>
+          </g>
+        </svg>
+      </span>
+      <span class="ecosystem-rail__identity" aria-hidden="true">
+        <span class="ecosystem-rail__identity-path">
+          <span>Snepssen</span><i>/</i><span>Workshop</span><i>/</i>
+        </span>
+        <strong>{current['name']}</strong>
+      </span>
+      <span class="ecosystem-rail__chevron" aria-hidden="true"></span>
+    </button>
+    <div class="ecosystem-rail__links" id="ecosystem-projects" aria-hidden="true" inert>
 {links}
     </div>
   </div>
@@ -141,7 +218,7 @@ def jump(page):
     return f"""
 <nav class="jump" aria-label="Jump to a section">
   <div class="wrap">
-    <a class="mark" href="#top">{page['meta']['name']}</a>
+    <a class="mark" href="#page-top">~/snepssen</a>
     <ul>
 {items}
     </ul>

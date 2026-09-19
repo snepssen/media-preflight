@@ -9,7 +9,13 @@
   --eco-siphon: #7aa7ff;
   --eco-current: var(--eco-protoke);
   --eco-copy: var(--ink, #f3f0e3);
-  --eco-rail-h: 48px;
+  --eco-rail-h: 124px;
+  --eco-mark-size: 104px;
+  --eco-drawer-motion: 220ms;
+}
+:root.ecosystem-compact {
+  --eco-rail-h: 52px;
+  --eco-mark-size: 36px;
 }
 
 body[data-project="gateway-forge"] { --eco-current: var(--eco-gateway); }
@@ -55,6 +61,12 @@ body[data-project="siphon"] { --eco-current: var(--eco-siphon); }
    wrappers; never let one of them make the whole page wobble sideways. */
 body { overflow-x: clip; }
 
+.ecosystem-page-top {
+  display: block;
+  width: 0;
+  height: 0;
+}
+
 .ecosystem-progress {
   position: fixed;
   z-index: 1002;
@@ -85,77 +97,208 @@ body { overflow-x: clip; }
   font: 600 12px/1 system-ui, sans-serif;
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  isolation: isolate;
+  transition: min-height var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
 }
 .ecosystem-rail__inner {
+  position: relative;
   width: min(1180px, calc(100% - 40px));
   min-height: var(--eco-rail-h);
   margin-inline: auto;
   display: flex;
   align-items: center;
   gap: 22px;
+  transition: min-height var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
 }
 .ecosystem-rail__brand {
+  appearance: none;
+  border: 0;
+  padding: 10px 0;
+  background: transparent;
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 9px;
+  gap: 18px;
   color: inherit !important;
-  text-decoration: none !important;
+  font: inherit;
+  text-align: left;
   letter-spacing: .08em;
   text-transform: uppercase;
+  cursor: pointer;
 }
-.ecosystem-rail__brand::before {
+.ecosystem-rail__brand:focus-visible {
+  outline: 2px solid var(--eco-current);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+:root.ecosystem-compact .ecosystem-rail__brand {
+  gap: 12px;
+  padding-block: 8px;
+}
+.ecosystem-rail__identity {
+  --eco-identity-gap: 7px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--eco-identity-gap);
+  font-size: clamp(11px, 1.15vw, 14px);
+}
+.ecosystem-rail__identity-path {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--eco-identity-gap);
+  max-width: 230px;
+  overflow: hidden;
+  opacity: 1;
+  white-space: nowrap;
+  transition:
+    max-width var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
+    opacity 130ms ease,
+    margin-right var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+}
+:root.ecosystem-compact .ecosystem-rail__identity-path {
+  max-width: 0;
+  margin-right: calc(-1 * var(--eco-identity-gap));
+  opacity: 0;
+}
+.ecosystem-rail__identity i {
+  color: color-mix(in srgb, currentColor 38%, transparent);
+  font-style: normal;
+}
+.ecosystem-rail__identity strong {
+  color: var(--eco-current);
+  font-weight: 750;
+}
+.ecosystem-rail__chevron {
+  width: 8px;
+  height: 8px;
+  margin-left: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+}
+.ecosystem-rail.is-open .ecosystem-rail__chevron {
+  transform: translateY(2px) rotate(225deg);
+}
+.ecosystem-mark {
+  --eco-mark-reset: #fffdf2;
+  --eco-mark-c0: #060919;
+  --eco-mark-c1: #f1efe7;
+  --eco-mark-c2: #7187ff;
+  --eco-mark-c3: #171a38;
+  --eco-mark-c4: #cfd7ff;
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: var(--eco-mark-size);
+  height: var(--eco-mark-size);
+  color: var(--eco-mark-reset);
+  transition:
+    width var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
+    height var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+}
+.ecosystem-mark__wire {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ecosystem-mark__wire {
+  overflow: visible;
+  fill: none;
+}
+.ecosystem-mark__base,
+.ecosystem-mark__pattern-lines {
+  fill: none;
+  stroke: var(--eco-mark-reset);
+  stroke-width: 8;
+}
+.ecosystem-mark__colour {
+  opacity: 0;
+}
+.ecosystem-mark__base {
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--eco-mark-reset) 32%, transparent));
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .ecosystem-mark {
+    --eco-mark-reset: #17180f;
+  }
+}
+:root[data-theme="light"] .ecosystem-mark {
+  --eco-mark-reset: #17180f;
+}
+.ecosystem-rail__links {
+  position: absolute;
+  z-index: -1;
+  top: calc(100% - 1px);
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, currentColor 17%, transparent);
+  background: var(--ground, #151611);
+  box-shadow: 0 22px 55px color-mix(in srgb, #000 28%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  clip-path: inset(0 0 100% 0);
+  transform: translateY(-10px);
+  transform-origin: top;
+  transition:
+    opacity 150ms ease,
+    transform var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
+    clip-path var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
+    visibility 0s linear var(--eco-drawer-motion);
+}
+.ecosystem-rail.is-open .ecosystem-rail__links {
+  z-index: 1;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  clip-path: inset(0);
+  transform: none;
+  transition-delay: 0s;
+}
+.ecosystem-rail__links a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 58px;
+  padding: 14px 16px;
+  border-radius: 3px;
+  color: color-mix(in srgb, currentColor 68%, transparent) !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
+}
+.ecosystem-rail__links a::before {
   content: "";
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: var(--eco-current);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--eco-current) 15%, transparent),
-              0 0 18px var(--eco-current);
-}
-.ecosystem-rail__links {
-  min-width: 0;
-  margin-left: auto;
-  display: flex;
-  align-items: stretch;
-  align-self: stretch;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.ecosystem-rail__links::-webkit-scrollbar { display: none; }
-.ecosystem-rail__links a {
-  position: relative;
-  display: inline-flex;
   flex: 0 0 auto;
-  align-items: center;
-  padding: 0 14px;
-  color: color-mix(in srgb, currentColor 58%, transparent) !important;
-  text-decoration: none !important;
-  white-space: nowrap;
-}
-.ecosystem-rail__links a::after {
-  content: "";
-  position: absolute;
-  inset: auto 14px 0;
-  height: 2px;
+  border-radius: 50%;
   background: var(--project-accent, var(--eco-current));
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform .2s ease;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--project-accent, var(--eco-current)) 62%, transparent);
 }
 .ecosystem-rail__links a:hover,
 .ecosystem-rail__links a:focus-visible,
-.ecosystem-rail__links a[aria-current="page"] { color: inherit !important; }
-.ecosystem-rail__links a:hover::after,
-.ecosystem-rail__links a:focus-visible::after,
-.ecosystem-rail__links a[aria-current="page"]::after { transform: scaleX(1); }
+.ecosystem-rail__links a[aria-current="page"] {
+  color: inherit !important;
+  background: color-mix(in srgb, var(--project-accent, var(--eco-current)) 11%, transparent);
+}
 /* Each rail link and each card is given its accent inline, from the same
    catalogue entry that gives it its name and its address. The list of
    per-project selectors that used to live here had five of the six projects
    in it, and the missing one showed the accent of whichever page it was on. */
 
-/* Existing sticky section navigation sits below the shared rail. */
-.jump, .site-nav { top: var(--eco-rail-h) !important; }
+/* Existing sticky section navigation stays physically attached to the shared
+   rail while its arrival state compacts into navigation. */
+.jump, .site-nav {
+  top: var(--eco-rail-h) !important;
+  transition: top var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+}
 
 .ecosystem-more {
   position: relative;
@@ -380,12 +523,25 @@ body { overflow-x: clip; }
   .ecosystem-more__head { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .ecosystem-rail__inner { width: 100%; gap: 10px; padding-left: 14px; }
-  .ecosystem-rail__brand span { display: none; }
-  .ecosystem-rail__links a { padding-inline: 11px; }
+  :root { --eco-rail-h: 100px; --eco-mark-size: 82px; }
+  .ecosystem-rail__inner { width: calc(100% - 24px); }
+  .ecosystem-rail__brand { max-width: 100%; gap: 12px; }
+  .ecosystem-rail__identity { --eco-identity-gap: 4px; max-width: 210px; font-size: 10px; line-height: 1.5; }
+  .ecosystem-rail__chevron { margin-left: 0; }
+  .ecosystem-rail__links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ecosystem-rail__links a { min-height: 50px; padding: 11px 12px; font-size: 11px; }
   .ecosystem-card { min-height: 245px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ecosystem-ready [data-eco-reveal] { opacity: 1; transform: none; transition: none; }
-  .ecosystem-card::before, .ecosystem-rail__links a::after { transition: none; }
+  .ecosystem-card::before,
+  .ecosystem-rail__links,
+  .ecosystem-rail__links a,
+  .ecosystem-rail__chevron,
+  .ecosystem-rail,
+  .ecosystem-rail__inner,
+  .ecosystem-mark,
+  .ecosystem-rail__identity-path,
+  .jump,
+  .site-nav { transition: none; }
 }
