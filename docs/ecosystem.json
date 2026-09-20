@@ -5,8 +5,8 @@
   },
   "grid": {
     "kicker": "The wider workshop",
-    "heading": "Five tools, one local-first practice.",
-    "intro": "Move between guided-meditation authoring, measured speech, lyric video, delivery validation, and the small field tools that support all of them."
+    "heading": "Seven tools, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them."
   },
   "contact": {
     "eyebrow": "Get in touch",
@@ -81,6 +81,17 @@
       "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to.",
       "repo": "https://github.com/snepssen/siphon",
       "accent": "--eco-siphon"
+    },
+    {
+      "slug": "auto-sort",
+      "name": "auto-sort",
+      "url": "https://snepssen.github.io/auto-sort/",
+      "index": "FILING",
+      "platforms": "macOS · Windows · Linux",
+      "glyph": "↓ Downloads → ∅",
+      "blurb": "Empty the Downloads funnel into structure the folder taught it, and undo any of it.",
+      "repo": "https://github.com/snepssen/auto-sort",
+      "accent": "--eco-autosort"
     },
     {
       "slug": "tools-core",

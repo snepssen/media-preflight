@@ -7,6 +7,7 @@
   --eco-tools: #ff765f;
   --eco-preflight: #9ae66e;
   --eco-siphon: #7aa7ff;
+  --eco-autosort: #e79bd8;
   --eco-current: var(--eco-protoke);
   --eco-copy: var(--ink, #f3f0e3);
   --eco-rail-h: 124px;
@@ -27,6 +28,9 @@ body[data-project="tools-core"] {
 }
 body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
 body[data-project="siphon"] { --eco-current: var(--eco-siphon); }
+body[data-project="auto-sort"]{
+  --eco-current: var(--eco-autosort);
+}
 
 /* The five accents above are built for a dark ground and fail badly on a
    light one — measured against the lightest surface these pages use, the
