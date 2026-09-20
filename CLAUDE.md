@@ -350,6 +350,25 @@ either absence into an osascript dialog carrying the install command. If you
 are ever tempted to make the launcher import the application to check
 something, do not — it must run before there is a Python that can.
 
+**But an absence is offered, not just reported.** `bootstrap.py` is the folder
+convention (`siphon/bootstrap.py` is the worked example): it reads
+`platform_support.PROGRAMS` — the external programs as data, with the name each
+package manager knows each one by — lists what is missing with the exact
+command, and defaults to yes. `start.sh`, `start.bat` and the `.command` run
+`bootstrap.py --check` first and only turn into a conversation when something
+is actually absent; the `.command` delegates to `start.sh` so the two cannot
+drift. **It never invokes sudo**: where `MANAGERS[...]["needs_root"]` is true
+the line is printed to run by hand.
+
+Two things about the table. `Program.locator` exists because ffmpeg is not the
+first binary of that name on PATH but the first one carrying `ebur128`, so
+`find("ffmpeg")` calls `find_ffmpeg` rather than looking a name up — which is
+also why `bootstrap.unusable_build` prints a different sentence for a build
+that is present and will not do, or somebody reinstalls a package they already
+have and is told it is up to date. And `ffprobe` carries `provided_by="ffmpeg"`
+so one formula is not offered twice. `tools/check_ffmpeg.py` still exists and
+still answers the narrow question for the `.app` launcher.
+
 **`build.sh`'s `MODULES` list is checked by a test** against the modules that
 exist, because a bundle missing a file fails on somebody else's machine. Add a
 top-level module and that test fails until the build copies it.

@@ -1,8 +1,10 @@
 #!/bin/sh
-# Starts the local server and opens the window.
+# Starts the local server and opens the window, and offers to install anything
+# the tool needs first.
 #
-# It checks the two things the tool needs and does not ship, so that a missing
-# ffmpeg is a sentence rather than a window that never appears.
+# The check is separate from the offer on purpose: somebody who already has
+# everything should see the window, not a question. Only a missing program turns
+# this into a conversation, and the default answer to that is yes.
 cd "$(dirname "$0")" || exit 1
 
 for candidate in python3 python; do
@@ -15,11 +17,13 @@ done
 
 if [ -z "${PYTHON:-}" ]; then
   echo "Media Preflight needs Python 3.10 or newer, and could not find one." >&2
+  echo "On macOS:  brew install python" >&2
   exit 1
 fi
 
-if ! "$PYTHON" tools/check_ffmpeg.py; then
-  exit 1
+# Exit 0 means everything required is present. Anything else, ask.
+if ! "$PYTHON" bootstrap.py --check; then
+  "$PYTHON" bootstrap.py || exit 1
 fi
 
 exec "$PYTHON" app.py "$@"

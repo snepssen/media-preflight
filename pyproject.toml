@@ -36,4 +36,4 @@ Source = "https://github.com/snepssen/media-preflight"
 
 [tool.setuptools]
 py-modules = ["preflight", "app", "probe", "analysis", "checks", "profiles",
-              "corrections", "report", "platform_support"]
+              "corrections", "report", "platform_support", "bootstrap"]
