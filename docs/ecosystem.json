@@ -5,8 +5,8 @@
   },
   "grid": {
     "kicker": "The wider workshop",
-    "heading": "Seven tools, one local-first practice.",
-    "intro": "Move between guided-meditation authoring, measured speech, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them."
+    "heading": "Eight tools, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them."
   },
   "contact": {
     "eyebrow": "Get in touch",
@@ -92,6 +92,17 @@
       "blurb": "Empty the Downloads funnel into structure the folder taught it, and undo any of it.",
       "repo": "https://github.com/snepssen/auto-sort",
       "accent": "--eco-autosort"
+    },
+    {
+      "slug": "translate-core",
+      "name": "Interpreter",
+      "url": "https://snepssen.github.io/translate-core/",
+      "index": "INTERPRETING",
+      "platforms": "macOS · iPhone",
+      "glyph": "halb elf → 10:30",
+      "blurb": "Hear the table in English a few seconds behind, cut at the end of each thought, on your own phone.",
+      "repo": "https://github.com/snepssen/translate-core",
+      "accent": "--eco-interpreter"
     },
     {
       "slug": "tools-core",
