@@ -13,7 +13,12 @@ while the others did. Chrome that is retyped per project drifts per project.
 So the chrome is generated and the content is data:
 
   ecosystem.json   the projects, shared byte-identically across every repo.
-                   Adding a project is one entry and a rebuild of each page.
+                   Adding a project is one entry here in site-core and a sync.
+
+This file, ecosystem.json, ecosystem.css and ecosystem.js are copies. Their
+source is github.com/snepssen/site-core, and `./sync.sh` there carries a change
+into every project, rebuilds its page and pushes it. Edit them there, never in
+a project's docs/: a change made in one copy is undone by the next sync.
   page.py          this project's own content: sections, prose, figures.
                    Adding a section is one dict.
 
