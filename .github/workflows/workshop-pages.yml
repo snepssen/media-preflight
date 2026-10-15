@@ -1,0 +1,16 @@
+name: workshop pages
+
+# The page's shared files (build.py, ecosystem.css/js/json) come from
+# github.com/snepssen/site-core. This pulls them once a day, or on demand from
+# the Actions tab, rebuilds the page, and pushes only if something changed.
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    uses: snepssen/site-core/.github/workflows/sync-pages.yml@main
