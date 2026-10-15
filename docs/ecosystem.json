@@ -5,8 +5,8 @@
   },
   "grid": {
     "kicker": "The wider workshop",
-    "heading": "Eight tools, one local-first practice.",
-    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them."
+    "heading": "Eleven pieces, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice and one speech engine they share."
   },
   "contact": {
     "eyebrow": "Get in touch",
@@ -115,6 +115,42 @@
       "go": "Open the toolbox →",
       "repo": "https://github.com/snepssen/tools-core",
       "accent": "--eco-tools"
+    },
+    {
+      "slug": "voice-polyglot",
+      "name": "voice-polyglot",
+      "url": "https://github.com/snepssen/voice-polyglot",
+      "index": "VOICE",
+      "platforms": "Piper · eight languages",
+      "glyph": "fél tizenegy",
+      "blurb": "Teaching one small voice to speak eight languages, and releasing it for every app that speaks.",
+      "go": "Open the repository →",
+      "repo": "https://github.com/snepssen/voice-polyglot",
+      "accent": "--eco-polyglot"
+    },
+    {
+      "slug": "voice-core",
+      "name": "voice-core",
+      "url": "https://github.com/snepssen/voice-core",
+      "index": "ENGINE",
+      "platforms": "Swift · macOS · iOS",
+      "glyph": "text → /ipa/ → ids",
+      "blurb": "The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.",
+      "go": "Open the repository →",
+      "repo": "https://github.com/snepssen/voice-core",
+      "accent": "--eco-voicecore"
+    },
+    {
+      "slug": "site-core",
+      "name": "site-core",
+      "url": "https://github.com/snepssen/site-core",
+      "index": "PAGES",
+      "platforms": "Python · HTML",
+      "glyph": "one → every page",
+      "blurb": "The builder and project network every page here shares, kept in one place.",
+      "go": "Open the repository →",
+      "repo": "https://github.com/snepssen/site-core",
+      "accent": "--eco-sitecore"
     }
   ]
 }
