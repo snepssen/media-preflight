@@ -12,6 +12,7 @@
   --eco-polyglot: #ffd84f;
   --eco-voicecore: #e8a878;
   --eco-sitecore: #b9c3d0;
+  --eco-companion: #ff8ab8;
   --eco-current: var(--eco-protoke);
   --eco-copy: var(--ink, #f3f0e3);
   --eco-rail-h: 124px;
@@ -36,6 +37,7 @@ body[data-project="auto-sort"]{
   --eco-current: var(--eco-autosort);
 }
 body[data-project="translate-core"] { --eco-current: var(--eco-interpreter); }
+body[data-project="companion-core"] { --eco-current: var(--eco-companion); }
 
 /* The five accents above are built for a dark ground and fail badly on a
    light one — measured against the lightest surface these pages use, the
@@ -60,6 +62,7 @@ body[data-project="translate-core"] { --eco-current: var(--eco-interpreter); }
     --eco-polyglot: #6b5600;
     --eco-voicecore: #8f4718;
     --eco-sitecore: #475366;
+    --eco-companion: #a04e6e;
   }
 }
 :root[data-theme="light"] {
@@ -74,6 +77,7 @@ body[data-project="translate-core"] { --eco-current: var(--eco-interpreter); }
   --eco-polyglot: #6b5600;
   --eco-voicecore: #8f4718;
   --eco-sitecore: #475366;
+  --eco-companion: #a04e6e;
 }
 
 /* Wide diagrams and code samples own their scrolling inside their existing

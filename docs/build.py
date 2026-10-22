@@ -208,18 +208,23 @@ def rail(ecosystem, slug):
 """
 
 
-def jump(page):
+def jump(page, ecosystem):
     """Derived from the sections, so a new section cannot be left out of it.
 
     A top-level `<nav>`, outside the wrap — `position: sticky` is measured
     against the nearest scrolling ancestor, so one nested inside a header
     scrolls away with that header instead of staying put.
+
+    A project that records relationships in the catalogue gets one more link,
+    for the section render() places just before the grid. Projects without
+    that field keep the nav they had.
     """
-    items = "\n".join(
-        [f'      <li><a href="#{section["id"]}">{section["jump"]}</a></li>'
-         for section in page["sections"] if section.get("jump")]
-        + ['      <li><a href="#contact">Contact</a></li>']
-    )
+    links = [f'      <li><a href="#{section["id"]}">{section["jump"]}</a></li>'
+             for section in page["sections"] if section.get("jump")]
+    if project_relationships(ecosystem, page["meta"]["slug"]):
+        links.append('      <li><a href="#with">Beside it</a></li>')
+    links.append('      <li><a href="#contact">Contact</a></li>')
+    items = "\n".join(links)
     return f"""
 <nav class="jump" aria-label="Jump to a section">
   <div class="wrap">
@@ -382,7 +387,7 @@ def figure(item):
   </figure>"""
 
 
-def header(page):
+def header(page, ecosystem):
     meta = page["meta"]
     stats = "\n".join(f"    <span>{stat}</span>" for stat in meta["stats"])
     blocks = "\n".join(block(item) for item in page.get("header_blocks", []))
@@ -399,7 +404,7 @@ def header(page):
   </div>
 </header>
 </div>
-{jump(page)}
+{jump(page, ecosystem)}
 <div class="wrap">
 {blocks}"""
 
@@ -456,18 +461,62 @@ def footer(page):
 """
 
 
+def project_relationships(ecosystem, slug):
+    project = next(p for p in ecosystem["projects"] if p["slug"] == slug)
+    return project.get("relationships") or []
+
+
+def relationships(ecosystem, slug):
+    """How this piece is made from the others, from the shared catalogue.
+
+    The sentence is authored beside the project, with `{name}` where the other
+    project's name should be linked. It is the same arrangement as page prose:
+    written by whoever owns the catalogue, and not escaped. A project with no
+    relationships contributes nothing, so every other page stays as it was.
+    """
+    rels = project_relationships(ecosystem, slug)
+    if not rels:
+        return ""
+    known = {p["slug"]: p for p in ecosystem["projects"]}
+    paragraphs = []
+    for rel in rels:
+        other = known.get(rel.get("slug"))
+        text = rel.get("text") or ""
+        if other is None or other["slug"] == slug or "{name}" not in text:
+            raise SystemExit(
+                f"ecosystem.json: {slug} has a relationship that does not "
+                f"name another project and a sentence with {{name}} in it "
+                f"({rel.get('slug')!r})")
+        link = f'<a href="{other["url"]}">{other["name"]}</a>'
+        paragraphs.append(f"  <p>{text.replace('{name}', link)}</p>")
+    body = "\n".join(paragraphs)
+    return f"""
+<section id="with">
+  <p class="eyebrow">The workshop</p>
+  <h2>Made from the pieces beside it</h2>
+{body}
+</section>
+"""
+
+
 def render():
     page = load_page()
     ecosystem = load_ecosystem()
     slug = page["meta"]["slug"]
-    parts = [head(page, ecosystem), rail(ecosystem, slug), header(page)]
+    parts = [head(page, ecosystem), rail(ecosystem, slug), header(page, ecosystem)]
     placed = False
+    beside = relationships(ecosystem, slug)
     for item in page["sections"]:
         if item.get("grid"):          # the ecosystem grid, in its place
+            if beside:
+                parts.append(beside)
+                beside = ""
             parts.append(grid(ecosystem, slug))
             placed = True
         else:
             parts.append(section(item))
+    if beside:
+        parts.append(beside)
     if not placed:                    # no marker: it closes the page
         parts.append(grid(ecosystem, slug))
     parts.append(contact(page, ecosystem))

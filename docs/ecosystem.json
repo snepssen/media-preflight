@@ -5,8 +5,8 @@
   },
   "grid": {
     "kicker": "The wider workshop",
-    "heading": "Eleven pieces, one local-first practice.",
-    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice and one speech engine they share."
+    "heading": "Twelve pieces, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice and one speech engine they share."
   },
   "contact": {
     "eyebrow": "Get in touch",
@@ -103,6 +103,39 @@
       "blurb": "Hear the table in English a few seconds behind, cut at the end of each thought, on your own phone.",
       "repo": "https://github.com/snepssen/translate-core",
       "accent": "--eco-interpreter"
+    },
+    {
+      "slug": "companion-core",
+      "name": "companion-core",
+      "url": "https://snepssen.github.io/companion-core/",
+      "index": "COMPANION",
+      "platforms": "Mac · iPhone · iPad",
+      "glyph": "mic → visor",
+      "blurb": "A local voice companion for Mac, iPhone and iPad, with a protogen LED-visor face.",
+      "repo": "https://github.com/snepssen/companion-core",
+      "accent": "--eco-companion",
+      "relationships": [
+        {
+          "slug": "voice-core",
+          "text": "Depends on {name} for Piper."
+        },
+        {
+          "slug": "voice-forge",
+          "text": "Uses {name}'s English snepssen voice and its reading."
+        },
+        {
+          "slug": "voice-polyglot",
+          "text": "Uses {name}'s snepssen voice, the one the build bundles."
+        },
+        {
+          "slug": "translate-core",
+          "text": "Reuses {name}'s speech pipeline pieces, copied with small changes: Silero VAD, Voice, SampleBuffer, the model store and PromptCache."
+        },
+        {
+          "slug": "protoke",
+          "text": "Ports {name}'s protogen visor to Swift, drawn as an LED panel."
+        }
+      ]
     },
     {
       "slug": "tools-core",
