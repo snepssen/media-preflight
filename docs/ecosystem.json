@@ -94,25 +94,25 @@
       "accent": "--eco-autosort"
     },
     {
-      "slug": "translate-core",
+      "slug": "interpreter-forge",
       "name": "Interpreter",
-      "url": "https://snepssen.github.io/translate-core/",
+      "url": "https://snepssen.github.io/interpreter-forge/",
       "index": "INTERPRETING",
       "platforms": "macOS · iPhone",
       "glyph": "halb elf → 10:30",
       "blurb": "Hear the table in English a few seconds behind, cut at the end of each thought, on your own phone.",
-      "repo": "https://github.com/snepssen/translate-core",
+      "repo": "https://github.com/snepssen/interpreter-forge",
       "accent": "--eco-interpreter"
     },
     {
-      "slug": "companion-core",
-      "name": "companion-core",
-      "url": "https://snepssen.github.io/companion-core/",
+      "slug": "companion-forge",
+      "name": "companion-forge",
+      "url": "https://snepssen.github.io/companion-forge/",
       "index": "COMPANION",
       "platforms": "Mac · iPhone · iPad",
       "glyph": "mic → visor",
       "blurb": "A local voice companion for Mac, iPhone and iPad, with a protogen LED-visor face.",
-      "repo": "https://github.com/snepssen/companion-core",
+      "repo": "https://github.com/snepssen/companion-forge",
       "accent": "--eco-companion",
       "relationships": [
         {
@@ -128,7 +128,7 @@
           "text": "Uses {name}'s snepssen voice, the one the build bundles."
         },
         {
-          "slug": "translate-core",
+          "slug": "interpreter-forge",
           "text": "Reuses {name}'s speech pipeline pieces, copied with small changes: Silero VAD, Voice, SampleBuffer, the model store and PromptCache."
         },
         {
