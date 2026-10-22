@@ -13,12 +13,58 @@ from __future__ import annotations
 
 import datetime
 import json
+from pathlib import Path
 
 import chart
 import checks
 
+
+def _version_text(module_file, loader):
+    """The release number, from the VERSION file.
+
+    ``build.sh`` and ``release.sh`` name the archives from that file. The
+    report and the window read it too, so the number on a report is the
+    number on the release. A checkout and the .app have the file beside
+    this module. A zipapp has it inside the archive, which is why the build
+    copies it in. An installed copy has it in the package metadata, written
+    from this same value when the package was built.
+    """
+    path = Path(module_file).resolve().with_name("VERSION")
+    if path.is_file():
+        text = path.read_text(encoding="utf-8")
+    else:
+        archive = getattr(loader, "archive", None)
+        if archive:
+            text = _version_in_archive(archive)
+        else:
+            text = _installed_version()
+    text = text.strip()
+    if not text:
+        raise RuntimeError("VERSION is empty")
+    return text
+
+
+def _version_in_archive(archive):
+    import zipfile
+    try:
+        with zipfile.ZipFile(archive) as bundle:
+            return bundle.read("VERSION").decode("utf-8")
+    except KeyError:
+        raise RuntimeError("VERSION is missing from the archive") from None
+
+
+def _installed_version():
+    """The number setuptools wrote from VERSION when the package was built."""
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version("media-preflight")
+    except PackageNotFoundError:
+        raise RuntimeError(
+            "VERSION is missing beside the application") from None
+
+
 NAME = "Media Preflight"
-VERSION = "0.1.0"
+VERSION = _version_text(__file__, globals().get("__loader__"))
 SCHEMA = 1
 
 MARK = {"pass": "✓", "fail": "✕", "warn": "⚠", "skip": "·", "info": "i"}

@@ -4,7 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "media-preflight"
-version = "0.1.0"
+# The release number is the VERSION file. build.sh and release.sh name the
+# archives from it, and report.VERSION reads the same file into every report.
+dynamic = ["version"]
 description = "Local-first delivery validation for audio and video: will this be accepted, and what exactly is wrong with it?"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,3 +39,6 @@ Source = "https://github.com/snepssen/media-preflight"
 [tool.setuptools]
 py-modules = ["preflight", "app", "probe", "analysis", "checks", "profiles",
               "corrections", "report", "platform_support", "bootstrap"]
+
+[tool.setuptools.dynamic]
+version = {attr = "report.VERSION"}
