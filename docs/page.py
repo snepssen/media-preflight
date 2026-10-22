@@ -24,7 +24,7 @@ PAGE = {
         "stats": [
             "<b>9</b> delivery targets, and your own",
             "<b>1</b> decode per stream, every measurement",
-            "<b>442</b> checks passing",
+            "<b>447</b> checks passing",
             "<b>0</b> uploads, accounts, credits",
             "<b>Local-first.</b> Nothing leaves the machine",
         ],

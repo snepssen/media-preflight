@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 import zlib
 from pathlib import Path
 
@@ -155,7 +156,11 @@ class BuildTests(unittest.TestCase):
         text = (TOOL / "build.sh").read_text(encoding="utf-8")
         block = re.search(r"MODULES=\((.*?)\)", text, re.S)
         self.assertIsNotNone(block, "build.sh should declare MODULES")
-        return set(re.findall(r"[\w.]+\.(?:py|html)", block.group(1)))
+        names = set(re.findall(r"[\w.]+\.(?:py|html)", block.group(1)))
+        # VERSION has no suffix: the report reads it back out of the bundle.
+        if re.search(r"(?<![\w.])VERSION(?![\w.])", block.group(1)):
+            names.add("VERSION")
+        return names
 
     def test_the_build_carries_every_module_the_application_has(self):
         listed = self._module_list()
@@ -181,6 +186,57 @@ class BuildTests(unittest.TestCase):
     def test_the_version_is_a_version(self):
         version = (TOOL / "VERSION").read_text(encoding="utf-8").strip()
         self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        import report
+        self.assertEqual(report.VERSION, version)
+
+    def test_the_build_carries_the_version_file(self):
+        self.assertIn("VERSION", self._module_list())
+
+    def test_a_zipapp_reads_the_version_shipped_inside_it(self):
+        import report
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "media-preflight.pyz"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("VERSION", "9.8.7\n")
+
+            class Loader:
+                pass
+            Loader.archive = str(archive)
+
+            found = report._version_text(str(archive / "report.py"), Loader())
+        self.assertEqual(found, "9.8.7")
+
+    def test_an_archive_missing_its_version_refuses_to_guess(self):
+        import report
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "media-preflight.pyz"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("report.py", "")
+
+            class Loader:
+                pass
+            Loader.archive = str(archive)
+
+            with self.assertRaisesRegex(RuntimeError, "missing from the archive"):
+                report._version_text(str(archive / "report.py"), Loader())
+
+    def test_the_package_version_is_taken_from_the_report(self):
+        text = (TOOL / "pyproject.toml").read_text(encoding="utf-8")
+        self.assertIn('dynamic = ["version"]', text)
+        self.assertIn('version = {attr = "report.VERSION"}', text)
+        self.assertNotRegex(text, r'(?m)^\s*version\s*=\s*["\']')
+        manifest = (TOOL / "MANIFEST.in").read_text(encoding="utf-8")
+        self.assertIn("include VERSION", manifest)
+
+    def test_setuptools_resolves_the_version_file(self):
+        try:
+            from setuptools.config.expand import read_attr
+        except ImportError:
+            self.skipTest("setuptools reads the version, and it is not installed")
+        # What `version = {attr = "report.VERSION"}` evaluates.
+        resolved = read_attr("report.VERSION", root_dir=str(TOOL))
+        version = (TOOL / "VERSION").read_text(encoding="utf-8").strip()
+        self.assertEqual(resolved, version)
 
 
 class ProjectPageTests(unittest.TestCase):

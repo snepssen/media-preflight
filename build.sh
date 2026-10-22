@@ -25,11 +25,12 @@ BUILD="$ROOT/build"
 
 # Everything the application needs at runtime, and nothing else: no tests, no
 # fixtures, no build scripts. A bundle that carries its own test suite is a
-# bundle nobody checked the contents of.
+# bundle nobody checked the contents of. VERSION is the release number the
+# report reads back, so a built copy carries the file too.
 MODULES=(analysis.py app.py batch.py bootstrap.py captions.py chart.py \
          checks.py corrections.py index.html intake.py platform_support.py \
          preflight.py probe.py profiles.py report.py survey.py video.py \
-         __main__.py)
+         __main__.py VERSION)
 
 say() { printf '  %s\n' "$*"; }
 

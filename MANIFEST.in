@@ -1,0 +1,3 @@
+# The release number. report.py reads it at build time, so an sdist that
+# omitted it could not say which version it was.
+include VERSION
