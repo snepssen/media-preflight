@@ -32,7 +32,9 @@
       "name": "Gateway Forge",
       "url": "https://snepssen.github.io/gateway-forge/",
       "index": "JOURNEYS",
-      "platforms": "macOS · Windows · Linux",
+      "support": {
+        "macOS": "runs"
+      },
       "glyph": "F10 ── F27",
       "blurb": "Assemble guided sessions and keep published maps beside what was actually found.",
       "repo": "https://github.com/snepssen/gateway-forge",
@@ -52,7 +54,11 @@
       "name": "Voice Forge",
       "url": "https://snepssen.github.io/voice-forge/",
       "index": "SPEECH",
-      "platforms": "macOS · Windows · Linux",
+      "support": {
+        "macOS": "runs",
+        "Linux": "runs",
+        "Windows": "untested"
+      },
       "glyph": "⌁ / həˈləʊ /",
       "blurb": "A transparent Piper workbench for timing, pronunciation, and honest audio export.",
       "repo": "https://github.com/snepssen/voice-forge",
@@ -72,7 +78,11 @@
       "name": "Protoke",
       "url": "https://snepssen.github.io/protoke/",
       "index": "VIDEO",
-      "platforms": "macOS · Windows · Linux",
+      "support": {
+        "macOS": "runs",
+        "Linux": "tested",
+        "Windows": "tested"
+      },
       "glyph": "◤ w ◥",
       "blurb": "Karaoke and narration video with a vector visor face that mouths every word.",
       "repo": "https://github.com/snepssen/protoke",
@@ -83,7 +93,11 @@
       "name": "Media Preflight",
       "url": "https://snepssen.github.io/media-preflight/",
       "index": "DELIVERY",
-      "platforms": "macOS · Windows · Linux",
+      "support": {
+        "macOS": "runs",
+        "Linux": "tested",
+        "Windows": "tested"
+      },
       "glyph": "✓ ≤ -3 dB",
       "blurb": "Check a finished file against where it is going, and correct it without touching the original.",
       "repo": "https://github.com/snepssen/media-preflight",
@@ -94,7 +108,11 @@
       "name": "siphon",
       "url": "https://snepssen.github.io/siphon/",
       "index": "INTAKE",
-      "platforms": "macOS · Windows · Linux",
+      "support": {
+        "macOS": "runs",
+        "Linux": "tested",
+        "Windows": "untested"
+      },
       "glyph": "webm ⟶ mp3",
       "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to.",
       "repo": "https://github.com/snepssen/siphon",
@@ -105,7 +123,11 @@
       "name": "auto-sort",
       "url": "https://snepssen.github.io/auto-sort/",
       "index": "FILING",
-      "platforms": "macOS · Windows · Linux",
+      "support": {
+        "macOS": "runs",
+        "Linux": "runs",
+        "Windows": "tested"
+      },
       "glyph": "↓ Downloads → ∅",
       "blurb": "Empty the Downloads funnel into structure the folder taught it, and undo any of it.",
       "repo": "https://github.com/snepssen/auto-sort",
@@ -116,7 +138,12 @@
       "name": "Interpreter",
       "url": "https://snepssen.github.io/interpreter-forge/",
       "index": "INTERPRETING",
-      "platforms": "macOS · iPhone",
+      "support": {
+        "macOS": "runs",
+        "iPhone": "runs",
+        "iPad": "runs",
+        "Android": "untested"
+      },
       "glyph": "halb elf → 10:30",
       "blurb": "Hear the table in English a few seconds behind, cut at the end of each thought, on your own phone.",
       "repo": "https://github.com/snepssen/interpreter-forge",
@@ -143,7 +170,11 @@
       "name": "companion-forge",
       "url": "https://snepssen.github.io/companion-forge/",
       "index": "COMPANION",
-      "platforms": "Mac · iPhone · iPad",
+      "support": {
+        "macOS": "runs",
+        "iPhone": "runs",
+        "iPad": "runs"
+      },
       "glyph": "mic → visor",
       "blurb": "A local voice companion for Mac, iPhone and iPad, with a protogen LED-visor face.",
       "repo": "https://github.com/snepssen/companion-forge",
@@ -210,7 +241,12 @@
       "name": "voice-core",
       "url": "https://github.com/snepssen/voice-core",
       "index": "ENGINE",
-      "platforms": "Swift · macOS · iOS",
+      "stack": "Swift",
+      "support": {
+        "macOS": "runs",
+        "iOS": "runs",
+        "Linux": "tested"
+      },
       "glyph": "text → /ipa/ → ids",
       "blurb": "The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.",
       "go": "Open the repository →",
@@ -222,7 +258,11 @@
       "name": "speech-core",
       "url": "https://github.com/snepssen/speech-core",
       "index": "HEARING",
-      "platforms": "Swift · macOS · iOS",
+      "stack": "Swift",
+      "support": {
+        "macOS": "runs",
+        "iOS": "runs"
+      },
       "glyph": "mic → vad → store",
       "blurb": "The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.",
       "go": "Open the repository →",

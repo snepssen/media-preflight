@@ -194,7 +194,7 @@ h3 { margin: 28px 0 12px; }
 section { padding: 72px 0; }
 /* A wide table scrolls inside the section. It must not push the page sideways. */
 .wrap > section { overflow-x: auto; }
-section[id], header[id], h2[id], .ecosystem-more {
+section[id], header[id], h2[id], .fold[id], .ecosystem-more {
   scroll-margin-top: calc(var(--eco-bar) + 18px);
 }
 
@@ -503,8 +503,8 @@ section[id], header[id], h2[id], .ecosystem-more {
   z-index: -1;
   top: calc(var(--eco-bar) + 48px);
   right: max(28px, calc((100% - var(--eco-frame)) / 2));
-  width: 248px;
-  height: 248px;
+  width: 196px;
+  height: 196px;
   pointer-events: none;
   background: radial-gradient(circle at 50% 42%, #2a2a2e 0%, #161618 72%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 40px rgba(0, 0, 0, 0.16);
@@ -517,14 +517,54 @@ header.mast, header#top {
   padding: 36px 0 8px;
 }
 @media (min-width: 900px) {
-  body:not([data-project="tools-core"]) header.mast {
-    min-height: 300px;
-    padding-right: 280px;
+  /* header#top, with the id: the rule above names the id, and an id beats
+     any number of classes, so the room for the mark never applied before. */
+  body:not([data-project="tools-core"]) header#top.mast {
+    min-height: 260px;
+    padding-right: 244px;
     display: flex;
     flex-direction: column;
     justify-content: center;
   }
 }
+
+/* ------------------------------------------------------------- the folds */
+.folds > h2 { margin-bottom: 8px; }
+.fold { border-top: 1px solid var(--line); }
+.fold:last-of-type { border-bottom: 1px solid var(--line); }
+.fold > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title mark" "teaser mark";
+  column-gap: 16px;
+  row-gap: 4px;
+  padding: 18px 0;
+  cursor: pointer;
+  list-style: none;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after {
+  content: "+";
+  grid-area: mark;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  font: 400 18px/26px var(--eco-mono);
+  text-align: center;
+  transition: transform 160ms ease;
+}
+.fold[open] > summary::after { content: "−"; }
+.fold > summary:hover::after,
+.fold > summary:focus-visible::after { color: var(--eco-current); border-color: currentColor; }
+.fold > summary:focus-visible { outline: 2px solid var(--eco-current); outline-offset: 4px; }
+.fold__title { grid-area: title; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.fold__teaser { grid-area: teaser; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.fold__body { padding: 0 0 28px; }
+.fold__body > :first-child { margin-top: 0; }
+@media (prefers-reduced-motion: reduce) { .fold > summary::after { transition: none; } }
 
 /* -------------------------------------------------------------- the cards */
 .ecosystem-more {
@@ -675,31 +715,6 @@ header.mast, header#top {
 
 /* ------------------------------------------------- tools-core, same system */
 body[data-project="tools-core"]::before { content: none; display: none; }
-body[data-project="tools-core"] .site-nav {
-  position: fixed;
-  z-index: 1001;
-  top: 0;
-  right: max(24px, calc((100% - var(--eco-frame)) / 2));
-  left: auto;
-  width: auto;
-  height: var(--eco-bar);
-  display: flex;
-  align-items: center;
-  border: 0;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-body[data-project="tools-core"] .site-nav .wordmark { display: none; }
-body[data-project="tools-core"] .nav-inner { min-height: 0; gap: 0; width: auto; }
-body[data-project="tools-core"] .nav-links { gap: 16px; }
-body[data-project="tools-core"] .nav-links a {
-  color: var(--muted);
-  font: 500 13px/1 var(--eco-sans);
-  letter-spacing: 0;
-}
-body[data-project="tools-core"] .nav-links a:hover { color: var(--ink); }
-body[data-project="tools-core"] .ecosystem-rail__inner { padding-right: 248px; }
 body[data-project="tools-core"] .ecosystem-mark--piece {
   top: calc(var(--eco-bar) + 28px);
   right: 50%;
@@ -832,14 +847,6 @@ body[data-project="tools-core"] .wrap {
   body[data-project="tools-core"] .section-head,
   body[data-project="tools-core"] .project { grid-template-columns: 1fr; }
   .ecosystem-rail__identity-path { display: none; }
-  body[data-project="tools-core"] .ecosystem-rail__inner { padding-right: 0; }
-  body[data-project="tools-core"] .site-nav {
-    position: static;
-    height: auto;
-    padding: 8px 0 0;
-    right: auto;
-  }
-  body[data-project="tools-core"] .site-nav .wrap { width: min(var(--eco-frame), calc(100% - 48px)); }
   .wrap, .ecosystem-rail__inner { width: min(var(--eco-frame), calc(100% - 32px)); }
 }
 @media (max-width: 640px) {
