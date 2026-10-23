@@ -5,8 +5,8 @@
   },
   "grid": {
     "kicker": "The wider workshop",
-    "heading": "Twelve pieces, one local-first practice.",
-    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice and one speech engine they share."
+    "heading": "Thirteen pieces, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice, one speech engine and one hearing layer they share."
   },
   "contact": {
     "eyebrow": "Get in touch",
@@ -36,7 +36,16 @@
       "glyph": "F10 ── F27",
       "blurb": "Assemble guided sessions and keep published maps beside what was actually found.",
       "repo": "https://github.com/snepssen/gateway-forge",
-      "accent": "--eco-gateway"
+      "accent": "--eco-gateway",
+      "swift": {
+        "package": ".",
+        "uses": [
+          "voice-core"
+        ],
+        "checks": "swift run -q gfcheck && diff -rq .build/checkouts/voice-core/Sources/VoiceCore/Resources/espeak-ng-data Sources/GatewayTTS/Resources/espeak-ng-data",
+        "core": "GatewayCore",
+        "check": "gfcheck"
+      }
     },
     {
       "slug": "voice-forge",
@@ -47,7 +56,16 @@
       "glyph": "⌁ / həˈləʊ /",
       "blurb": "A transparent Piper workbench for timing, pronunciation, and honest audio export.",
       "repo": "https://github.com/snepssen/voice-forge",
-      "accent": "--eco-voice"
+      "accent": "--eco-voice",
+      "swift": {
+        "package": "macos",
+        "uses": [
+          "voice-core"
+        ],
+        "checks": "swift run -q vfcheck && ../scripts/check-shared-assets.sh",
+        "core": "VoiceForgeCore",
+        "check": "vfcheck"
+      }
     },
     {
       "slug": "protoke",
@@ -102,7 +120,23 @@
       "glyph": "halb elf → 10:30",
       "blurb": "Hear the table in English a few seconds behind, cut at the end of each thought, on your own phone.",
       "repo": "https://github.com/snepssen/interpreter-forge",
-      "accent": "--eco-interpreter"
+      "accent": "--eco-interpreter",
+      "swift": {
+        "package": "apple",
+        "uses": [
+          "voice-core",
+          "speech-core"
+        ],
+        "checks": "swift run -q tccheck && swift test",
+        "core": "InterpreterCore",
+        "check": "tccheck"
+      },
+      "relationships": [
+        {
+          "slug": "speech-core",
+          "text": "Takes ObjCExceptions, SileroVAD, SampleBuffer, ModelStore and PromptCache from {name}, at 0.5.0."
+        }
+      ]
     },
     {
       "slug": "companion-forge",
@@ -114,22 +148,32 @@
       "blurb": "A local voice companion for Mac, iPhone and iPad, with a protogen LED-visor face.",
       "repo": "https://github.com/snepssen/companion-forge",
       "accent": "--eco-companion",
+      "swift": {
+        "package": ".",
+        "uses": [
+          "voice-core",
+          "speech-core"
+        ],
+        "checks": "swift run -q cccheck",
+        "core": "CompanionCore",
+        "check": "cccheck"
+      },
       "relationships": [
         {
           "slug": "voice-core",
-          "text": "Depends on {name} for Piper."
-        },
-        {
-          "slug": "voice-forge",
-          "text": "Uses {name}'s English snepssen voice and its reading."
+          "text": "Speaks every language, English included, with the polyglot snepssen Piper voice through {name}."
         },
         {
           "slug": "voice-polyglot",
           "text": "Uses {name}'s snepssen voice, the one the build bundles."
         },
         {
+          "slug": "speech-core",
+          "text": "Takes ObjCExceptions, SileroVAD, SampleBuffer, ModelStore and PromptCache from {name}, at 0.5.0."
+        },
+        {
           "slug": "interpreter-forge",
-          "text": "Reuses {name}'s speech pipeline pieces, copied with small changes: Silero VAD, Voice, SampleBuffer, the model store and PromptCache."
+          "text": "Reuses {name}'s Voice, copied with small changes."
         },
         {
           "slug": "protoke",
@@ -172,6 +216,18 @@
       "go": "Open the repository →",
       "repo": "https://github.com/snepssen/voice-core",
       "accent": "--eco-voicecore"
+    },
+    {
+      "slug": "speech-core",
+      "name": "speech-core",
+      "url": "https://github.com/snepssen/speech-core",
+      "index": "HEARING",
+      "platforms": "Swift · macOS · iOS",
+      "glyph": "mic → vad → store",
+      "blurb": "The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.",
+      "go": "Open the repository →",
+      "repo": "https://github.com/snepssen/speech-core",
+      "accent": "--eco-speechcore"
     },
     {
       "slug": "site-core",

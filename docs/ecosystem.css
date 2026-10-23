@@ -1,6 +1,20 @@
-/* Shared across the snepssen project pages. Each site keeps its own type and
-   palette; this is the common navigation and discovery layer between them. */
+/* The workshop look. Every project page loads this after its own style.css,
+   so the shared palette, the one sticky bar, the measure and the cards win
+   when they disagree. Accents stay per project. Type is the system face:
+   nothing here asks a font CDN for the visit. */
+
+/* A length, not a ch, so it is resolved once against the body face and
+   inherited as pixels. Otherwise a heading's own 68ch is wider than the
+   frame, the paragraph's is not, and margin:auto centres them on
+   different left edges. */
+@property --prose {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 :root {
+  color-scheme: dark;
   --eco-gateway: #b69aff;
   --eco-voice: #ffbc52;
   --eco-protoke: #71e5d2;
@@ -13,44 +27,45 @@
   --eco-voicecore: #e8a878;
   --eco-sitecore: #b9c3d0;
   --eco-companion: #ff8ab8;
+  --eco-speechcore: #6ed9a0;
   --eco-current: var(--eco-protoke);
-  --eco-copy: var(--ink, #f3f0e3);
-  --eco-rail-h: 124px;
-  --eco-mark-size: 104px;
-  --eco-drawer-motion: 220ms;
-}
-:root.ecosystem-compact {
-  --eco-rail-h: 52px;
-  --eco-mark-size: 36px;
+  --ground: #121212;
+  --surface: #1c1c1e;
+  --raise: #2c2c2e;
+  --ink: #f5f5f7;
+  --chalk: #f5f5f7;
+  --muted: #c7c7cc;
+  --line: rgba(255, 255, 255, 0.12);
+  --body: #d2d2d6;
+  --body-2: #d2d2d6;
+  --faint: #c7c7cc;
+  --whisper: #c7c7cc;
+  --code: #f5f5f7;
+  --paper: #1c1c1e;
+  --paper-2: #2c2c2e;
+  --plate: #1c1c1e;
+  --well: #161616;
+  --sunken: #161616;
+  --nav-bg: rgba(18, 18, 18, 0.88);
+  --on-accent: #121212;
+  --grid-line: transparent;
+  --eco-copy: var(--ink);
+  --measure: 68ch;
+  --eco-bar: 56px;
+  --eco-frame: 1080px;
+  --eco-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --eco-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --eco-flower: #f5f5f7;
+  --serif: var(--eco-sans);
+  --sans: var(--eco-sans);
 }
 
-body[data-project="gateway-forge"] { --eco-current: var(--eco-gateway); }
-body[data-project="voice-forge"] { --eco-current: var(--eco-voice); }
-body[data-project="protoke"] { --eco-current: var(--eco-protoke); }
-body[data-project="tools-core"] {
-  --eco-current: var(--eco-tools);
-  --eco-copy: var(--chalk, #f3f0e3);
-}
-body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
-body[data-project="siphon"] { --eco-current: var(--eco-siphon); }
-body[data-project="auto-sort"]{
-  --eco-current: var(--eco-autosort);
-}
-body[data-project="interpreter-forge"] { --eco-current: var(--eco-interpreter); }
-body[data-project="companion-forge"] { --eco-current: var(--eco-companion); }
-
-/* The five accents above are built for a dark ground and fail badly on a
-   light one — measured against the lightest surface these pages use, the
-   green came to 1.26:1 and the teal to 1.27:1 where body text needs 4.5:1.
-   They were not dim, they were close to invisible.
-   
-   These are the same hues taken down until each clears 4.5:1 on every light
-   surface in the workshop (#EDEBDC, #EFEDE1, #EAEEE7), which is what the
-   individual sites already do for their own palettes — protoke turns its
-   #FFD400 signal into #7A5C00 the same way. Dark mode is untouched: there the
-   originals run from 6.5:1 to 11.4:1 and are exactly right. */
+/* Same hues as the dark accents, taken down until each clears 4.5:1 on the
+   light ground. Decorative flower colours stay the vivid set; these are for
+   text, eyebrows and card glyphs. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
+    color-scheme: light;
     --eco-gateway: #723cff;
     --eco-voice: #955b00;
     --eco-protoke: #157565;
@@ -63,9 +78,31 @@ body[data-project="companion-forge"] { --eco-current: var(--eco-companion); }
     --eco-voicecore: #8f4718;
     --eco-sitecore: #475366;
     --eco-companion: #a04e6e;
+    --eco-speechcore: #0f7923;
+    --ground: #f5f5f7;
+    --surface: #ffffff;
+    --raise: #e8e8ed;
+    --ink: #1d1d1f;
+    --chalk: #1d1d1f;
+    --muted: #3a3a3c;
+    --line: rgba(0, 0, 0, 0.1);
+    --body: #3a3a3c;
+    --body-2: #3a3a3c;
+    --faint: #3a3a3c;
+    --whisper: #3a3a3c;
+    --code: #1d1d1f;
+    --paper: #ffffff;
+    --paper-2: #e8e8ed;
+    --plate: #f5f5f7;
+    --well: #f0f0f2;
+    --sunken: #e8e8ed;
+    --nav-bg: rgba(245, 245, 247, 0.9);
+    --on-accent: #f5f5f7;
+    --grid-line: transparent;
   }
 }
 :root[data-theme="light"] {
+  color-scheme: light;
   --eco-gateway: #723cff;
   --eco-voice: #955b00;
   --eco-protoke: #157565;
@@ -78,223 +115,356 @@ body[data-project="companion-forge"] { --eco-current: var(--eco-companion); }
   --eco-voicecore: #8f4718;
   --eco-sitecore: #475366;
   --eco-companion: #a04e6e;
+  --eco-speechcore: #0f7923;
+  --ground: #f5f5f7;
+  --surface: #ffffff;
+  --raise: #e8e8ed;
+  --ink: #1d1d1f;
+  --chalk: #1d1d1f;
+  --muted: #3a3a3c;
+  --line: rgba(0, 0, 0, 0.1);
+  --body: #3a3a3c;
+  --body-2: #3a3a3c;
+  --faint: #3a3a3c;
+  --whisper: #3a3a3c;
+  --code: #1d1d1f;
+  --paper: #ffffff;
+  --paper-2: #e8e8ed;
+  --plate: #f5f5f7;
+  --well: #f0f0f2;
+  --sunken: #e8e8ed;
+  --nav-bg: rgba(245, 245, 247, 0.9);
+  --on-accent: #f5f5f7;
+  --grid-line: transparent;
 }
 
-/* Wide diagrams and code samples own their scrolling inside their existing
-   wrappers; never let one of them make the whole page wobble sideways. */
-body { overflow-x: clip; }
+body[data-project="gateway-forge"] { --eco-current: var(--eco-gateway); }
+body[data-project="voice-forge"] { --eco-current: var(--eco-voice); }
+body[data-project="protoke"] { --eco-current: var(--eco-protoke); }
+body[data-project="tools-core"] { --eco-current: var(--eco-tools); }
+body[data-project="media-preflight"] { --eco-current: var(--eco-preflight); }
+body[data-project="siphon"] { --eco-current: var(--eco-siphon); }
+body[data-project="auto-sort"] { --eco-current: var(--eco-autosort); }
+body[data-project="interpreter-forge"] { --eco-current: var(--eco-interpreter); }
+body[data-project="companion-forge"] { --eco-current: var(--eco-companion); }
+body[data-project="voice-polyglot"] { --eco-current: var(--eco-polyglot); }
+body[data-project="voice-core"] { --eco-current: var(--eco-voicecore); }
+body[data-project="speech-core"] { --eco-current: var(--eco-speechcore); }
+body[data-project="site-core"] { --eco-current: var(--eco-sitecore); }
 
-.ecosystem-page-top {
+body {
+  overflow-x: clip;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--eco-sans);
+  font-size: 17px;
+  --prose: 68ch;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: var(--eco-sans); letter-spacing: -0.022em; }
+h1 { font-size: clamp(40px, 5vw, 56px); font-weight: 600; line-height: 1.05; margin: 18px 0 0; }
+h2 { font-size: clamp(28px, 3vw, 36px); font-weight: 600; line-height: 1.15; margin: 0 0 16px; }
+h3 { margin: 28px 0 12px; }
+.wrap {
+  width: min(var(--eco-frame), calc(100% - 48px));
+  max-width: var(--eco-frame);
+  margin-inline: auto;
+}
+/* One left edge for eyebrows, headings, prose and captions. The column is
+   the body's 68ch, so a 36px heading does not centre a different box.
+   Figures, tables and the card grid stay on the frame. */
+.wrap > section > :is(p, h2, h3, ul, ol),
+.wrap > section > .eyebrow {
+  max-width: var(--prose, 68ch);
+  margin-left: 0;
+  margin-right: 0;
+}
+.wrap > section > h2 { margin-bottom: 16px; }
+.wrap > section > h3 { margin-top: 28px; margin-bottom: 12px; }
+.subhead {
+  margin: 18px 0 0;
+  max-width: 62ch;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.headmeta { margin-top: 28px; }
+.headmeta span { font-size: 13px; color: var(--muted); }
+section { padding: 72px 0; }
+/* A wide table scrolls inside the section. It must not push the page sideways. */
+.wrap > section { overflow-x: auto; }
+section[id], header[id], h2[id], .ecosystem-more {
+  scroll-margin-top: calc(var(--eco-bar) + 18px);
+}
+
+/* Small labels were 7–11px and grey. 12px is the floor, and --muted clears
+   4.5:1 on both grounds. */
+.eyebrow, .badge, .card .num, th, .tag, .phone-line .lang,
+.ecosystem-kicker, .ecosystem-card__index {
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+}
+.eyebrow {
+  color: var(--eco-current);
+  font-family: var(--eco-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  margin: 0 0 12px;
+}
+.badge {
+  color: var(--muted);
+  font-family: var(--eco-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+}
+.caption, .shot figcaption, .figure figcaption, .window figcaption, figcaption {
   display: block;
-  width: 0;
-  height: 0;
+  margin: 12px 0 28px;
+  max-width: var(--prose, 68ch);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.card h3, .ecosystem-card h3, .tool-card h3, .principle h3, .lab h3, .project h3 {
+  margin-top: 0;
 }
 
+/* ---------------------------------------------------------------- the bar */
+.ecosystem-page-top { display: block; width: 0; height: 0; }
 .ecosystem-progress {
-  position: fixed;
-  z-index: 1002;
-  top: 0;
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
   left: 0;
-  width: 100%;
-  height: 2px;
+  height: 3px;
   pointer-events: none;
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
 }
 .ecosystem-progress span {
   display: block;
   width: 100%;
   height: 100%;
   background: var(--eco-current);
-  box-shadow: 0 0 15px color-mix(in srgb, var(--eco-current) 70%, transparent);
   transform: scaleX(0);
   transform-origin: left;
 }
-
 .ecosystem-rail {
   position: sticky;
   z-index: 1000;
   top: 0;
-  min-height: var(--eco-rail-h);
-  border-bottom: 1px solid color-mix(in srgb, currentColor 17%, transparent);
-  background: color-mix(in srgb, var(--ground, #151611) 88%, transparent);
-  color: var(--eco-copy);
-  font: 600 12px/1 system-ui, sans-serif;
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
-  isolation: isolate;
-  transition: min-height var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+  height: auto;
+  min-height: var(--eco-bar);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  color: var(--ink);
+  font-family: var(--eco-sans);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
 }
 .ecosystem-rail__inner {
   position: relative;
-  width: min(1180px, calc(100% - 40px));
-  min-height: var(--eco-rail-h);
+  width: min(var(--eco-frame), calc(100% - 48px));
+  height: auto;
+  min-height: var(--eco-bar);
   margin-inline: auto;
   display: flex;
   align-items: center;
-  gap: 22px;
-  transition: min-height var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+  flex-wrap: wrap;
+  gap: 4px 8px;
 }
-.ecosystem-rail__brand {
-  appearance: none;
-  border: 0;
-  padding: 10px 0;
-  background: transparent;
+.ecosystem-rail.is-managed {
+  height: var(--eco-bar);
+}
+.ecosystem-rail.is-managed .ecosystem-rail__inner {
+  flex-wrap: nowrap;
+  height: 100%;
+  padding-block: 0;
+}
+.ecosystem-rail__home {
   display: inline-flex;
-  flex: 0 0 auto;
   align-items: center;
-  gap: 18px;
-  color: inherit !important;
-  font: inherit;
-  text-align: left;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  cursor: pointer;
+  gap: 10px;
+  min-width: 0;
+  flex: 0 0 auto;
+  color: inherit;
+  text-decoration: none;
 }
-.ecosystem-rail__brand:focus-visible {
+.ecosystem-rail__home:focus-visible,
+.ecosystem-rail__brand:focus-visible,
+.ecosystem-rail__jumps a:focus-visible,
+.ecosystem-rail__more-btn:focus-visible,
+.ecosystem-rail__more-panel a:focus-visible,
+.ecosystem-rail__links a:focus-visible {
   outline: 2px solid var(--eco-current);
-  outline-offset: 5px;
+  outline-offset: 3px;
   border-radius: 4px;
 }
-:root.ecosystem-compact .ecosystem-rail__brand {
-  gap: 12px;
-  padding-block: 8px;
-}
 .ecosystem-rail__identity {
-  --eco-identity-gap: 7px;
   display: flex;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--eco-identity-gap);
-  font-size: clamp(11px, 1.15vw, 14px);
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  text-transform: none;
 }
 .ecosystem-rail__identity-path {
   display: inline-flex;
   align-items: baseline;
-  gap: var(--eco-identity-gap);
-  max-width: 230px;
-  overflow: hidden;
-  opacity: 1;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
-  transition:
-    max-width var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
-    opacity 130ms ease,
-    margin-right var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
 }
-:root.ecosystem-compact .ecosystem-rail__identity-path {
-  max-width: 0;
-  margin-right: calc(-1 * var(--eco-identity-gap));
-  opacity: 0;
-}
-.ecosystem-rail__identity i {
-  color: color-mix(in srgb, currentColor 38%, transparent);
-  font-style: normal;
-}
+.ecosystem-rail__identity i { font-style: normal; color: color-mix(in srgb, var(--muted) 65%, transparent); }
 .ecosystem-rail__identity strong {
   color: var(--eco-current);
-  font-weight: 750;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46vw;
+}
+.ecosystem-rail__jumps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  min-width: 0;
+  flex: 1 1 auto;
+  margin-left: 12px;
+  overflow: visible;
+}
+.ecosystem-rail.is-managed .ecosystem-rail__jumps {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.ecosystem-rail__jumps a {
+  flex: 0 0 auto;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.ecosystem-rail__more:not([hidden]) {
+  position: relative;
+  flex: 0 0 auto;
+}
+.ecosystem-rail__more-btn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 8px 4px;
+  background: transparent;
+  color: var(--muted);
+  font: 500 13px/1 var(--eco-sans);
+  letter-spacing: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ecosystem-rail__more-btn:hover,
+.ecosystem-rail.is-sections .ecosystem-rail__more-btn { color: var(--ink); }
+.ecosystem-rail__more-panel[hidden] { display: none; }
+.ecosystem-rail__more-panel:not([hidden]) {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 10px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 200px;
+  max-width: min(280px, calc(100vw - 32px));
+  max-height: min(70vh, 420px);
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+.ecosystem-rail__more-panel a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ecosystem-rail__more-panel a:hover { background: color-mix(in srgb, var(--eco-current) 14%, transparent); }
+.ecosystem-rail__jumps a:hover { color: var(--ink); }
+.ecosystem-rail__home + .ecosystem-rail__brand { margin-left: auto; }
+.ecosystem-rail__brand {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  padding: 8px 2px 8px 12px;
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1 var(--eco-sans);
+  letter-spacing: 0;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  cursor: pointer;
 }
 .ecosystem-rail__chevron {
-  width: 8px;
-  height: 8px;
-  margin-left: 2px;
+  width: 7px;
+  height: 7px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   transform: translateY(-2px) rotate(45deg);
-  transition: transform var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
 }
-.ecosystem-rail.is-open .ecosystem-rail__chevron {
-  transform: translateY(2px) rotate(225deg);
-}
-.ecosystem-mark {
-  --eco-mark-reset: #fffdf2;
-  --eco-mark-c0: #060919;
-  --eco-mark-c1: #f1efe7;
-  --eco-mark-c2: #7187ff;
-  --eco-mark-c3: #171a38;
-  --eco-mark-c4: #cfd7ff;
-  position: relative;
-  display: block;
-  flex: 0 0 auto;
-  width: var(--eco-mark-size);
-  height: var(--eco-mark-size);
-  color: var(--eco-mark-reset);
-  transition:
-    width var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
-    height var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
-}
-.ecosystem-mark__wire {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-.ecosystem-mark__wire {
-  overflow: visible;
-  fill: none;
-}
-.ecosystem-mark__base,
-.ecosystem-mark__pattern-lines {
-  fill: none;
-  stroke: var(--eco-mark-reset);
-  stroke-width: 8;
-}
-.ecosystem-mark__colour {
-  opacity: 0;
-}
-.ecosystem-mark__base {
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--eco-mark-reset) 32%, transparent));
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .ecosystem-mark {
-    --eco-mark-reset: #17180f;
-  }
-}
-:root[data-theme="light"] .ecosystem-mark {
-  --eco-mark-reset: #17180f;
-}
+.ecosystem-rail.is-open .ecosystem-rail__chevron { transform: translateY(2px) rotate(225deg); }
 .ecosystem-rail__links {
   position: absolute;
-  z-index: -1;
-  top: calc(100% - 1px);
-  left: 0;
+  z-index: 2;
+  top: calc(100% + 8px);
   right: 0;
+  left: auto;
+  width: min(640px, calc(100vw - 32px));
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, currentColor 17%, transparent);
-  background: var(--ground, #151611);
-  box-shadow: 0 22px 55px color-mix(in srgb, #000 28%, transparent);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  clip-path: inset(0 0 100% 0);
-  transform: translateY(-10px);
-  transform-origin: top;
-  transition:
-    opacity 150ms ease,
-    transform var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
-    clip-path var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1),
-    visibility 0s linear var(--eco-drawer-motion);
 }
 .ecosystem-rail.is-open .ecosystem-rail__links {
-  z-index: 1;
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  clip-path: inset(0);
-  transform: none;
-  transition-delay: 0s;
 }
 .ecosystem-rail__links a {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 58px;
-  padding: 14px 16px;
-  border-radius: 3px;
-  color: color-mix(in srgb, currentColor 68%, transparent) !important;
-  text-decoration: none !important;
-  white-space: nowrap;
-  transition: background 140ms ease, color 140ms ease;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
 }
 .ecosystem-rail__links a::before {
   content: "";
@@ -303,80 +473,109 @@ body { overflow-x: clip; }
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--project-accent, var(--eco-current));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--project-accent, var(--eco-current)) 62%, transparent);
 }
 .ecosystem-rail__links a:hover,
-.ecosystem-rail__links a:focus-visible,
 .ecosystem-rail__links a[aria-current="page"] {
-  color: inherit !important;
-  background: color-mix(in srgb, var(--project-accent, var(--eco-current)) 11%, transparent);
-}
-/* Each rail link and each card is given its accent inline, from the same
-   catalogue entry that gives it its name and its address. The list of
-   per-project selectors that used to live here had five of the six projects
-   in it, and the missing one showed the accent of whichever page it was on. */
-
-/* Existing sticky section navigation stays physically attached to the shared
-   rail while its arrival state compacts into navigation. */
-.jump, .site-nav {
-  top: var(--eco-rail-h) !important;
-  transition: top var(--eco-drawer-motion) cubic-bezier(.2,.8,.2,1);
+  background: color-mix(in srgb, var(--project-accent, var(--eco-current)) 14%, transparent);
 }
 
+/* --------------------------------------------------------------- the flower */
+.ecosystem-mark {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #1a1a1c;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.ecosystem-mark__wire { display: block; width: 86%; height: 86%; margin: 7%; overflow: visible; }
+.ecosystem-mark__base,
+.ecosystem-mark__pattern-lines {
+  fill: none;
+  stroke: var(--eco-flower, #f5f5f7);
+  stroke-width: 20;
+}
+.ecosystem-mark__colour { display: none; }
+.ecosystem-mark--piece {
+  position: absolute;
+  z-index: -1;
+  top: calc(var(--eco-bar) + 48px);
+  right: max(28px, calc((100% - var(--eco-frame)) / 2));
+  width: 248px;
+  height: 248px;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 42%, #2a2a2e 0%, #161618 72%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 40px rgba(0, 0, 0, 0.16);
+}
+.ecosystem-mark--piece .ecosystem-mark__base,
+.ecosystem-mark--piece .ecosystem-mark__pattern-lines { stroke-width: 9; }
+
+header.mast, header#top {
+  border-bottom: 0;
+  padding: 36px 0 8px;
+}
+@media (min-width: 900px) {
+  body:not([data-project="tools-core"]) header.mast {
+    min-height: 300px;
+    padding-right: 280px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+}
+
+/* -------------------------------------------------------------- the cards */
 .ecosystem-more {
   position: relative;
-  overflow: hidden;
-  padding: clamp(56px, 8vw, 96px) 0;
-  border-bottom: 1px solid var(--line, rgba(255,255,255,.14));
-}
-.ecosystem-more::before {
-  content: "";
-  position: absolute;
-  width: 520px;
-  height: 520px;
-  left: max(-260px, calc(50% - 820px));
-  top: -280px;
-  border: 1px solid color-mix(in srgb, var(--eco-current) 22%, transparent);
-  border-radius: 50%;
-  box-shadow: 0 0 100px color-mix(in srgb, var(--eco-current) 7%, transparent);
-  pointer-events: none;
+  padding: clamp(56px, 8vw, 88px) 0;
+  border-bottom: 1px solid var(--line);
 }
 .ecosystem-more__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, .65fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(240px, 0.9fr);
   align-items: end;
-  gap: 32px;
-  margin-bottom: 30px;
+  gap: 28px 40px;
+  margin-bottom: 28px;
 }
 .ecosystem-kicker {
-  margin: 0 0 12px !important;
-  color: var(--eco-current) !important;
-  font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
-  letter-spacing: .16em;
+  margin: 0 0 12px;
+  color: var(--eco-current);
+  font: 600 12px/1.4 var(--eco-mono);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.ecosystem-more h2 {
-  margin: 0;
-  max-width: 14ch;
-}
+.ecosystem-more h2 { margin: 0; max-width: 18ch; }
 .ecosystem-more__intro {
-  margin: 0 !important;
-  color: var(--muted, #999) !important;
+  margin: 0;
+  max-width: none;
+  color: var(--muted);
   font-size: 16px;
+  line-height: 1.5;
+}
+.ecosystem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  align-items: stretch;
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
 }
 .ecosystem-card {
   --card-accent: var(--eco-current);
   --mx: 50%;
-  --my: 50%;
+  --my: 0%;
   position: relative;
   isolation: isolate;
-  min-height: 310px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  color: var(--eco-copy) !important;
-  background: var(--surface, #1e1f19);
-  text-decoration: none !important;
+  height: 100%;
+  min-height: 280px;
+  padding: 22px 22px 20px;
+  display: grid;
+  grid-template-rows: 2.9em 56px auto minmax(4.6em, 1fr) auto;
+  color: var(--ink);
+  background: var(--surface);
+  text-decoration: none;
 }
 .ecosystem-card::before {
   content: "";
@@ -384,187 +583,274 @@ body { overflow-x: clip; }
   z-index: -1;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(340px circle at var(--mx) var(--my),
-    color-mix(in srgb, var(--card-accent) 20%, transparent), transparent 58%);
-  transition: opacity .22s ease;
+  background: radial-gradient(280px circle at var(--mx) var(--my),
+    color-mix(in srgb, var(--card-accent) 18%, transparent), transparent 60%);
 }
 .ecosystem-card:hover::before,
 .ecosystem-card:focus-visible::before { opacity: 1; }
-.ecosystem-card[aria-current="page"] {
-  box-shadow: inset 0 3px 0 var(--card-accent);
-}
+.ecosystem-card[aria-current="page"] { box-shadow: inset 3px 0 0 var(--card-accent); }
 .ecosystem-card__index {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  /* Five cards in a constrained column give each about 170px, and these two
-     labels together need almost exactly that. Without a gap they butt
-     together and wrap inside themselves, which reads as broken rather than
-     as tight. With one they drop to two lines instead, which reads as a
-     stack. */
-  gap: 3px 12px;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 4px;
   color: var(--card-accent);
-  font: 700 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: .12em;
+  font: 600 12px/1.35 var(--eco-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-/* Neither label may shrink to make room for the other: a flex item shrinks
-   before it wraps, so without this the platform list squeezes itself onto two
-   cramped lines *inside* its own box while still touching the label beside
-   it. Refusing to shrink is what makes the row wrap instead. */
-.ecosystem-card__index span {
-  flex: 0 0 auto;
-  max-width: 100%;
-}
-.ecosystem-card__index span:first-child { white-space: nowrap; }
-/* The platform list is the long one — "macOS · Windows · Linux" wants 205px
-   of the 172px a five-column card leaves it, almost all of the excess being
-   tracking. It gets its own, tighter, so the index stays one line per card
-   instead of one card in five looking a different height from its
-   neighbours. */
 .ecosystem-card__index span:last-child {
-  color: var(--muted, #999);
-  text-align: right;
-  letter-spacing: .02em;
-  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  font-size: 12px;
+  text-align: left;
+  text-transform: none;
+}
+.ecosystem-card__glyph {
+  margin: 0;
+  align-self: end;
+  height: 56px;
+  display: flex;
+  align-items: flex-end;
+  color: var(--card-accent);
+  font: 400 clamp(18px, 8cqw, 30px)/1 var(--eco-mono);
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .ecosystem-card { container-type: inline-size; }
-/* The contact card, shared so that it stops being re-invented.
+.ecosystem-card h3 {
+  margin: 14px 0 8px;
+  color: inherit;
+  font-size: clamp(20px, 2vw, 24px);
+  line-height: 1.15;
+}
+.ecosystem-card p {
+  margin: 0;
+  max-width: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.ecosystem-card__go {
+  margin-top: 18px;
+  align-self: end;
+  color: var(--card-accent);
+  font: 600 13px/1.3 var(--eco-sans);
+  letter-spacing: 0;
+}
 
-   It lives here rather than in each site's style.css for the same reason the
-   ecosystem grid does: a section written out six times drifts six ways, and
-   this one had — different headings, different links, and one page with no
-   contact section at all. The palette is still each site's own, through the
-   same variables with the same fallbacks used above.
-
-   Note this is not `.contact`, which every site already uses for its own row
-   of link buttons elsewhere on the page. */
 .contact-card {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 1px;
-  margin: 28px 0 0;
-  border: 1px solid var(--line, rgba(255,255,255,.14));
-  background: var(--line, rgba(255,255,255,.14));
+  margin: 28px 0 8px;
+  border: 1px solid var(--line);
+  background: var(--line);
 }
 .contact-card a {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 18px 20px;
-  background: var(--surface, #1e1f19);
-  color: var(--eco-copy) !important;
-  text-decoration: none !important;
+  justify-content: center;
+  gap: 8px;
+  min-height: 104px;
+  padding: 22px 24px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
 }
 .contact-card a span {
-  color: var(--muted, #999);
-  font-weight: 400;
+  color: var(--muted);
+  font-weight: 450;
   font-size: 13px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  /* An address can be longer than the box it is in; break it rather than
-     letting it push the card wider than the page. */
+  font-family: var(--eco-mono);
   overflow-wrap: anywhere;
 }
 .contact-card a:hover,
-.contact-card a:focus-visible { color: var(--eco-current) !important; }
+.contact-card a:focus-visible { color: var(--eco-current); }
 .contact-card a:hover span,
 .contact-card a:focus-visible span { color: var(--eco-current); }
-@media (prefers-reduced-motion: no-preference) {
-  .contact-card a { transition: color .16s ease; }
+
+/* ------------------------------------------------- tools-core, same system */
+body[data-project="tools-core"]::before { content: none; display: none; }
+body[data-project="tools-core"] .site-nav {
+  position: fixed;
+  z-index: 1001;
+  top: 0;
+  right: max(24px, calc((100% - var(--eco-frame)) / 2));
+  left: auto;
+  width: auto;
+  height: var(--eco-bar);
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
-
-/* Six cards, three across, two rows.
-
-   The column width is chosen to fit the glyph rather than the glyph being
-   squeezed into whatever column is left over. Five across gave each card
-   about 172px, and at 17cqw the type was 17% of that per line — eighteen
-   monospace characters of "[ measure → keep ]" want roughly 1.8 times the
-   card at that size, so it could not fit on one line at any window width and
-   came apart into four. Wrapping was not the bug; the width was.
-
-   auto-fit with a 300px floor gives three columns at full width and steps
-   down to two and then one, so the cards reflow into a new row instead of
-   the type reflowing inside a card. */
-.ecosystem-grid {
-  display: grid;
-  /* min() so a window narrower than one column shrinks the column instead of
-     overflowing the page, which bare minmax(300px, …) does. */
-  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-  gap: 1px;
-  border: 1px solid var(--line, rgba(255,255,255,.14));
-  background: var(--line, rgba(255,255,255,.14));
+body[data-project="tools-core"] .site-nav .wordmark { display: none; }
+body[data-project="tools-core"] .nav-inner { min-height: 0; gap: 0; width: auto; }
+body[data-project="tools-core"] .nav-links { gap: 16px; }
+body[data-project="tools-core"] .nav-links a {
+  color: var(--muted);
+  font: 500 13px/1 var(--eco-sans);
+  letter-spacing: 0;
 }
-
-.ecosystem-card__glyph {
-  margin: auto 0 26px;
-  color: var(--card-accent);
-  /* Sized against the card's own width, and set as large as the longest
-     glyph allows on one line. "[ measure → keep ]" is the one that decides
-     it: measured, it runs to about 10 times the font size, so 9cqw leaves
-     roughly 30px of slack in a three-column card and about 23px at the 19px
-     floor, which is where a 320px phone lands. */
-  font: 400 clamp(19px, 9cqw, 32px)/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  letter-spacing: -.045em;
-  white-space: nowrap;
-  /* If a window is narrow enough that even one column cannot hold it, shrink
-     rather than break: a glyph split across lines is the thing being fixed. */
-  overflow: hidden;
-  text-overflow: clip;
+body[data-project="tools-core"] .nav-links a:hover { color: var(--ink); }
+body[data-project="tools-core"] .ecosystem-rail__inner { padding-right: 248px; }
+body[data-project="tools-core"] .ecosystem-mark--piece {
+  top: calc(var(--eco-bar) + 28px);
+  right: 50%;
+  width: 148px;
+  height: 148px;
+  transform: translateX(50%);
 }
-
-.ecosystem-card h3 {
-  margin: 0 0 10px;
-  color: inherit;
-  font-size: clamp(20px, 2vw, 26px);
-  line-height: 1.05;
+/* header#top sets padding with an id, which beats a class. Repeat the id. */
+body[data-project="tools-core"] header#top.hero {
+  min-height: 0;
+  padding: 208px 0 56px;
+  border-bottom: 1px solid var(--line);
 }
-.ecosystem-card p {
-  margin: 0 !important;
-  color: var(--muted, #999) !important;
-  font-size: 14px;
+body[data-project="tools-core"] .hero-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  padding-right: 0;
+  min-height: 0;
+}
+body[data-project="tools-core"] h1 {
+  max-width: 14ch;
+  margin: 0 0 20px;
+  font-family: var(--eco-sans);
+  font-size: clamp(40px, 6vw, 60px);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+body[data-project="tools-core"] h1 em { font-style: normal; color: var(--eco-current); }
+body[data-project="tools-core"] h2 {
+  font-family: var(--eco-sans);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+body[data-project="tools-core"] .intro {
+  max-width: 42rem;
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
   line-height: 1.5;
 }
-.ecosystem-card__go {
-  margin-top: 20px;
-  color: var(--card-accent);
-  font: 700 12px/1 system-ui, sans-serif;
+body[data-project="tools-core"] #contact :is(.eyebrow, h2, p) {
+  max-width: var(--prose, 68ch);
+  margin-left: 0;
+  margin-right: 0;
 }
-
-.ecosystem-ready [data-eco-reveal] {
-  opacity: 0;
-  transform: translateY(18px);
-  transition: opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1);
+body[data-project="tools-core"] .hero-note {
+  max-width: 46rem;
+  border-top: 0;
+  padding-top: 0;
+  color: var(--muted);
+  font: 400 15px/1.55 var(--eco-sans);
 }
-.ecosystem-ready [data-eco-reveal].is-visible {
+body[data-project="tools-core"] .hero-note strong {
+  margin-bottom: 10px;
+  color: var(--ink);
+  font: 600 12px/1.4 var(--eco-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+body[data-project="tools-core"] .section-head { align-items: start; gap: 16px 40px; }
+body[data-project="tools-core"] .section-copy { color: var(--muted); font-size: 16px; line-height: 1.5; }
+body[data-project="tools-core"] .project {
+  min-height: 0;
+  align-items: stretch;
+  background: var(--surface);
+}
+body[data-project="tools-core"] .project h3 { margin: 12px 0 12px; }
+body[data-project="tools-core"] .project p { max-width: 46ch; }
+body[data-project="tools-core"] .project-media {
+  min-height: 0;
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--eco-current) 7%, var(--surface));
+}
+body[data-project="tools-core"] .project-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
   opacity: 1;
   transform: none;
+  border-radius: 8px;
+}
+body[data-project="tools-core"] .project:hover .project-media img { opacity: 1; transform: none; }
+body[data-project="tools-core"] .project-media::after { content: none; }
+body[data-project="tools-core"] .tools-plate { aspect-ratio: auto; min-height: 200px; }
+body[data-project="tools-core"] .face-plate,
+body[data-project="tools-core"] .tool-tree {
+  width: min(100%, 460px);
+  color: var(--ink);
+  font: 500 15px/1.6 var(--eco-mono);
+}
+body[data-project="tools-core"] .face-plate b,
+body[data-project="tools-core"] .tool-tree b,
+body[data-project="tools-core"] .tool-tree strong { color: var(--eco-current); font-weight: 650; }
+body[data-project="tools-core"] .project-no,
+body[data-project="tools-core"] .project-meta,
+body[data-project="tools-core"] .tool-card .tag,
+body[data-project="tools-core"] .copy,
+body[data-project="tools-core"] .lab-status,
+body[data-project="tools-core"] .beat-readout,
+body[data-project="tools-core"] .principle .n,
+body[data-project="tools-core"] .safety {
+  font-size: 12px !important;
+  line-height: 1.45;
+  color: var(--muted);
+}
+body[data-project="tools-core"] .project-no { color: var(--eco-current); }
+body[data-project="tools-core"] .tool-card h3 { margin: 16px 0 12px; }
+body[data-project="tools-core"] .tool-card p { min-height: 0; margin-bottom: 16px; }
+body[data-project="tools-core"] .wrap {
+  width: min(var(--eco-frame), calc(100% - 48px));
+  max-width: var(--eco-frame);
 }
 
 @media (max-width: 900px) {
-  .ecosystem-more__head { grid-template-columns: 1fr; }
+  .ecosystem-mark--piece { display: none; }
+  body[data-project="tools-core"] header#top.hero { padding: 28px 0 40px; }
+  .ecosystem-more__head,
+  body[data-project="tools-core"] .hero-grid,
+  body[data-project="tools-core"] .section-head,
+  body[data-project="tools-core"] .project { grid-template-columns: 1fr; }
+  .ecosystem-rail__identity-path { display: none; }
+  body[data-project="tools-core"] .ecosystem-rail__inner { padding-right: 0; }
+  body[data-project="tools-core"] .site-nav {
+    position: static;
+    height: auto;
+    padding: 8px 0 0;
+    right: auto;
+  }
+  body[data-project="tools-core"] .site-nav .wrap { width: min(var(--eco-frame), calc(100% - 48px)); }
+  .wrap, .ecosystem-rail__inner { width: min(var(--eco-frame), calc(100% - 32px)); }
 }
 @media (max-width: 640px) {
-  :root { --eco-rail-h: 100px; --eco-mark-size: 82px; }
-  .ecosystem-rail__inner { width: calc(100% - 24px); }
-  .ecosystem-rail__brand { max-width: 100%; gap: 12px; }
-  .ecosystem-rail__identity { --eco-identity-gap: 4px; max-width: 210px; font-size: 10px; line-height: 1.5; }
-  .ecosystem-rail__chevron { margin-left: 0; }
-  .ecosystem-rail__links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ecosystem-rail__links a { min-height: 50px; padding: 11px 12px; font-size: 11px; }
-  .ecosystem-card { min-height: 245px; }
+  .ecosystem-rail__links { left: 16px; right: 16px; width: auto; grid-template-columns: 1fr; }
+  .ecosystem-card { min-height: 0; }
+  h1 { font-size: clamp(36px, 10vw, 48px); }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .ecosystem-ready [data-eco-reveal] { opacity: 1; transform: none; transition: none; }
   .ecosystem-card::before,
   .ecosystem-rail__links,
-  .ecosystem-rail__links a,
-  .ecosystem-rail__chevron,
-  .ecosystem-rail,
-  .ecosystem-rail__inner,
-  .ecosystem-mark,
-  .ecosystem-rail__identity-path,
-  .jump,
-  .site-nav { transition: none; }
+  .ecosystem-rail__chevron { transition: none; }
+  html { scroll-behavior: auto; }
 }

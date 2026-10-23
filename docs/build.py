@@ -32,7 +32,8 @@ a hand-drawn diagram is not improved by being retyped as a dict.
 
 The jump navigation is derived from the sections rather than written beside
 them, so a new section cannot be forgotten in the nav — the commonest way a
-hand-written page of this shape goes stale.
+hand-written page of this shape goes stale. It lives in the one sticky bar,
+beside the mark, so a page never grows a second strip underneath.
 
 Content is authored HTML. The catalogue is written by whoever owns the
 repository, so a paragraph may contain a link or an `<em>`; nothing here comes
@@ -108,28 +109,10 @@ def head(page, ecosystem):
 """
 
 
-def rail(ecosystem, slug):
-    current = next(project for project in ecosystem["projects"]
-                   if project["slug"] == slug)
-    # The accent travels with the project, out of the catalogue, rather than
-    # from a list of selectors in the stylesheet that a new project has to be
-    # added to by hand. See grid_inner for what that cost.
-    links = "\n".join(
-        f'      <a data-project="{p["slug"]}" style="--project-accent: var({p["accent"]})"'
-        f' href="{p["url"]}">{p["name"]}</a>'
-        for p in ecosystem["projects"]
-    )
-    return f"""
-<span class="ecosystem-page-top" id="page-top" aria-hidden="true"></span>
-<div class="ecosystem-progress" aria-hidden="true"><span></span></div>
-<nav class="ecosystem-rail" aria-label="Snepssen project network">
-  <div class="ecosystem-rail__inner">
-    <button class="ecosystem-rail__brand" type="button" aria-expanded="false"
-            aria-controls="ecosystem-projects" aria-label="Open workshop projects">
-      <span class="ecosystem-mark" aria-hidden="true">
-        <!-- Flower of Life geometry adapted from Pd4u's CC0 Wikimedia SVG:
-             https://commons.wikimedia.org/wiki/File:Flower_of_Life_SVG.svg -->
-        <svg class="ecosystem-mark__wire" viewBox="-250 -250 500 500" focusable="false">
+# The geometry is Pd4u's CC0 Flower of Life. Two copies share a page — the
+# small one in the bar and the large one in the hero — so each pattern id is
+# prefixed, or the second copy paints with the first copy's gradient.
+FLOWER_SVG = """<svg class="ecosystem-mark__wire" viewBox="-250 -250 500 500" focusable="false">
           <defs>
             <pattern id="ecosystem-flower-pattern" width="135.1" height="78" patternUnits="userSpaceOnUse">
               <g class="ecosystem-mark__pattern-lines">
@@ -156,24 +139,24 @@ def rail(ecosystem, slug):
             </mask>
             <clipPath id="ecosystem-flower-clip"><circle r="245.3" /></clipPath>
             <radialGradient id="ecosystem-light-1">
-              <stop offset="0" stop-color="var(--eco-mark-c1)" />
-              <stop offset=".52" stop-color="var(--eco-mark-c1)" stop-opacity=".72" />
-              <stop offset="1" stop-color="var(--eco-mark-c1)" stop-opacity="0" />
+              <stop offset="0" stop-color="var(--eco-flower)" />
+              <stop offset=".52" stop-color="var(--eco-flower)" stop-opacity=".72" />
+              <stop offset="1" stop-color="var(--eco-flower)" stop-opacity="0" />
             </radialGradient>
             <radialGradient id="ecosystem-light-2">
-              <stop offset="0" stop-color="var(--eco-mark-c2)" />
-              <stop offset=".46" stop-color="var(--eco-mark-c2)" stop-opacity=".66" />
-              <stop offset="1" stop-color="var(--eco-mark-c2)" stop-opacity="0" />
+              <stop offset="0" stop-color="var(--eco-flower)" />
+              <stop offset=".46" stop-color="var(--eco-flower)" stop-opacity=".66" />
+              <stop offset="1" stop-color="var(--eco-flower)" stop-opacity="0" />
             </radialGradient>
             <radialGradient id="ecosystem-light-3">
-              <stop offset="0" stop-color="var(--eco-mark-c3)" />
-              <stop offset=".42" stop-color="var(--eco-mark-c3)" stop-opacity=".58" />
-              <stop offset="1" stop-color="var(--eco-mark-c3)" stop-opacity="0" />
+              <stop offset="0" stop-color="var(--eco-flower)" />
+              <stop offset=".42" stop-color="var(--eco-flower)" stop-opacity=".58" />
+              <stop offset="1" stop-color="var(--eco-flower)" stop-opacity="0" />
             </radialGradient>
             <radialGradient id="ecosystem-light-4">
-              <stop offset="0" stop-color="var(--eco-mark-c4)" stop-opacity=".96" />
-              <stop offset=".34" stop-color="var(--eco-mark-c4)" stop-opacity=".42" />
-              <stop offset="1" stop-color="var(--eco-mark-c4)" stop-opacity="0" />
+              <stop offset="0" stop-color="var(--eco-flower)" stop-opacity=".96" />
+              <stop offset=".34" stop-color="var(--eco-flower)" stop-opacity=".42" />
+              <stop offset="1" stop-color="var(--eco-flower)" stop-opacity="0" />
             </radialGradient>
           </defs>
           <g class="ecosystem-mark__base">
@@ -183,55 +166,98 @@ def rail(ecosystem, slug):
           </g>
           <g class="ecosystem-mark__colour" mask="url(#ecosystem-flower-mask)" clip-path="url(#ecosystem-flower-clip)">
             <g class="ecosystem-mark__light-field">
-              <circle r="260" fill="var(--eco-mark-c0)" />
+              <circle r="260" fill="var(--eco-flower)" />
               <ellipse cx="-112" cy="-92" rx="238" ry="182" fill="url(#ecosystem-light-1)" transform="rotate(-18 -112 -92)" />
               <ellipse cx="118" cy="-42" rx="198" ry="144" fill="url(#ecosystem-light-2)" transform="rotate(31 118 -42)" />
               <ellipse cx="-38" cy="132" rx="218" ry="158" fill="url(#ecosystem-light-3)" transform="rotate(47 -38 132)" />
               <ellipse cx="58" cy="38" rx="116" ry="88" fill="url(#ecosystem-light-4)" transform="rotate(-36 58 38)" />
             </g>
           </g>
-        </svg>
-      </span>
-      <span class="ecosystem-rail__identity" aria-hidden="true">
+        </svg>"""
+
+
+def flower_mark(prefix, mark_class):
+    """One Flower of Life, with ids that will not collide with the other copy."""
+    svg = FLOWER_SVG.replace('id="ecosystem-', f'id="{prefix}-')
+    svg = svg.replace("url(#ecosystem-", f"url(#{prefix}-")
+    return (
+        f'<span class="{mark_class}" aria-hidden="true">\n'
+        f"        <!-- Flower of Life geometry adapted from Pd4u's CC0 Wikimedia SVG:\n"
+        f"             https://commons.wikimedia.org/wiki/File:Flower_of_Life_SVG.svg -->\n"
+        f"        {svg}\n"
+        f"      </span>"
+    )
+
+
+def section_links(page, ecosystem):
+    """The section links for the one sticky bar.
+
+    Derived from the sections, so a new one cannot be left out. Kept in the
+    bar rather than a second sticky nav under it: two bars were stacking into
+    a band of chrome, and the lower one's labels were being clipped.
+    """
+    if not page:
+        return ""
+    items = [(section["id"], section["jump"])
+             for section in page["sections"]
+             if section.get("jump") and section.get("id")]
+    if project_relationships(ecosystem, page["meta"]["slug"]):
+        items.append(("with", "Beside it"))
+    items.append(("contact", "Contact"))
+    links = "\n".join(f'      <a href="#{anchor}">{label}</a>'
+                      for anchor, label in items)
+    # Links that do not fit stay whole, in a menu. A scrolling row was
+    # cutting the last visible word in half against the Workshop button.
+    return f"""    <div class="ecosystem-rail__jumps" role="navigation" aria-label="On this page">
+{links}
+    </div>
+    <div class="ecosystem-rail__more" hidden>
+      <button class="ecosystem-rail__more-btn" type="button" aria-expanded="false"
+              aria-controls="ecosystem-page-sections">More</button>
+      <div class="ecosystem-rail__more-panel" id="ecosystem-page-sections" role="navigation"
+           aria-label="On this page" hidden></div>
+    </div>
+"""
+
+
+def rail(ecosystem, slug, page=None):
+    current = next(project for project in ecosystem["projects"]
+                   if project["slug"] == slug)
+    # The accent travels with the project, out of the catalogue, rather than
+    # from a list of selectors in the stylesheet that a new project has to be
+    # added to by hand. See grid_inner for what that cost.
+    links = "\n".join(
+        f'      <a data-project="{p["slug"]}" style="--project-accent: var({p["accent"]})"'
+        f' href="{p["url"]}">{p["name"]}</a>'
+        for p in ecosystem["projects"]
+    )
+    # The large mark is a sibling of the bar, not a child of it. The bar is
+    # sticky; a child of it would stick too. tools-core rewrites this whole
+    # region, from the page-top anchor through the nav, so the mark has to
+    # live inside that span or the hub would never receive it.
+    return f"""
+<span class="ecosystem-page-top" id="page-top" aria-hidden="true"></span>
+{flower_mark("piece", "ecosystem-mark ecosystem-mark--piece")}
+<nav class="ecosystem-rail" aria-label="Snepssen project network">
+  <div class="ecosystem-progress" aria-hidden="true"><span></span></div>
+  <div class="ecosystem-rail__inner">
+    <a class="ecosystem-rail__home" href="#page-top">
+      {flower_mark("rail", "ecosystem-mark")}
+      <span class="ecosystem-rail__identity">
         <span class="ecosystem-rail__identity-path">
           <span>Snepssen</span><i>/</i><span>Workshop</span><i>/</i>
         </span>
         <strong>{current['name']}</strong>
       </span>
+    </a>
+{section_links(page, ecosystem)}    <button class="ecosystem-rail__brand" type="button" aria-expanded="false"
+            aria-controls="ecosystem-projects" aria-label="Open workshop projects">
+      <span class="ecosystem-rail__brand-label">Workshop</span>
       <span class="ecosystem-rail__chevron" aria-hidden="true"></span>
     </button>
     <div class="ecosystem-rail__links" id="ecosystem-projects" aria-hidden="true" inert>
 {links}
     </div>
-  </div>
-</nav>
-"""
-
-
-def jump(page, ecosystem):
-    """Derived from the sections, so a new section cannot be left out of it.
-
-    A top-level `<nav>`, outside the wrap — `position: sticky` is measured
-    against the nearest scrolling ancestor, so one nested inside a header
-    scrolls away with that header instead of staying put.
-
-    A project that records relationships in the catalogue gets one more link,
-    for the section render() places just before the grid. Projects without
-    that field keep the nav they had.
-    """
-    links = [f'      <li><a href="#{section["id"]}">{section["jump"]}</a></li>'
-             for section in page["sections"] if section.get("jump")]
-    if project_relationships(ecosystem, page["meta"]["slug"]):
-        links.append('      <li><a href="#with">Beside it</a></li>')
-    links.append('      <li><a href="#contact">Contact</a></li>')
-    items = "\n".join(links)
-    return f"""
-<nav class="jump" aria-label="Jump to a section">
-  <div class="wrap">
-    <a class="mark" href="#page-top">~/snepssen</a>
-    <ul>
-{items}
-    </ul>
   </div>
 </nav>
 """
@@ -291,12 +317,14 @@ def grid_inner(ecosystem, slug):
 def grid(ecosystem, slug):
     """The closing grid, in the form the whole family uses.
 
-    `data-eco-reveal` is what ecosystem.js watches to fade the cards in; siphon
-    was hand-written without it and so its grid never animated. That is the
-    kind of difference a generated chrome exists to stop.
+    The cards are painted as they are. A scroll reveal that starts them at
+    opacity 0 leaves an empty band in a full-page capture, with scripting
+    off, and after a jump to an anchor — the observer never gets a chance
+    to bring them back. Siphon used to omit the hook and so never animated;
+    the generated page now agrees with that, on purpose.
     """
     return f"""
-<section class="ecosystem-more" aria-labelledby="ecosystem-heading" data-eco-reveal>
+<section class="ecosystem-more" aria-labelledby="ecosystem-heading">
 {grid_inner(ecosystem, slug)}
 </section>
 """
@@ -395,7 +423,7 @@ def header(page, ecosystem):
     extra = partial(meta["header_extra"]) + "\n" if meta.get("header_extra") else ""
     return f"""
 <div class="wrap">
-<header id="top">
+<header id="top" class="mast">
   <span class="badge"><span class="dot"></span>{meta['badge']}</span>
   <h1>{meta['name']}</h1>
 {extra}  <p class="subhead">{meta['subhead']}</p>
@@ -404,7 +432,6 @@ def header(page, ecosystem):
   </div>
 </header>
 </div>
-{jump(page, ecosystem)}
 <div class="wrap">
 {blocks}"""
 
@@ -503,7 +530,7 @@ def render():
     page = load_page()
     ecosystem = load_ecosystem()
     slug = page["meta"]["slug"]
-    parts = [head(page, ecosystem), rail(ecosystem, slug), header(page, ecosystem)]
+    parts = [head(page, ecosystem), rail(ecosystem, slug, page), header(page, ecosystem)]
     placed = False
     beside = relationships(ecosystem, slug)
     for item in page["sections"]:
