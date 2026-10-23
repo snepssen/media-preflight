@@ -15,7 +15,7 @@ PAGE = {
         "slug": "media-preflight",
         "name": "Media Preflight",
         "title": "Media Preflight",
-        "badge": "macOS · Windows · Linux · MIT",
+        "license": "MIT",
         "fonts": "fonts.css",
         "description": "Local-first delivery validation for finished audio and video. Will this be accepted, and what exactly is wrong with it — with the timestamps, and a corrected copy that is measured again before it claims to be fixed.",
         "og_description": "Will this be accepted — and can you safely fix what is wrong? An inspector with carefully bounded, previewable transformations.",
@@ -42,6 +42,8 @@ PAGE = {
         "jump": "Workflow",
         "eyebrow": "One engine, two ways in",
         "heading": "Guided when you want the answer. Professional when you know the handoff.",
+        "fold": True,
+        "teaser": 'Guided measures once and asks nothing; Professional exposes each decision. The verdicts are the same either way.',
         "body": "workflow.html",
     },
     {
@@ -49,6 +51,8 @@ PAGE = {
         "jump": "Deliveries",
         "eyebrow": "A folder, not a file",
         "heading": "Some faults belong to the set",
+        "fold": True,
+        "teaser": 'Some of what ACX asks for belongs to the whole title, not any one file, so a delivery is measured as a set.',
         "body": "delivery.html",
     },
     {
@@ -56,6 +60,8 @@ PAGE = {
         "jump": "Targets",
         "eyebrow": "Where it is going",
         "heading": "Nine targets, and the one you write",
+        "fold": True,
+        "teaser": 'Every target carries where its thresholds came from and when they were read, and you can write your own.',
         "body": "targets.html",
     },
     {
@@ -63,6 +69,8 @@ PAGE = {
         "jump": "Corrections",
         "eyebrow": "The corrected copy",
         "heading": "Four promises, kept in code",
+        "fold": True,
+        "teaser": 'Never the source, nothing unpreviewed, no new faults, and success measured again from scratch.',
         "body": "fix.html",
     },
     {
@@ -70,6 +78,8 @@ PAGE = {
         "jump": "How",
         "eyebrow": "Under it",
         "heading": "One decode per stream",
+        "fold": True,
+        "teaser": 'Everything the audio report needs comes from one pass over the file, and the picture from one more.',
         "body": "how.html",
     },
     {
@@ -79,6 +89,7 @@ PAGE = {
         "heading": "Two commands, no packages",
         "body": "install.html",
     },
+    {"folds": True},
     {"grid": True},
     ],
     "footer": [

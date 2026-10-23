@@ -133,6 +133,20 @@
     });
   });
 
+  /* A link to a folded section opens it: the address names the section,
+     and arriving at a closed one would show a heading and nothing else. */
+  function openTarget() {
+    var id = decodeURIComponent(location.hash.slice(1));
+    var target = id && document.getElementById(id);
+    var fold = target && target.closest("details");
+    if (fold && !fold.open) {
+      fold.open = true;
+      target.scrollIntoView();
+    }
+  }
+  addEventListener("hashchange", openTarget);
+  openTarget();
+
   /* One slow ease through every project's accent and then white.
      The geometry does not spin and the colour does not cut: each stop holds,
      then smoothsteps into the next. Both marks read the same custom property.
