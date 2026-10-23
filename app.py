@@ -261,11 +261,11 @@ def _refuse_mismatch(path, target, ffprobe=None):
     if preflight.is_caption_file(path):
         kind = "captions"
     else:
-        if ffprobe is None:
-            _, ffprobe = platform_support.require_tools()
         try:
+            if ffprobe is None:
+                _, ffprobe = platform_support.require_tools()
             kind = probe.kind_of(probe.inspect(path, ffprobe))
-        except probe.ProbeError:
+        except (probe.ProbeError, platform_support.ToolsMissing):
             return          # the check itself will report this properly
     profile = profiles.get(target) if not isinstance(target, dict) else target
     if kind and not profiles.accepts(profile, kind):
