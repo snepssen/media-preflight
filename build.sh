@@ -41,6 +41,7 @@ build_pyz() {
   for module in "${MODULES[@]}"; do cp "$ROOT/$module" "$staging/"; done
   cp "$ROOT/tools/check_ffmpeg.py" "$staging/tools/"
   [ -d "$ROOT/profiles" ] && cp -R "$ROOT/profiles" "$staging/" || true
+  cp -R "$ROOT/workshop" "$staging/" && rm -rf "$staging/workshop/__pycache__"
 
   python3 -m zipapp "$staging" \
     --output "$BUILD/media-preflight.pyz" \
@@ -75,6 +76,7 @@ build_app() {
   done
   cp "$ROOT/tools/check_ffmpeg.py" "$app/Contents/Resources/tools/"
   [ -d "$ROOT/profiles" ] && cp -R "$ROOT/profiles" "$app/Contents/Resources/" || true
+  cp -R "$ROOT/workshop" "$app/Contents/Resources/" && rm -rf "$app/Contents/Resources/workshop/__pycache__"
   cp "$ROOT/packaging/launcher.sh" "$app/Contents/MacOS/Media Preflight"
   chmod +x "$app/Contents/MacOS/Media Preflight"
 
