@@ -350,8 +350,10 @@ either absence into an osascript dialog carrying the install command. If you
 are ever tempted to make the launcher import the application to check
 something, do not — it must run before there is a Python that can.
 
-**But an absence is offered, not just reported.** `bootstrap.py` is the folder
-convention (`siphon/bootstrap.py` is the worked example): it reads
+**But an absence is offered, not just reported.** How it asks is
+[workshop-core](https://github.com/snepssen/workshop-core)'s, shared with
+siphon and protoke and carried in `workshop/` — synced from there, never
+edited here. `bootstrap.py` keeps this tool's words and the ebur128 note: it reads
 `platform_support.PROGRAMS` — the external programs as data, with the name each
 package manager knows each one by — lists what is missing with the exact
 command, and defaults to yes. `start.sh`, `start.bat` and the `.command` run
