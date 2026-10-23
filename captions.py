@@ -86,15 +86,16 @@ def load(path):
 
 def extract(media_path, stream, ffmpeg=None):
     """Pull an embedded subtitle stream out as ASS, which keeps its styling."""
-    if ffmpeg is None:
-        ffmpeg, _ = platform_support.require_tools()
     # Bitmap subtitles (PGS, VobSub) are pictures, not text; there is nothing
     # here to measure and saying so is better than emitting an empty track.
+    # Knowing that takes the codec name only, so it needs no ffmpeg.
     if stream.get("codec") in ("hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle"):
         return {"cues": [], "format": stream.get("codec"), "fonts": [],
                 "origin": "embedded", "source": media_path,
                 "unreadable": "These are picture subtitles, not text — there "
                               "is nothing in them to measure."}
+    if ffmpeg is None:
+        ffmpeg, _ = platform_support.require_tools()
     index = stream.get("index", 0)
     try:
         result = subprocess.run(

@@ -1,0 +1,43 @@
+# The test suite on the three systems media-preflight is for. macOS and Linux must
+# pass; Windows runs too but is informational until there is a Windows
+# machine to fix what it finds on. Linux also installs ffmpeg, so the tests
+# that need real media programs run somewhere rather than only skipping.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    name: tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    continue-on-error: ${{ matrix.informational }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest Python media-preflight promises, and a current one.
+          - { os: ubuntu-latest, python: "3.10", informational: false }
+          - { os: ubuntu-latest, python: "3.13", informational: false }
+          - { os: macos-latest, python: "3.13", informational: false }
+          - { os: windows-latest, python: "3.13", informational: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Media programs
+        if: runner.os == 'Linux'
+        # A stalled mirror has hung this step for twenty minutes. Without the
+        # programs the tests that need them skip; the rest still run.
+        timeout-minutes: 5
+        continue-on-error: true
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
+      - name: Run the test suite
+        run: python -m unittest discover -s tests -v
