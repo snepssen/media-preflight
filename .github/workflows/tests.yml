@@ -34,6 +34,10 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Media programs
         if: runner.os == 'Linux'
+        # A stalled mirror has hung this step for twenty minutes. Without the
+        # programs the tests that need them skip; the rest still run.
+        timeout-minutes: 5
+        continue-on-error: true
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
       - name: Run the test suite
         run: python -m unittest discover -s tests -v
