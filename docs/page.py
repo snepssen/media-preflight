@@ -42,8 +42,6 @@ PAGE = {
         "jump": "Workflow",
         "eyebrow": "One engine, two ways in",
         "heading": "Guided when you want the answer. Professional when you know the handoff.",
-        "fold": True,
-        "teaser": 'Guided measures once and asks nothing; Professional exposes each decision. The verdicts are the same either way.',
         "body": "workflow.html",
     },
     {
