@@ -289,8 +289,10 @@ def grid_inner(ecosystem, slug):
     the whole point -- so they are separable from the chrome around them.
     """
     copy = ecosystem["grid"]
+    projects = [p for p in ecosystem["projects"] if p.get("kind") != "foundation"]
+    foundations = [p for p in ecosystem["projects"] if p.get("kind") == "foundation"]
     cards = []
-    for number, project in enumerate(ecosystem["projects"], start=1):
+    for number, project in enumerate(projects, start=1):
         here = ' aria-current="page"' if project["slug"] == slug else ""
         # A picture of the page rather than a glyph, and keyed on the reader's
         # theme the same way siphon's figures are: a dark thumbnail on a light
@@ -303,6 +305,8 @@ def grid_inner(ecosystem, slug):
       <span class="ecosystem-card__go">{project.get('go', f"Explore {project['name']} →")}</span>
     </a>""")
     joined = "\n".join(cards)
+    rows = "\n".join(foundation_row(ecosystem, f) for f in foundations)
+    found = copy.get("foundations", {})
     return f"""  <div class="ecosystem-more__head">
     <div>
       <p class="ecosystem-kicker">{copy['kicker']}</p>
@@ -312,7 +316,42 @@ def grid_inner(ecosystem, slug):
   </div>
   <div class="ecosystem-grid">
 {joined}
+  </div>
+  <div class="ecosystem-foundations">
+    <div class="ecosystem-foundations__head">
+      <p class="ecosystem-kicker">{found.get('kicker', 'Foundations')}</p>
+      <p>{found.get('intro', '')}</p>
+    </div>
+    <ul>
+{rows}
+    </ul>
   </div>"""
+
+
+def built_on(project):
+    """What a project is made from: its Swift packages and anything named beside them."""
+    return list(project.get("swift", {}).get("uses", [])) + list(project.get("built_on", []))
+
+
+def foundation_row(ecosystem, foundation):
+    """A foundation is a repository, not a page, so it is listed as one: what
+    it is, which projects it is in, and that the link leaves for GitHub.
+    "Used by" is worked out from what each project says it is built on, so it
+    cannot drift from the dependencies themselves."""
+    users = [p for p in ecosystem["projects"]
+             if p.get("kind") != "foundation" and foundation["slug"] in built_on(p)]
+    if foundation.get("used_by"):
+        used = foundation["used_by"]
+    elif users:
+        used = both([p["name"] for p in users])
+    else:
+        used = ""
+    used = f'<span class="ecosystem-foundation__used">Used by {used}</span>' if used else ""
+    return f"""      <li><a class="ecosystem-foundation" data-project="{foundation['slug']}" style="--card-accent: var({foundation['accent']})" href="{foundation['url']}">
+        <span class="ecosystem-foundation__name">{foundation['name']}<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">{foundation['blurb']}</span>
+        {used}
+      </a></li>"""
 
 
 def grid(ecosystem, slug):

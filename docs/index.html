@@ -83,6 +83,7 @@
       <a data-project="voice-polyglot" style="--project-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">voice-polyglot</a>
       <a data-project="voice-core" style="--project-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">voice-core</a>
       <a data-project="speech-core" style="--project-accent: var(--eco-speechcore)" href="https://github.com/snepssen/speech-core">speech-core</a>
+      <a data-project="workshop-core" style="--project-accent: var(--eco-workshopcore)" href="https://github.com/snepssen/workshop-core">workshop-core</a>
       <a data-project="site-core" style="--project-accent: var(--eco-sitecore)" href="https://github.com/snepssen/site-core">site-core</a>
     </div>
   </div>
@@ -635,7 +636,7 @@ python3 preflight.py fix   finished.mp3 --target acx</pre>
   <div class="ecosystem-more__head">
     <div>
       <p class="ecosystem-kicker">The wider workshop</p>
-      <h2 id="ecosystem-heading">Thirteen pieces, one local-first practice.</h2>
+      <h2 id="ecosystem-heading">Nine projects, five foundations, one local-first practice.</h2>
     </div>
     <p class="ecosystem-more__intro">Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice, one speech engine and one hearing layer they share.</p>
   </div>
@@ -703,34 +704,39 @@ python3 preflight.py fix   finished.mp3 --target acx</pre>
       <p>Small utilities for audio inspection, corpus work, authoring, and repeatable checks.</p>
       <span class="ecosystem-card__go">Open the toolbox →</span>
     </a>
-    <a class="ecosystem-card" data-project="voice-polyglot" style="--card-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">
-      <div class="ecosystem-card__index"><span>10 / VOICE</span><span>Piper · eight languages</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">fél tizenegy</div>
-      <h3>voice-polyglot</h3>
-      <p>Teaching one small voice to speak eight languages, and releasing it for every app that speaks.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
-    <a class="ecosystem-card" data-project="voice-core" style="--card-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">
-      <div class="ecosystem-card__index"><span>11 / ENGINE</span><span>Swift · macOS · iOS · tested on Linux</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">text → /ipa/ → ids</div>
-      <h3>voice-core</h3>
-      <p>The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
-    <a class="ecosystem-card" data-project="speech-core" style="--card-accent: var(--eco-speechcore)" href="https://github.com/snepssen/speech-core">
-      <div class="ecosystem-card__index"><span>12 / HEARING</span><span>Swift · macOS · iOS</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">mic → vad → store</div>
-      <h3>speech-core</h3>
-      <p>The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
-    <a class="ecosystem-card" data-project="site-core" style="--card-accent: var(--eco-sitecore)" href="https://github.com/snepssen/site-core">
-      <div class="ecosystem-card__index"><span>13 / PAGES</span><span>Python · HTML</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">one → every page</div>
-      <h3>site-core</h3>
-      <p>The builder and project network every page here shares, kept in one place.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
+  </div>
+  <div class="ecosystem-foundations">
+    <div class="ecosystem-foundations__head">
+      <p class="ecosystem-kicker">Foundations</p>
+      <p>The parts the projects are built from. They have no page of their own: each is a repository, and the projects are where you see them at work.</p>
+    </div>
+    <ul>
+      <li><a class="ecosystem-foundation" data-project="voice-polyglot" style="--card-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">
+        <span class="ecosystem-foundation__name">voice-polyglot<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">Teaching one small voice to speak eight languages, and releasing it for every app that speaks.</span>
+        <span class="ecosystem-foundation__used">Used by Interpreter and companion-forge</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="voice-core" style="--card-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">
+        <span class="ecosystem-foundation__name">voice-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.</span>
+        <span class="ecosystem-foundation__used">Used by Gateway Forge, Voice Forge, Interpreter and companion-forge</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="speech-core" style="--card-accent: var(--eco-speechcore)" href="https://github.com/snepssen/speech-core">
+        <span class="ecosystem-foundation__name">speech-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.</span>
+        <span class="ecosystem-foundation__used">Used by Interpreter and companion-forge</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="workshop-core" style="--card-accent: var(--eco-workshopcore)" href="https://github.com/snepssen/workshop-core">
+        <span class="ecosystem-foundation__name">workshop-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">How the Python tools find the programs they need, and offer to install what is missing, from one source.</span>
+        <span class="ecosystem-foundation__used">Used by Protoke, Media Preflight and siphon</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="site-core" style="--card-accent: var(--eco-sitecore)" href="https://github.com/snepssen/site-core">
+        <span class="ecosystem-foundation__name">site-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">The builder and project network every page here shares, kept in one place.</span>
+        <span class="ecosystem-foundation__used">Used by every page in the workshop</span>
+      </a></li>
+    </ul>
   </div>
 </section>
 

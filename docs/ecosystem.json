@@ -5,8 +5,12 @@
   },
   "grid": {
     "kicker": "The wider workshop",
-    "heading": "Thirteen pieces, one local-first practice.",
-    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice, one speech engine and one hearing layer they share."
+    "heading": "Nine projects, five foundations, one local-first practice.",
+    "intro": "Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice, one speech engine and one hearing layer they share.",
+    "foundations": {
+      "kicker": "Foundations",
+      "intro": "The parts the projects are built from. They have no page of their own: each is a repository, and the projects are where you see them at work."
+    }
   },
   "contact": {
     "eyebrow": "Get in touch",
@@ -86,7 +90,10 @@
       "glyph": "◤ w ◥",
       "blurb": "Karaoke and narration video with a vector visor face that mouths every word.",
       "repo": "https://github.com/snepssen/protoke",
-      "accent": "--eco-protoke"
+      "accent": "--eco-protoke",
+      "built_on": [
+        "workshop-core"
+      ]
     },
     {
       "slug": "media-preflight",
@@ -101,7 +108,10 @@
       "glyph": "✓ ≤ -3 dB",
       "blurb": "Check a finished file against where it is going, and correct it without touching the original.",
       "repo": "https://github.com/snepssen/media-preflight",
-      "accent": "--eco-preflight"
+      "accent": "--eco-preflight",
+      "built_on": [
+        "workshop-core"
+      ]
     },
     {
       "slug": "siphon",
@@ -116,7 +126,10 @@
       "glyph": "webm ⟶ mp3",
       "blurb": "Fetch from a link or convert what you already have, without re-encoding what it does not have to.",
       "repo": "https://github.com/snepssen/siphon",
-      "accent": "--eco-siphon"
+      "accent": "--eco-siphon",
+      "built_on": [
+        "workshop-core"
+      ]
     },
     {
       "slug": "auto-sort",
@@ -163,6 +176,9 @@
           "slug": "speech-core",
           "text": "Takes ObjCExceptions, SileroVAD, SampleBuffer, ModelStore and PromptCache from {name}, at 0.5.0."
         }
+      ],
+      "built_on": [
+        "voice-polyglot"
       ]
     },
     {
@@ -210,6 +226,9 @@
           "slug": "protoke",
           "text": "Ports {name}'s protogen visor to Swift, drawn as an LED panel."
         }
+      ],
+      "built_on": [
+        "voice-polyglot"
       ]
     },
     {
@@ -234,7 +253,8 @@
       "blurb": "Teaching one small voice to speak eight languages, and releasing it for every app that speaks.",
       "go": "Open the repository →",
       "repo": "https://github.com/snepssen/voice-polyglot",
-      "accent": "--eco-polyglot"
+      "accent": "--eco-polyglot",
+      "kind": "foundation"
     },
     {
       "slug": "voice-core",
@@ -251,7 +271,8 @@
       "blurb": "The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.",
       "go": "Open the repository →",
       "repo": "https://github.com/snepssen/voice-core",
-      "accent": "--eco-voicecore"
+      "accent": "--eco-voicecore",
+      "kind": "foundation"
     },
     {
       "slug": "speech-core",
@@ -267,7 +288,21 @@
       "blurb": "The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.",
       "go": "Open the repository →",
       "repo": "https://github.com/snepssen/speech-core",
-      "accent": "--eco-speechcore"
+      "accent": "--eco-speechcore",
+      "kind": "foundation"
+    },
+    {
+      "slug": "workshop-core",
+      "name": "workshop-core",
+      "url": "https://github.com/snepssen/workshop-core",
+      "index": "PLUMBING",
+      "platforms": "Python · standard library",
+      "glyph": "$ brew install …",
+      "blurb": "How the Python tools find the programs they need, and offer to install what is missing, from one source.",
+      "go": "Open the repository →",
+      "repo": "https://github.com/snepssen/workshop-core",
+      "accent": "--eco-workshopcore",
+      "kind": "foundation"
     },
     {
       "slug": "site-core",
@@ -279,7 +314,9 @@
       "blurb": "The builder and project network every page here shares, kept in one place.",
       "go": "Open the repository →",
       "repo": "https://github.com/snepssen/site-core",
-      "accent": "--eco-sitecore"
+      "accent": "--eco-sitecore",
+      "kind": "foundation",
+      "used_by": "every page in the workshop"
     }
   ]
 }
